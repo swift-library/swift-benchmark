@@ -1,0 +1,145 @@
+{
+  "metadata": {
+    "architecture": "arm64",
+    "buildConfiguration": "debug",
+    "generatedAt": "2026-05-11T00:00:00Z",
+    "gitCommit": "fixture",
+    "id": "run:fixture",
+    "osVersion": "15",
+    "packageIdentity": "swift-benchmark",
+    "platform": "macOS",
+    "swiftVersion": "6.3.1"
+  },
+  "schemaVersion": 2,
+  "suites": [
+    {
+      "cases": [
+        {
+          "attachments": [],
+          "attributions": [],
+          "budgets": [
+            {
+              "absoluteDeltaNanoseconds": 500,
+              "actualNanoseconds": 2000,
+              "policy": {
+                "limitNanoseconds": 1500,
+                "metric": "p95"
+              },
+              "verdict": "failed"
+            }
+          ],
+          "configuration": {
+            "iterations": "iterations(2)",
+            "warmup": "none"
+          },
+          "diagnostics": [
+            {
+              "id": "metric:metrickit-cpu",
+              "name": "metrickit.cpu",
+              "scope": {
+                "caseID": "case:parser.parsedocument",
+                "runID": "run:fixture",
+                "suiteID": "suite:parser"
+              },
+              "state": {
+                "kind": "failed",
+                "reason": "provider crashed"
+              }
+            }
+          ],
+          "dimensionCurves": [],
+          "id": "case:parser.parsedocument",
+          "measurement": {
+            "rows": [
+              {
+                "metrics": {
+                  "count": 2,
+                  "max": 2000,
+                  "mean": 1500,
+                  "median": 1500,
+                  "min": 1000,
+                  "p90": 1900,
+                  "p95": 2000,
+                  "p99": 2000,
+                  "standardDeviation": 500
+                },
+                "samples": [
+                  {
+                    "durationNanoseconds": 1000,
+                    "id": "sample:parser.parsedocument.0",
+                    "iteration": 0,
+                    "iterationID": "iteration:parser.parsedocument.0"
+                  },
+                  {
+                    "durationNanoseconds": 2000,
+                    "id": "sample:parser.parsedocument.1",
+                    "iteration": 1,
+                    "iterationID": "iteration:parser.parsedocument.1"
+                  }
+                ]
+              }
+            ]
+          },
+          "name": "ParseDocument",
+          "scope": {
+            "caseID": "case:parser.parsedocument",
+            "runID": "run:fixture",
+            "suiteID": "suite:parser"
+          },
+          "sourceLocation": {
+            "column": 5,
+            "fileID": "ParserBenchmarks/ParserBenchmarks.swift",
+            "filePath": "/tmp/ParserBenchmarks.swift",
+            "line": 42
+          },
+          "status": "passed",
+          "verdict": "failed",
+          "verdictCauses": [
+            {
+              "actualNanoseconds": 2000,
+              "budget": {
+                "limitNanoseconds": 1500,
+                "metric": "p95"
+              },
+              "deltaNanoseconds": 500,
+              "expectedNanoseconds": 1500,
+              "kind": "budgetExceeded",
+              "message": "Budget exceeded for p95.",
+              "metric": "p95",
+              "scope": {
+                "caseID": "case:parser.parsedocument",
+                "runID": "run:fixture",
+                "suiteID": "suite:parser"
+              }
+            },
+            {
+              "diagnosticID": "metric:metrickit-cpu",
+              "kind": "diagnosticFailed",
+              "message": "provider crashed",
+              "scope": {
+                "caseID": "case:parser.parsedocument",
+                "runID": "run:fixture",
+                "suiteID": "suite:parser"
+              }
+            }
+          ]
+        }
+      ],
+      "id": "suite:parser",
+      "name": "Parser",
+      "scope": {
+        "runID": "run:fixture",
+        "suiteID": "suite:parser"
+      }
+    }
+  ],
+  "summary": {
+    "caseCount": 1,
+    "failedBudgetCount": 1,
+    "failedDiagnosticCount": 1,
+    "failedRegressionCount": 0,
+    "suiteCount": 1,
+    "unavailableDiagnosticCount": 0,
+    "verdict": "failed"
+  }
+}
