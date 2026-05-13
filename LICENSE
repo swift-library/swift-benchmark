@@ -1,0 +1,23 @@
+SignpostMacros Dual License Notice
+
+Copyright (c) 2020-present Xudong Xu
+
+This project is dual-licensed:
+
+1. GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)
+2. Commercial License (paid, proprietary terms)
+
+You may use this Software under either license, at your option.
+
+AGPL path:
+- If you choose AGPL, all use/distribution/modification must comply with
+  AGPL-3.0-or-later terms.
+- License text: https://www.gnu.org/licenses/agpl-3.0.html
+
+Commercial path:
+- If your intended use is closed-source or otherwise incompatible with AGPL,
+  you must obtain a commercial license before use.
+- Commercial terms are provided in `COMMERCIAL_LICENSE.md`.
+- Contact: <licensing-contact@example.com>
+
+No additional rights are granted beyond the selected license.
