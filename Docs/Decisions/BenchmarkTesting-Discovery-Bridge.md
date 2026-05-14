@@ -34,10 +34,15 @@ record/accessor path is owned by Swift Testing. The generated thunks and
 - The plugin target itself does not depend on SwiftSyntax, SwiftParser,
   Benchmark, Report, or local library targets. A SwiftSyntax/SwiftParser
   scanner remains the preferred semantic direction if the source-built tool path
-  validates under SwiftPM command-plugin execution. Until then, the package
-  workflow uses the self-contained scanner behind `_BenchmarkDiscoveryCore` so
-  `swift package benchmark` remains production usable without requiring users
-  to pass serial build flags.
+  validates under SwiftPM command-plugin execution. A 2026-05-14 hard-gate spike
+  added `SwiftParser` / `SwiftSyntax` only to `_BenchmarkDiscoveryCore` and
+  verified `swift build --product BenchmarkDiscoveryTool` succeeds, but the
+  real command-plugin path failed with `no such module 'SwiftParser'` while
+  running `swift package ... benchmark list --format json` against the fixture
+  package. Until that SwiftPM/toolchain path is fixed or a different tool
+  packaging strategy is chosen, the package workflow uses the self-contained
+  scanner behind `_BenchmarkDiscoveryCore` so `swift package benchmark` remains
+  production usable without requiring users to pass serial build flags.
 - The generated bridge links the user's test target and invokes supported test
   methods through `BenchmarkRunner`.
 - `private` and `fileprivate` tests are not supported by the pure Testing
