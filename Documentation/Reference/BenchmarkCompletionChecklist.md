@@ -1,9 +1,9 @@
 # Benchmark Completion Checklist
 
 Use this checklist when implementing or auditing the Benchmark product goal. It
-supports the architecture in `Docs/Architecture/Benchmark.md`.
+supports the architecture in `Documentation/Architecture/Benchmark.md`.
 
-This checklist is secondary to `Docs/Architecture/ImplementationScope.md`
+This checklist is secondary to `Documentation/Architecture/ImplementationScope.md`
 for the active closure. If this file conflicts with that
 document, update this file rather than reopening the accepted architecture.
 
@@ -43,7 +43,7 @@ complete while architecture and reference docs retain durable truth.
 ## Required Inspection Before Editing
 
 Verify these before implementation. The accepted answers are recorded in
-`../Decisions/Preflight-Implementation-Decisions.md`; these checks should not
+`../Decisions/PreflightImplementationDecisions.md`; these checks should not
 reopen the architecture unless local facts contradict that decision record.
 
 1. Verify current package facts still match architecture docs after the
@@ -68,7 +68,7 @@ reopen the architecture unless local facts contradict that decision record.
 Follow these accepted decisions before changing Benchmark package structure or
 runtime behavior:
 
-- Read `../Decisions/Preflight-Implementation-Decisions.md`.
+- Read `../Decisions/PreflightImplementationDecisions.md`.
 - Product and target names.
 - Public naming set:
   `BenchmarkSuite`, `BenchmarkCase` / `Benchmark`, `BenchmarkRunner`,

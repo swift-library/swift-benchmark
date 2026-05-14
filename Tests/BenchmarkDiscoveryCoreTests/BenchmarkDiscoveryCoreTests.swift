@@ -174,6 +174,89 @@ struct BenchmarkDiscoveryCoreTests {
     }
   }
 
+  @Test
+  func explicitSwiftSyntaxBackendRequiresToolPath() throws {
+    do {
+      try BenchmarkDiscoveryBackendRouter.run(
+        ["discover"],
+        environment: ["SWIFT_BENCHMARK_DISCOVERY_BACKEND": "swiftsyntax"]
+      )
+      Issue.record("Expected missing SwiftSyntax tool path diagnostic")
+    } catch {
+      #expect(String(describing: error).contains("SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH"))
+    }
+  }
+
+  @Test
+  func autoBackendFallsBackToStablePlannerWhenSyntaxToolFails() throws {
+    let directory = try temporaryDirectory()
+    let source = directory.appendingPathComponent("LibraryBenchmarks.swift")
+    let manifest = directory.appendingPathComponent("targets.json")
+    let planPath = directory.appendingPathComponent("plan.json")
+    try """
+      import Benchmark
+
+      @BenchmarkSuite("Parser")
+      struct ParserBenchmarks {
+        @Benchmark("Noop")
+        func noop() {}
+      }
+      """
+      .write(to: source, atomically: true, encoding: .utf8)
+    let encoder = JSONEncoder()
+    try encoder.encode(
+      TargetManifest(
+        targets: [
+          TargetDescription(
+            name: "FixtureLibrary",
+            moduleName: "FixtureLibrary",
+            kind: "library",
+            sourcePaths: [source.path]
+          )
+        ]
+      )
+    )
+    .write(to: manifest)
+
+    try BenchmarkDiscoveryBackendRouter.run(
+      [
+        "discover",
+        "--targets-manifest",
+        manifest.path,
+        "--work-directory",
+        directory.path,
+        "--output-plan",
+        planPath.path,
+      ],
+      environment: [
+        "SWIFT_BENCHMARK_DISCOVERY_BACKEND": "auto",
+        "SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH": "/usr/bin/false",
+      ]
+    )
+
+    let plan = try JSONDecoder().decode(
+      BenchmarkDiscoveryPlan.self,
+      from: Data(contentsOf: planPath)
+    )
+    #expect(plan.discoveryExpressions == ["FixtureLibrary.__BenchmarkDiscovery_ParserBenchmarks.self"])
+  }
+
+  @Test
+  func unknownDiscoveryBackendReportsAllowedValues() throws {
+    do {
+      try BenchmarkDiscoveryBackendRouter.run(
+        ["discover"],
+        environment: ["SWIFT_BENCHMARK_DISCOVERY_BACKEND": "nonsense"]
+      )
+      Issue.record("Expected unknown backend diagnostic")
+    } catch {
+      let message = String(describing: error)
+      #expect(message.contains("stable"))
+      #expect(message.contains("swiftsyntax"))
+      #expect(message.contains("auto"))
+    }
+  }
+
   private func temporaryDirectory() throws -> URL {
     let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent("swift-benchmark-discovery-\(UUID().uuidString)")

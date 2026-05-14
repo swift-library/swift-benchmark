@@ -6,7 +6,7 @@ public final class BenchmarkTimelineObserver: BenchmarkExecutionObserver, @unche
   public let recorder: InMemoryRecorder
 
   private let lock = NSLock()
-  private var tokens: [String: SpanToken] = [:]
+  private var captures: [String: IterationCapture] = [:]
 
   public init(recorder: InMemoryRecorder = InMemoryRecorder()) {
     self.recorder = recorder
@@ -16,12 +16,19 @@ public final class BenchmarkTimelineObserver: BenchmarkExecutionObserver, @unche
     guard case .measurement(let iteration) = context.phase else {
       return
     }
-    let token = recorder.beginSpan(
+    let previousRecorder = Instruments.current
+    let compositeRecorder = CompositeRecorder([recorder, previousRecorder])
+    let scope = Instruments.beginCurrentRecorderScope(compositeRecorder)
+    let token = compositeRecorder.beginSpan(
       "BenchmarkIteration",
       attributes: correlationAttributes(context: context, iteration: iteration)
     )
     lock.withLock {
-      tokens[key(context)] = token
+      captures[key(context)] = IterationCapture(
+        recorder: compositeRecorder,
+        token: token,
+        scope: scope
+      )
     }
   }
 
@@ -36,20 +43,27 @@ public final class BenchmarkTimelineObserver: BenchmarkExecutionObserver, @unche
     if let durationNanoseconds {
       attributes.values[TimelineCorrelationKeys.durationNanoseconds] = .int(Int(durationNanoseconds))
     }
-    recorder.recordEvent("BenchmarkIterationMeasured", attributes: attributes)
-    endSpan(for: context)
+    endSpan(for: context, eventName: "BenchmarkIterationMeasured", eventAttributes: attributes)
   }
 
   public func benchmarkDidFail(context: BenchmarkExecutionContext, error: any Error) async {
     endSpan(for: context)
   }
 
-  private func endSpan(for context: BenchmarkExecutionContext) {
-    let token = lock.withLock {
-      tokens.removeValue(forKey: key(context))
+  private func endSpan(
+    for context: BenchmarkExecutionContext,
+    eventName: StaticString? = nil,
+    eventAttributes: SpanAttributes = .empty
+  ) {
+    let capture = lock.withLock {
+      captures.removeValue(forKey: key(context))
     }
-    if let token {
-      recorder.endSpan(token)
+    if let capture {
+      if let eventName {
+        capture.recorder.recordEvent(eventName, attributes: eventAttributes)
+      }
+      capture.recorder.endSpan(capture.token)
+      capture.scope.restore()
     }
   }
 
@@ -68,6 +82,12 @@ public final class BenchmarkTimelineObserver: BenchmarkExecutionObserver, @unche
       TimelineCorrelationKeys.dimensionSize: context.size.map { .int($0.rawValue) } ?? .string("none"),
     ]
   }
+}
+
+private struct IterationCapture: Sendable {
+  var recorder: any Recorder
+  var token: SpanToken
+  var scope: Instruments.RecorderScope
 }
 
 extension NSLock {

@@ -153,6 +153,7 @@ struct BenchmarkPlugin: CommandPlugin {
   }
 
   private func swiftTestingLibraryArguments() throws -> [String] {
+    let toolchainAttempt = "toolchain testing runtime at runtimeLibraryImportPaths.first/testing"
     let output = try runProcess(
       executable: URL(fileURLWithPath: "/usr/bin/env"),
       arguments: ["swiftc", "-print-target-info"],
@@ -165,24 +166,56 @@ struct BenchmarkPlugin: CommandPlugin {
       let importPaths = paths["runtimeLibraryImportPaths"] as? [String],
       let runtimeImportPath = importPaths.first
     else {
-      return []
+      return try swiftTestingFrameworkArguments(attempted: [toolchainAttempt])
     }
     let testingPath = URL(fileURLWithPath: runtimeImportPath)
       .appendingPathComponent("testing")
       .path
-    guard FileManager.default.fileExists(atPath: testingPath) else {
-      return []
+    if FileManager.default.fileExists(atPath: testingPath) {
+      return [
+        "-I",
+        testingPath,
+        "-L",
+        testingPath,
+        "-lTesting",
+        "-Xlinker",
+        "-rpath",
+        "-Xlinker",
+        testingPath,
+      ]
+    }
+
+    return try swiftTestingFrameworkArguments(
+      attempted: [toolchainAttempt, testingPath]
+    )
+  }
+
+  private func swiftTestingFrameworkArguments(attempted: [String]) throws -> [String] {
+    let platformPath = try runProcess(
+      executable: URL(fileURLWithPath: "/usr/bin/xcrun"),
+      arguments: ["--sdk", "macosx", "--show-sdk-platform-path"],
+      captureOutput: true,
+      captureOutputOnFailure: true
+    )
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+    let frameworksPath = URL(fileURLWithPath: platformPath)
+      .appendingPathComponent("Developer/Library/Frameworks")
+      .path
+    let testingFramework = URL(fileURLWithPath: frameworksPath)
+      .appendingPathComponent("Testing.framework")
+      .path
+    guard FileManager.default.fileExists(atPath: testingFramework) else {
+      throw PluginError.swiftTestingRuntimeUnavailable(attempted + [testingFramework])
     }
     return [
-      "-I",
-      testingPath,
-      "-L",
-      testingPath,
-      "-lTesting",
+      "-F",
+      frameworksPath,
+      "-framework",
+      "Testing",
       "-Xlinker",
       "-rpath",
       "-Xlinker",
-      testingPath,
+      frameworksPath,
     ]
   }
 
@@ -314,6 +347,7 @@ enum PluginError: Error, CustomStringConvertible {
   case failed(executable: String, status: Int32, output: String, errorOutput: String)
   case noBenchmarksDiscovered
   case noObjectFiles(String)
+  case swiftTestingRuntimeUnavailable([String])
 
   var description: String {
     switch self {
@@ -331,6 +365,12 @@ enum PluginError: Error, CustomStringConvertible {
       return "No @BenchmarkSuite declarations were discovered in library targets and no @Suite(.benchmark...) or @Test(.benchmark...) declarations were discovered in test targets."
     case .noObjectFiles(let directory):
       return "No Swift object files were found under \(directory)."
+    case .swiftTestingRuntimeUnavailable(let attempted):
+      return """
+        Swift Testing runtime was required for BenchmarkTesting bridge compilation, but no supported runtime layout was found.
+        Attempted:
+        \(attempted.map { "- \($0)" }.joined(separator: "\n"))
+        """
     }
   }
 }

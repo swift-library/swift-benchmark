@@ -6,27 +6,34 @@
 
 This file is for maintainers/LLM contributors.
 Do not duplicate end-user usage docs here.
-All user-facing API usage and examples must live in `README.md`.
+User-facing usage docs are split by depth:
+
+- `README.md` is the quick-start and best-practice entrypoint.
+- `Documentation/UsageManual.md` is the complete user manual for API, CLI, CI,
+  diagnostics, adapters, and advanced workflows.
+
+Do not duplicate user-facing API examples outside those two files unless a
+specialized architecture or decision document needs a narrowly scoped example.
 
 ## Architecture Source Of Truth
 
-- `Docs/Architecture/Instruments.md` is the source of truth for the
+- `Documentation/Architecture/Instruments.md` is the source of truth for the
   Instruments layer.
-- `Docs/Architecture/ProductDomains.md` is the source of truth for product
-  boundaries.
-- `Docs/Architecture/Benchmark.md` is the source of truth for the Benchmark
-  layer and defines the Benchmark runner scope.
-- `Docs/Architecture/Report.md` is the source of truth for Report, baseline,
-  attribution, diagnostics adapter, and renderer boundaries.
-- `Docs/Migrations/Signpost-To-Instruments.md` records the accepted semantic
-  shift from Signpost-first to Instruments-first.
-- `Docs/Reference/InstrumentsAlignmentChecklist.md` is the implementation
+- `Documentation/Architecture/ProductDomains.md` is the source of truth for
+  product boundaries.
+- `Documentation/Architecture/Benchmark.md` is the source of truth for the
+  Benchmark layer and defines the Benchmark runner scope.
+- `Documentation/Architecture/Report.md` is the source of truth for Report,
+  baseline, attribution, diagnostics adapter, and renderer boundaries.
+- `Documentation/Migrations/SignpostToInstruments.md` records the accepted
+  semantic shift from Signpost-first to Instruments-first.
+- `Documentation/Reference/InstrumentsAlignmentChecklist.md` is the implementation
   checklist for the Instruments alignment pass.
-- `Docs/Reference/BenchmarkCompletionChecklist.md` is the implementation
+- `Documentation/Reference/BenchmarkCompletionChecklist.md` is the implementation
   checklist for the Benchmark completion target.
 - Official Apple/Swift alignment belongs in the relevant architecture document.
-  Architecture truth lives in `Docs/Architecture/` and user-facing usage lives
-  in `README.md`.
+  Architecture truth lives in `Documentation/Architecture/`; user-facing usage
+  lives in `README.md` and `Documentation/UsageManual.md`.
 
 ## Current Completion State
 
@@ -55,8 +62,8 @@ depth stays behind available APIs, platform memory/allocation hooks vary, and
 MetricKit is future optional production diagnostics evidence.
 
 When implementation completes, absorb durable facts into
-`Docs/Architecture/`, focused `Docs/Reference/` checklists where appropriate,
-and `README.md`.
+`Documentation/Architecture/`, focused `Documentation/Reference/` checklists
+where appropriate, and `README.md`.
 
 Instruments-first semantics override stale Signpost-first implementation drift.
 Treat any remaining legacy Signpost-oriented code as an implementation source
@@ -95,7 +102,9 @@ Before code changes for the Benchmark target, explicitly decide:
 
 - Prefer additive API changes over breaking renames unless the accepted
   migration requires a breaking semantic cleanup.
-- If API behavior/signatures change, update `README.md` in the same change.
+- If API behavior/signatures change, update `README.md` and
+  `Documentation/UsageManual.md` in the same change when the change affects
+  user-facing usage.
 - Keep runtime/API code in `Sources/Instruments`.
 - Keep macro expansion implementation in `Sources/InstrumentsMacro`.
 - Put Benchmark runner code in the Benchmark product boundary, not inside

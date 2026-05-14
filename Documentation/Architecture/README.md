@@ -31,9 +31,9 @@ Current architecture descriptions for `swift-benchmark` live here.
 - `Report.md`: structured performance evidence, baseline/regression,
   attribution, diagnostics, fallback, and renderer boundaries.
 
-Supporting proposals, decisions, migrations, and reference notes may be added in
-separate `Docs/` subtrees later. They should not replace the current truth in
-this directory.
+Supporting proposals, decisions, migrations, archives, and reference notes live
+in separate `Documentation/` subtrees. They should not replace the current
+truth in this directory.
 
 Related implementation reference:
 
@@ -42,4 +42,5 @@ Related implementation reference:
   Instruments architecture.
 - `../Reference/BenchmarkCompletionChecklist.md`: implementation checklist,
   test matrix, and report expectations for the Benchmark implementation goal.
+
 Official Apple/Swift alignment belongs in the relevant architecture documents.

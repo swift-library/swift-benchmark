@@ -82,10 +82,24 @@ let package = Package(
       name: "_BenchmarkDiscoveryCore",
       path: "Sources/_BenchmarkDiscoveryCore"
     ),
+    .target(
+      name: "_BenchmarkSyntaxDiscoveryCore",
+      dependencies: [
+        "_BenchmarkDiscoveryCore",
+        .product(name: "SwiftParser", package: "swift-syntax"),
+        .product(name: "SwiftSyntax", package: "swift-syntax"),
+      ],
+      path: "Sources/_BenchmarkSyntaxDiscoveryCore"
+    ),
     .executableTarget(
       name: "BenchmarkDiscoveryTool",
       dependencies: ["_BenchmarkDiscoveryCore"],
       path: "Sources/BenchmarkDiscoveryTool"
+    ),
+    .executableTarget(
+      name: "BenchmarkSyntaxDiscoveryTool",
+      dependencies: ["_BenchmarkSyntaxDiscoveryCore"],
+      path: "Sources/BenchmarkSyntaxDiscoveryTool"
     ),
     .plugin(
       name: "BenchmarkPlugin",
@@ -146,6 +160,11 @@ let package = Package(
       name: "BenchmarkDiscoveryCoreTests",
       dependencies: ["_BenchmarkDiscoveryCore"],
       path: "Tests/BenchmarkDiscoveryCoreTests"
+    ),
+    .testTarget(
+      name: "BenchmarkSyntaxDiscoveryCoreTests",
+      dependencies: ["_BenchmarkDiscoveryCore", "_BenchmarkSyntaxDiscoveryCore"],
+      path: "Tests/BenchmarkSyntaxDiscoveryCoreTests"
     ),
   ]
 )

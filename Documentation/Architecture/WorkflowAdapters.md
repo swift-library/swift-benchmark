@@ -27,9 +27,15 @@ SwiftPM `BenchmarkPlugin` follows the official plugin-tool pattern:
 The plugin passes SwiftPM target metadata to the discovery tool; the tool emits
 one discovery plan covering production `@BenchmarkSuite` declarations in
 library targets plus supported test-target `@Suite(.benchmark...)` /
-`@Test(.benchmark...)` bridge declarations. The plugin builds the package,
-compiles the generated host from that plan, and delegates to the same CLI
-semantics. Baseline write/update, diff, render, tag filters,
+`@Test(.benchmark...)` bridge declarations. The default discovery backend is
+the self-contained scanner in `_BenchmarkDiscoveryCore`, so default
+`swift package benchmark` does not build or link a SwiftSyntax discovery tool.
+An opt-in SwiftSyntax backend exists as implementation tooling through an
+external `BenchmarkSyntaxDiscoveryTool -> _BenchmarkSyntaxDiscoveryCore` path.
+It must be explicitly selected by environment and does not change the public
+Benchmark/Report model. The plugin builds the package, compiles the generated
+host from the selected discovery plan, and delegates to the same CLI semantics.
+Baseline write/update, diff, render, tag filters,
 warmup/iteration/adaptive overrides, diagnostics, trace attachments,
 `xctrace record` provenance, quiet output, and CI exit codes are wired through
 the shared Report model. Explicit `--host` remains an advanced/debug override.
@@ -55,6 +61,9 @@ Package workflow rules:
 
 - discover package code declarations through `BenchmarkDiscoveryTool` and a
   single internal discovery plan,
+- keep the stable self-contained scanner as the default discovery backend,
+- allow `SWIFT_BENCHMARK_DISCOVERY_BACKEND=swiftsyntax` to route to an external
+  SwiftSyntax discovery tool specified by `SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH`,
 - reference native macro-generated `_BenchmarkDiscovery` records for
   production `@BenchmarkSuite` declarations,
 - bridge supported test-target `@Suite(.benchmark...)` /
@@ -73,7 +82,10 @@ The SwiftPM plugin delegates behavior to the CLI. The plugin must stay a thin
 SwiftPM orchestration layer: it may collect target metadata, call executable
 tools through `context.tool(named:)`, compile generated host sources, and
 propagate tool exit status, but it must not parse benchmark declarations or
-generate bridge sources itself. CLI and plugin must share:
+generate bridge sources itself. It must not depend on the SwiftSyntax discovery
+tool because that would force default command-plugin execution to build the
+SwiftSyntax backend before environment routing can run. CLI and plugin must
+share:
 
 - filters,
 - warmup/iteration overrides,

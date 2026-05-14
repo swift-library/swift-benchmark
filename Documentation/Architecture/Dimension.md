@@ -149,7 +149,7 @@ part of the implemented architecture:
 - faceted comparison,
 - heatmap analysis.
 
-Those ideas are recorded in `../Decisions/Future-Multi-Dimension-Measurement.md`
+Those ideas are recorded in `../Decisions/FutureMultiDimensionMeasurement.md`
 so they can evolve without contaminating the current model.
 
 ## Acceptance Evidence

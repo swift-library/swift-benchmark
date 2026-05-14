@@ -83,7 +83,7 @@ are migration sources and should be removed from the target public surface.
 - Keep non-Apple behavior compiling through disabled/fallback instrumentation.
 - Do not introduce Benchmark runner or Report aggregation inside the
   Instruments migration layer. Benchmark completion is a separate repository
-  target with architecture truth in `Docs/Architecture/Benchmark.md`.
+  target with architecture truth in `Documentation/Architecture/Benchmark.md`.
 
 ## Current Status
 
@@ -103,7 +103,7 @@ Function-level `@Span` and `@Instrumented` are implemented as real body macros.
 Type/extension bulk instrumentation is implemented as `@InstrumentedMembers`.
 The originally desired same-name type-level `@Instrumented` spelling remains
 blocked by the current Swift macro attachment-role model; see
-`Docs/Architecture/Instruments.md` for the compiler evidence behind the spelling
+`Documentation/Architecture/Instruments.md` for the compiler evidence behind the spelling
 split.
 
 ## Related Documents
