@@ -172,7 +172,7 @@ The implementation pass should align code around these goals:
 | Macros | `#span`, `#event`, `@Span`, function-level `@Instrumented`, and `@InstrumentedMembers` are implemented. | Preserve the spelling split until the Swift macro role model supports one same-name macro for function and type attachment. |
 | Disabled path | `EmptyRecorder` is implemented. | Keep unsupported/disabled paths cheap. |
 | Timeline | `Timeline` / `InMemoryRecorder` are implemented. | Later Benchmark/Report integration consumes public timeline snapshots. |
-| Docs | README, architecture docs, migration docs, and tests describe implemented status plus the same-name type-level macro blocker. | Keep architecture truth current. |
+| Documentation | README, architecture docs, migration docs, and tests describe implemented status plus the same-name type-level macro blocker. | Keep architecture truth current. |
 
 ## Target Runtime Model
 
@@ -696,7 +696,7 @@ Update architecture docs in the same pass as code changes:
 1. Keep this file as the current Instruments architecture truth.
 2. Update `ProductDomains.md` if public products, transitional modules, or
    adapter/diagnostics boundaries change.
-3. Update `../Migrations/Signpost-To-Instruments.md` with the actual migration
+3. Update `../Migrations/SignpostToInstruments.md` with the actual migration
    outcome and removed Signpost surface.
 4. Keep `../Reference/InstrumentsAlignmentChecklist.md` as implementation
    checklist/reference material, not accepted architecture truth.
@@ -704,6 +704,6 @@ Update architecture docs in the same pass as code changes:
 
 ## Related Decisions
 
-Preflight decisions live in `../Decisions/Preflight-Implementation-Decisions.md`.
+Preflight decisions live in `../Decisions/PreflightImplementationDecisions.md`.
 If a later pass changes target names or the accepted macro scope, record that
-history under `Docs/Decisions/` and restate current truth here.
+history under `Documentation/Decisions/` and restate current truth here.

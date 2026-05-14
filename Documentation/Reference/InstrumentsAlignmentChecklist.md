@@ -2,7 +2,7 @@
 
 Use this checklist when implementing the first Instruments alignment pass. It is
 implementation reference material that supports the current architecture in
-`Docs/Architecture/Instruments.md`.
+`Documentation/Architecture/Instruments.md`.
 
 This checklist covers the Instruments target only. The repository completion
 goal also includes the Benchmark target, covered by
@@ -42,7 +42,7 @@ rewriting the current Instruments code; inspect it first and refactor the usable
 parts directly.
 
 Collect these facts before implementation. The architecture is already accepted
-in `../Decisions/Preflight-Implementation-Decisions.md`; these checks only
+in `../Decisions/PreflightImplementationDecisions.md`; these checks only
 pause execution if local facts contradict that decision record:
 
 1. What are the current package, product, and target names?
@@ -61,7 +61,7 @@ pause execution if local facts contradict that decision record:
 
 Complete and record these before changing runtime or macro behavior:
 
-- Read `../Decisions/Preflight-Implementation-Decisions.md`.
+- Read `../Decisions/PreflightImplementationDecisions.md`.
 - Run a baseline `swift test`.
 - Confirm Swift compiler and SwiftSyntax versions from `Package.swift` and the
   local toolchain.

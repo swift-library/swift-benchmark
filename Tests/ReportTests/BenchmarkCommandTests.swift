@@ -13,7 +13,7 @@ struct HostBenchmarks {
   }
 }
 
-@Suite("Benchmark Command")
+@Suite("Benchmark Command", .serialized)
 struct BenchmarkCommandTests {
   @Test
   func commandRunsSuitesThroughBenchmarkAndReport() async throws {
@@ -93,6 +93,66 @@ struct BenchmarkCommandTests {
         && attribution.events.map(\.name) == ["BenchmarkIterationMeasured"]
         && attribution.spanSummaries.map(\.name) == ["BenchmarkIteration"]
     })
+  }
+
+  @Test
+  func commandCapturesWorkloadSpansAsTimelineDescendants() async throws {
+    let suite = BenchmarkSuite(
+      "Command",
+      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+    ) {
+      Benchmark("Measured") {
+        Instruments.current.span("Parser.normalize") {
+          Instruments.current.event("Parser.cacheHit")
+          blackHole(1)
+        }
+      }
+    }
+    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100))).run(
+      suites: [suite],
+      metadata: .fixture(),
+      timelineCapture: .benchmarkIterations,
+      format: .json
+    )
+    let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
+    let report = try #require(document.suites.first?.cases.first)
+    let attribution = try #require(report.attributions.first)
+
+    #expect(attribution.spans.map(\.name) == ["BenchmarkIteration", "Parser.normalize"])
+    #expect(attribution.events.map(\.name) == ["Parser.cacheHit", "BenchmarkIterationMeasured"])
+    #expect(attribution.events.first?.parentSpanID == attribution.spans[1].id)
+    #expect(attribution.spanSummaries.map(\.name) == ["BenchmarkIteration", "Parser.normalize"])
+  }
+
+  @Test
+  func commandRestoresCurrentRecorderWhenTimelineWorkloadThrows() async throws {
+    enum DummyError: Error, Equatable {
+      case boom
+    }
+
+    let previous = IdentityRecorder()
+    let suite = BenchmarkSuite(
+      "Command",
+      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+    ) {
+      Benchmark("Throws") {
+        throw DummyError.boom
+      }
+    }
+
+    await Instruments.withCurrentRecorder(previous) {
+      do {
+        _ = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100))).run(
+          suites: [suite],
+          metadata: .fixture(),
+          timelineCapture: .benchmarkIterations,
+          format: .json
+        )
+        Issue.record("Expected throwing benchmark to fail")
+      } catch {
+        #expect((Instruments.current as? IdentityRecorder) === previous)
+      }
+    }
   }
 
   @Test
@@ -276,4 +336,14 @@ private final class StepClockState: @unchecked Sendable {
     }
     return BenchmarkInstant(nanoseconds: value)
   }
+}
+
+private final class IdentityRecorder: Recorder, @unchecked Sendable {
+  func beginSpan(_ name: StaticString, attributes: SpanAttributes) -> SpanToken {
+    .empty
+  }
+
+  func endSpan(_ token: SpanToken) {}
+
+  func recordEvent(_ name: StaticString, attributes: SpanAttributes) {}
 }

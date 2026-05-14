@@ -3,10 +3,95 @@ import Foundation
 public enum BenchmarkDiscoveryToolDriver {
   public static func run(arguments: [String]) {
     do {
-      try BenchmarkDiscoveryCommand.run(arguments)
+      try BenchmarkDiscoveryBackendRouter.run(arguments)
     } catch {
       fputs("BenchmarkDiscoveryTool: \(error)\n", stderr)
       Foundation.exit(1)
+    }
+  }
+}
+
+enum BenchmarkDiscoveryBackendRouter {
+  static func run(
+    _ arguments: [String],
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) throws {
+    let backend = environment["SWIFT_BENCHMARK_DISCOVERY_BACKEND"]?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased()
+
+    switch backend {
+    case nil, "", "stable":
+      try BenchmarkDiscoveryCommand.run(arguments)
+    case "swiftsyntax":
+      try ExternalSyntaxDiscoveryBackend.run(arguments, environment: environment)
+    case "auto":
+      guard let toolPath = environment["SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH"],
+        !toolPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      else {
+        try BenchmarkDiscoveryCommand.run(arguments)
+        return
+      }
+      do {
+        try ExternalSyntaxDiscoveryBackend.run(arguments, toolPath: toolPath)
+      } catch {
+        fputs(
+          "BenchmarkDiscoveryTool: syntax discovery backend failed in auto mode; falling back to stable backend.\n\(error)\n",
+          stderr
+        )
+        try BenchmarkDiscoveryCommand.run(arguments)
+      }
+    default:
+      throw ToolError.invalidArguments(
+        "unknown discovery backend \(backend ?? ""); expected stable, swiftsyntax, or auto"
+      )
+    }
+  }
+}
+
+enum ExternalSyntaxDiscoveryBackend {
+  static func run(_ arguments: [String], environment: [String: String]) throws {
+    guard let toolPath = environment["SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH"],
+      !toolPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else {
+      throw ToolError.invalidArguments(
+        "SWIFT_BENCHMARK_DISCOVERY_BACKEND=swiftsyntax requires SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH"
+      )
+    }
+    try run(arguments, toolPath: toolPath)
+  }
+
+  static func run(_ arguments: [String], toolPath: String) throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: toolPath)
+    process.arguments = arguments
+
+    let stdout = Pipe()
+    let stderrPipe = Pipe()
+    process.standardOutput = stdout
+    process.standardError = stderrPipe
+
+    try process.run()
+    process.waitUntilExit()
+
+    let output = String(
+      decoding: stdout.fileHandleForReading.readDataToEndOfFile(),
+      as: UTF8.self
+    )
+    let errorOutput = String(
+      decoding: stderrPipe.fileHandleForReading.readDataToEndOfFile(),
+      as: UTF8.self
+    )
+    guard process.terminationReason == .exit, process.terminationStatus == 0 else {
+      let details = [output, errorOutput]
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n")
+      throw ToolError.invalidArguments(
+        details.isEmpty
+          ? "syntax discovery tool exited with status \(process.terminationStatus)"
+          : "syntax discovery tool exited with status \(process.terminationStatus):\n\(details)"
+      )
     }
   }
 }
@@ -39,12 +124,12 @@ enum BenchmarkDiscoveryCommand {
   }
 }
 
-struct DiscoverOptions {
-  var targetsManifestPath: String
-  var workDirectoryPath: String
-  var outputPlanPath: String
+public struct DiscoverOptions {
+  public var targetsManifestPath: String
+  public var workDirectoryPath: String
+  public var outputPlanPath: String
 
-  init(arguments: [String]) throws {
+  public init(arguments: [String]) throws {
     var targetsManifestPath: String?
     var workDirectoryPath: String?
     var outputPlanPath: String?
@@ -90,54 +175,115 @@ struct DiscoverOptions {
   }
 }
 
-struct TargetManifest: Codable {
-  var targets: [TargetDescription]
+public struct TargetManifest: Codable, Equatable {
+  public var targets: [TargetDescription]
+
+  public init(targets: [TargetDescription]) {
+    self.targets = targets
+  }
 }
 
-struct TargetDescription: Codable {
-  var name: String
-  var moduleName: String
-  var kind: String
-  var sourcePaths: [String]
+public struct TargetDescription: Codable, Equatable {
+  public var name: String
+  public var moduleName: String
+  public var kind: String
+  public var sourcePaths: [String]
 
-  var isExecutable: Bool { kind == "executable" }
-  var isMacro: Bool { kind == "macro" }
-  var isSnippet: Bool { kind == "snippet" }
-  var isTest: Bool { kind == "test" }
+  public init(
+    name: String,
+    moduleName: String,
+    kind: String,
+    sourcePaths: [String]
+  ) {
+    self.name = name
+    self.moduleName = moduleName
+    self.kind = kind
+    self.sourcePaths = sourcePaths
+  }
+
+  public var isExecutable: Bool { kind == "executable" }
+  public var isMacro: Bool { kind == "macro" }
+  public var isSnippet: Bool { kind == "snippet" }
+  public var isTest: Bool { kind == "test" }
 }
 
-struct BenchmarkDiscoveryPlan: Codable {
-  var nativeDiscoveries: [NativeDiscoveryReference]
-  var testingBridges: [TestingBridgeReference]
-  var generatedHostSourcePath: String
-  var discoveredTargetNames: [String]
-  var requiresSwiftTesting: Bool
-  var discoveryExpressions: [String]
+public struct BenchmarkDiscoveryPlan: Codable, Equatable {
+  public var nativeDiscoveries: [NativeDiscoveryReference]
+  public var testingBridges: [TestingBridgeReference]
+  public var generatedHostSourcePath: String
+  public var discoveredTargetNames: [String]
+  public var requiresSwiftTesting: Bool
+  public var discoveryExpressions: [String]
 
-  var isEmpty: Bool {
+  public init(
+    nativeDiscoveries: [NativeDiscoveryReference],
+    testingBridges: [TestingBridgeReference],
+    generatedHostSourcePath: String,
+    discoveredTargetNames: [String],
+    requiresSwiftTesting: Bool,
+    discoveryExpressions: [String]
+  ) {
+    self.nativeDiscoveries = nativeDiscoveries
+    self.testingBridges = testingBridges
+    self.generatedHostSourcePath = generatedHostSourcePath
+    self.discoveredTargetNames = discoveredTargetNames
+    self.requiresSwiftTesting = requiresSwiftTesting
+    self.discoveryExpressions = discoveryExpressions
+  }
+
+  public var isEmpty: Bool {
     nativeDiscoveries.isEmpty && testingBridges.isEmpty
   }
 }
 
-struct NativeDiscoveryReference: Codable {
-  var moduleName: String
-  var targetName: String
-  var typeName: String
-  var discoveryTypeName: String
+public struct NativeDiscoveryReference: Codable, Equatable {
+  public var moduleName: String
+  public var targetName: String
+  public var typeName: String
+  public var discoveryTypeName: String
+
+  public init(
+    moduleName: String,
+    targetName: String,
+    typeName: String,
+    discoveryTypeName: String
+  ) {
+    self.moduleName = moduleName
+    self.targetName = targetName
+    self.typeName = typeName
+    self.discoveryTypeName = discoveryTypeName
+  }
 }
 
-struct TestingBridgeReference: Codable {
-  var moduleName: String
-  var targetName: String
-  var discoveryTypeName: String
-  var sourcePath: String
+public struct TestingBridgeReference: Codable, Equatable {
+  public var moduleName: String
+  public var targetName: String
+  public var discoveryTypeName: String
+  public var sourcePath: String
+
+  public init(
+    moduleName: String,
+    targetName: String,
+    discoveryTypeName: String,
+    sourcePath: String
+  ) {
+    self.moduleName = moduleName
+    self.targetName = targetName
+    self.discoveryTypeName = discoveryTypeName
+    self.sourcePath = sourcePath
+  }
 }
 
-struct BenchmarkDiscoveryPlanner {
-  var manifest: TargetManifest
-  var workDirectory: URL
+public struct BenchmarkDiscoveryPlanner {
+  public var manifest: TargetManifest
+  public var workDirectory: URL
 
-  func makePlan() throws -> BenchmarkDiscoveryPlan {
+  public init(manifest: TargetManifest, workDirectory: URL) {
+    self.manifest = manifest
+    self.workDirectory = workDirectory
+  }
+
+  public func makePlan() throws -> BenchmarkDiscoveryPlan {
     var nativeDiscoveries: [NativeDiscoveryReference] = []
     var testingBridges: [TestingBridgeReference] = []
     var skippedExecutableTargets: [String] = []
@@ -197,7 +343,8 @@ struct BenchmarkDiscoveryPlanner {
     } + testingBridges.map {
       "\($0.discoveryTypeName).self"
     }
-    let hostSourcePath = try writeGeneratedHost(
+    let hostSourcePath = try writeGeneratedBenchmarkHost(
+      workDirectory: workDirectory,
       nativeDiscoveries: nativeDiscoveries,
       discoveryExpressions: discoveryExpressions
     )
@@ -243,36 +390,6 @@ struct BenchmarkDiscoveryPlanner {
     )
   }
 
-  private func writeGeneratedHost(
-    nativeDiscoveries: [NativeDiscoveryReference],
-    discoveryExpressions: [String]
-  ) throws -> URL {
-    let directory = workDirectory.appendingPathComponent("GeneratedBenchmarkHost")
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let sourceURL = directory.appendingPathComponent("main.swift")
-    let imports = Set(nativeDiscoveries.map(\.moduleName)).sorted()
-      .map { "import \($0)" }
-      .joined(separator: "\n")
-    let discoveryList = discoveryExpressions
-      .map { "    \($0)" }
-      .joined(separator: ",\n")
-    let source = """
-      import Benchmark
-      import Report
-      \(imports)
-
-      @main
-      struct GeneratedBenchmarkHost {
-        static func main() async throws {
-          try await BenchmarkHost.run(discoveries: [
-      \(discoveryList)
-          ])
-        }
-      }
-      """
-    try source.write(to: sourceURL, atomically: true, encoding: .utf8)
-    return sourceURL
-  }
 }
 
 struct NativeBenchmarkScanner {
@@ -629,12 +746,22 @@ private struct SourceScanner {
   }
 }
 
-private struct BridgeSourceGenerator {
-  var moduleName: String
-  var discoveryName: String
-  var suites: [DiscoveredSuite]
+public struct BridgeSourceGenerator {
+  public var moduleName: String
+  public var discoveryName: String
+  public var suites: [DiscoveredSuite]
 
-  func render() -> String {
+  public init(
+    moduleName: String,
+    discoveryName: String,
+    suites: [DiscoveredSuite]
+  ) {
+    self.moduleName = moduleName
+    self.discoveryName = discoveryName
+    self.suites = suites
+  }
+
+  public func render() -> String {
     """
     import Benchmark
     import BenchmarkTesting
@@ -733,26 +860,51 @@ private struct FunctionDeclaration {
   var parametersAreEmpty: Bool
 }
 
-private struct DiscoveredSuite {
-  var name: String
-  var traits: [String]
-  var cases: [DiscoveredCase]
+public struct DiscoveredSuite {
+  public var name: String
+  public var traits: [String]
+  public var cases: [DiscoveredCase]
+
+  public init(name: String, traits: [String], cases: [DiscoveredCase]) {
+    self.name = name
+    self.traits = traits
+    self.cases = cases
+  }
 }
 
-private struct DiscoveredCase {
-  var name: String
-  var traits: [String]
-  var sourceLocation: BenchmarkSourceLocationLiteral
-  var invocation: String
+public struct DiscoveredCase {
+  public var name: String
+  public var traits: [String]
+  public var sourceLocation: BenchmarkSourceLocationLiteral
+  public var invocation: String
+
+  public init(
+    name: String,
+    traits: [String],
+    sourceLocation: BenchmarkSourceLocationLiteral,
+    invocation: String
+  ) {
+    self.name = name
+    self.traits = traits
+    self.sourceLocation = sourceLocation
+    self.invocation = invocation
+  }
 }
 
-private struct BenchmarkSourceLocationLiteral {
-  var fileID: String
-  var filePath: String
-  var line: Int
-  var column: Int
+public struct BenchmarkSourceLocationLiteral {
+  public var fileID: String
+  public var filePath: String
+  public var line: Int
+  public var column: Int
 
-  var rendered: String {
+  public init(fileID: String, filePath: String, line: Int, column: Int) {
+    self.fileID = fileID
+    self.filePath = filePath
+    self.line = line
+    self.column = column
+  }
+
+  public var rendered: String {
     "BenchmarkSourceLocation(fileID: \(String(reflecting: fileID)), filePath: \(String(reflecting: filePath)), line: \(line), column: \(column))"
   }
 }
@@ -773,11 +925,11 @@ private struct AttributeInfo {
   }
 }
 
-private enum ToolError: Error, CustomStringConvertible {
+public enum ToolError: Error, CustomStringConvertible {
   case invalidArguments(String)
   case diagnostics([String])
 
-  var description: String {
+  public var description: String {
     switch self {
     case .invalidArguments(let message):
       message
@@ -1023,10 +1175,42 @@ private func stripStringLiteralsAndComments(_ source: String) -> String {
   return String(output)
 }
 
-private func sanitizedIdentifier(_ name: String) -> String {
+public func sanitizedIdentifier(_ name: String) -> String {
   let scalars = name.unicodeScalars.map { scalar -> String in
     CharacterSet.alphanumerics.contains(scalar) ? String(scalar) : "_"
   }
   let identifier = scalars.joined()
   return identifier.isEmpty ? "BenchmarkSuite" : identifier
+}
+
+public func writeGeneratedBenchmarkHost(
+  workDirectory: URL,
+  nativeDiscoveries: [NativeDiscoveryReference],
+  discoveryExpressions: [String]
+) throws -> URL {
+  let directory = workDirectory.appendingPathComponent("GeneratedBenchmarkHost")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  let sourceURL = directory.appendingPathComponent("main.swift")
+  let imports = Set(nativeDiscoveries.map(\.moduleName)).sorted()
+    .map { "import \($0)" }
+    .joined(separator: "\n")
+  let discoveryList = discoveryExpressions
+    .map { "    \($0)" }
+    .joined(separator: ",\n")
+  let source = """
+    import Benchmark
+    import Report
+    \(imports)
+
+    @main
+    struct GeneratedBenchmarkHost {
+      static func main() async throws {
+        try await BenchmarkHost.run(discoveries: [
+    \(discoveryList)
+        ])
+      }
+    }
+    """
+  try source.write(to: sourceURL, atomically: true, encoding: .utf8)
+  return sourceURL
 }

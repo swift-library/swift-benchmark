@@ -158,7 +158,7 @@ Type/extension bulk instrumentation is exposed as `@InstrumentedMembers`, which
 applies `@Span("Type.method")` to eligible methods in the annotated declaration
 body. The current Swift macro system rejects one public `@Instrumented` macro
 name that is both a function `body` macro and a type `memberAttribute` macro;
-`Docs/Architecture/Instruments.md` records the compiler evidence behind the
+`Documentation/Architecture/Instruments.md` records the compiler evidence behind the
 split.
 
 ### Benchmark Declaration Macros
@@ -426,4 +426,4 @@ stable private data model to parse.
 - `Benchmark.md`
 - `Instruments.md`
 - `Report.md`
-- `../Migrations/Signpost-To-Instruments.md`
+- `../Migrations/SignpostToInstruments.md`

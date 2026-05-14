@@ -62,11 +62,90 @@ struct InstrumentsRuntimeTests {
   }
 
   @Test
+  func compositeRecorderFansOutSpansAndEvents() {
+    let first = InMemoryRecorder(stackKey: { 4 })
+    let second = InMemoryRecorder(stackKey: { 4 })
+    let recorder = CompositeRecorder([first, second])
+
+    let outer = recorder.beginSpan("outer", attributes: ["component": "test"])
+    let inner = recorder.beginSpan("inner", attributes: ["index": 1])
+    recorder.recordEvent("point", attributes: ["hit": true])
+    recorder.endSpan(inner)
+    recorder.endSpan(outer)
+
+    let firstTimeline = first.snapshot()
+    let secondTimeline = second.snapshot()
+
+    #expect(firstTimeline.spans.map(\.name) == ["outer", "inner"])
+    #expect(secondTimeline.spans.map(\.name) == ["outer", "inner"])
+    #expect(firstTimeline.events.map(\.name) == ["point"])
+    #expect(secondTimeline.events.map(\.name) == ["point"])
+    #expect(firstTimeline.spans[1].parentID == firstTimeline.spans[0].id)
+    #expect(secondTimeline.spans[1].parentID == secondTimeline.spans[0].id)
+    #expect(firstTimeline.events[0].parentSpanID == firstTimeline.spans[1].id)
+    #expect(secondTimeline.events[0].parentSpanID == secondTimeline.spans[1].id)
+  }
+
+  @Test
   func instrumentsCurrentCanBeSetAndReset() {
     let recorder = InMemoryRecorder(stackKey: { 3 })
     InstrumentsCurrentIsolation.withRecorder(recorder) {
       Instruments.current.recordEvent("current", attributes: [:])
       #expect(recorder.snapshot().events.map(\.name) == ["current"])
     }
+  }
+
+  @Test
+  func scopedCurrentRecorderRestoresAfterThrowingOperation() {
+    enum DummyError: Error, Equatable {
+      case boom
+    }
+
+    let outer = InMemoryRecorder(stackKey: { 5 })
+    let inner = InMemoryRecorder(stackKey: { 5 })
+
+    Instruments.withCurrentRecorder(outer) {
+      do {
+        try Instruments.withCurrentRecorder(inner) {
+          Instruments.current.recordEvent("inner", attributes: [:])
+          throw DummyError.boom
+        }
+        Issue.record("Expected scoped recorder operation to throw")
+      } catch DummyError.boom {
+        Instruments.current.recordEvent("outer", attributes: [:])
+      } catch {
+        Issue.record("Unexpected error: \(error)")
+      }
+    }
+
+    #expect(inner.snapshot().events.map(\.name) == ["inner"])
+    #expect(outer.snapshot().events.map(\.name) == ["outer"])
+  }
+
+  @Test
+  func scopedCurrentRecorderRestoresAfterAsyncThrowingOperation() async {
+    enum DummyError: Error, Equatable {
+      case boom
+    }
+
+    let outer = InMemoryRecorder(stackKey: { 6 })
+    let inner = InMemoryRecorder(stackKey: { 6 })
+
+    await Instruments.withCurrentRecorder(outer) {
+      do {
+        try await Instruments.withCurrentRecorder(inner) {
+          Instruments.current.recordEvent("async-inner", attributes: [:])
+          throw DummyError.boom
+        }
+        Issue.record("Expected scoped recorder async operation to throw")
+      } catch DummyError.boom {
+        Instruments.current.recordEvent("async-outer", attributes: [:])
+      } catch {
+        Issue.record("Unexpected error: \(error)")
+      }
+    }
+
+    #expect(inner.snapshot().events.map(\.name) == ["async-inner"])
+    #expect(outer.snapshot().events.map(\.name) == ["async-outer"])
   }
 }

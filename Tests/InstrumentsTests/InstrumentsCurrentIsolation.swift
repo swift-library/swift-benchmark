@@ -10,13 +10,12 @@ enum InstrumentsCurrentIsolation {
     _ body: () throws -> T
   ) rethrows -> T {
     wait()
-    let previous = Instruments.current
-    Instruments.current = recorder
     defer {
-      Instruments.current = previous
       signal()
     }
-    return try body()
+    return try Instruments.withCurrentRecorder(recorder) {
+      try body()
+    }
   }
 
   static func withRecorder<T>(
@@ -24,13 +23,12 @@ enum InstrumentsCurrentIsolation {
     _ body: () async throws -> T
   ) async rethrows -> T {
     wait()
-    let previous = Instruments.current
-    Instruments.current = recorder
     defer {
-      Instruments.current = previous
       signal()
     }
-    return try await body()
+    return try await Instruments.withCurrentRecorder(recorder) {
+      try await body()
+    }
   }
 
   private static func wait() {
