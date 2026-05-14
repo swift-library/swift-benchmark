@@ -22,11 +22,14 @@ truth.
 
 Current source implements both host-backed and no-`--host` package workflows.
 `BenchmarkCLI` forwards list/run/check/trace to `BenchmarkHost`, and the
-SwiftPM `BenchmarkPlugin` discovers production `@BenchmarkSuite` declarations
-in library targets plus supported test-target `@Suite(.benchmark...)` /
-`@Test(.benchmark...)` declarations through the BenchmarkTesting bridge. The
-plugin builds the package, generates an internal host, and delegates to the
-same CLI semantics. Baseline write/update, diff, render, tag filters,
+SwiftPM `BenchmarkPlugin` follows the official plugin-tool pattern:
+`BenchmarkPlugin -> BenchmarkDiscoveryTool -> _BenchmarkDiscoveryCore`.
+The plugin passes SwiftPM target metadata to the discovery tool; the tool emits
+one discovery plan covering production `@BenchmarkSuite` declarations in
+library targets plus supported test-target `@Suite(.benchmark...)` /
+`@Test(.benchmark...)` bridge declarations. The plugin builds the package,
+compiles the generated host from that plan, and delegates to the same CLI
+semantics. Baseline write/update, diff, render, tag filters,
 warmup/iteration/adaptive overrides, diagnostics, trace attachments,
 `xctrace record` provenance, quiet output, and CI exit codes are wired through
 the shared Report model. Explicit `--host` remains an advanced/debug override.
@@ -50,8 +53,10 @@ Memory/allocation evidence, timeline attribution, and xctrace artifacts.
 
 Package workflow rules:
 
-- discover code declarations through `_BenchmarkDiscovery` /
-  `BenchmarkDiscovery`,
+- discover package code declarations through `BenchmarkDiscoveryTool` and a
+  single internal discovery plan,
+- reference native macro-generated `_BenchmarkDiscovery` records for
+  production `@BenchmarkSuite` declarations,
 - bridge supported test-target `@Suite(.benchmark...)` /
   `@Test(.benchmark...)` declarations into generated `_BenchmarkDiscovery`
   records,
@@ -64,7 +69,11 @@ Package workflow rules:
 
 ## CLI / Plugin
 
-The SwiftPM plugin delegates behavior to the CLI. CLI and plugin must share:
+The SwiftPM plugin delegates behavior to the CLI. The plugin must stay a thin
+SwiftPM orchestration layer: it may collect target metadata, call executable
+tools through `context.tool(named:)`, compile generated host sources, and
+propagate tool exit status, but it must not parse benchmark declarations or
+generate bridge sources itself. CLI and plugin must share:
 
 - filters,
 - warmup/iteration overrides,

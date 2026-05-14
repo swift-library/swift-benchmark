@@ -21,18 +21,23 @@ record/accessor path is owned by Swift Testing. The generated thunks and
 - Do not reuse Swift Testing `__swift5_tests`, `Test.all`, or internal record
   ABI as the Benchmark execution bridge.
 - Implement pure `@Suite(.benchmark...)` / `@Test(.benchmark...)` package
-  support with SwiftSyntax source scanning and generated `_BenchmarkDiscovery`
-  bridge code.
-- Keep the scanner in a hidden `BenchmarkCLI` tool command consumed by
-  `BenchmarkPlugin`. The plugin target itself does not depend on SwiftSyntax or
-  SwiftParser, and `Benchmark` core does not depend on Testing or SwiftSyntax.
-  A SwiftSyntax/SwiftParser scanner was validated as the preferred semantic
-  direction, but SwiftPM command-plugin tool builds on Swift 6.3.1 fail under
-  default parallelism with `no such module 'SwiftParser'`; the same path works
-  with `--jobs 1`. Until that toolchain limitation is removed or the scanner is
-  shipped as a prebuilt/otherwise stable tool, the package workflow uses the
-  self-contained scanner so `swift package benchmark` remains production usable
-  without requiring users to pass serial build flags.
+  support with source scanning and generated `_BenchmarkDiscovery` bridge code.
+- Follow the official SwiftPM plugin tool pattern:
+  `BenchmarkPlugin -> BenchmarkDiscoveryTool -> _BenchmarkDiscoveryCore`.
+  `BenchmarkPlugin` is a thin orchestrator that passes SwiftPM target metadata
+  to `BenchmarkDiscoveryTool`, reads the tool's discovery plan, builds the
+  generated host, and delegates execution to `BenchmarkCLI`.
+- Keep all package discovery and source generation in `_BenchmarkDiscoveryCore`.
+  This includes native `@BenchmarkSuite` reference discovery and Testing bridge
+  generation. `BenchmarkCLI` owns benchmark/report workflows only and does not
+  expose hidden discovery commands.
+- The plugin target itself does not depend on SwiftSyntax, SwiftParser,
+  Benchmark, Report, or local library targets. A SwiftSyntax/SwiftParser
+  scanner remains the preferred semantic direction if the source-built tool path
+  validates under SwiftPM command-plugin execution. Until then, the package
+  workflow uses the self-contained scanner behind `_BenchmarkDiscoveryCore` so
+  `swift package benchmark` remains production usable without requiring users
+  to pass serial build flags.
 - The generated bridge links the user's test target and invokes supported test
   methods through `BenchmarkRunner`.
 - `private` and `fileprivate` tests are not supported by the pure Testing

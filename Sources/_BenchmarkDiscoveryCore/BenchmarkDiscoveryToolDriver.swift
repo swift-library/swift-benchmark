@@ -1,78 +1,79 @@
 import Foundation
 
-enum BenchmarkTestingBridgeDiscoveryCommand {
-  static func run(_ arguments: [String]) throws -> String {
-    let options = try Options(arguments: arguments)
-    let scanner = TestingBridgeScanner(options: options)
-    let result = try scanner.scan()
+public enum BenchmarkDiscoveryToolDriver {
+  public static func run(arguments: [String]) {
+    do {
+      try BenchmarkDiscoveryCommand.run(arguments)
+    } catch {
+      fputs("BenchmarkDiscoveryTool: \(error)\n", stderr)
+      Foundation.exit(1)
+    }
+  }
+}
 
-    if !result.diagnostics.isEmpty {
-      throw ToolError.diagnostics(result.diagnostics)
+enum BenchmarkDiscoveryCommand {
+  static func run(_ arguments: [String]) throws {
+    guard arguments.first == "discover" else {
+      throw ToolError.invalidArguments(
+        "usage: BenchmarkDiscoveryTool discover --targets-manifest <path> --work-directory <path> --output-plan <path>"
+      )
     }
 
-    guard !result.suites.isEmpty else {
-      return ""
-    }
+    let options = try DiscoverOptions(arguments: Array(arguments.dropFirst()))
+    let manifestURL = URL(fileURLWithPath: options.targetsManifestPath)
+    let manifestData = try Data(contentsOf: manifestURL)
+    let manifest = try JSONDecoder().decode(TargetManifest.self, from: manifestData)
+    let plan = try BenchmarkDiscoveryPlanner(
+      manifest: manifest,
+      workDirectory: URL(fileURLWithPath: options.workDirectoryPath)
+    ).makePlan()
 
-    let source = BridgeSourceGenerator(
-      moduleName: options.moduleName,
-      discoveryName: options.discoveryName,
-      suites: result.suites
-    ).render()
-
-    let outputURL = URL(fileURLWithPath: options.outputPath)
+    let outputURL = URL(fileURLWithPath: options.outputPlanPath)
     try FileManager.default.createDirectory(
       at: outputURL.deletingLastPathComponent(),
       withIntermediateDirectories: true
     )
-    try source.write(to: outputURL, atomically: true, encoding: .utf8)
-    return options.discoveryName
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    try encoder.encode(plan).write(to: outputURL)
   }
 }
 
-private struct Options {
-  var targetName: String
-  var moduleName: String
-  var discoveryName: String
-  var outputPath: String
-  var sourcePaths: [String]
+struct DiscoverOptions {
+  var targetsManifestPath: String
+  var workDirectoryPath: String
+  var outputPlanPath: String
 
   init(arguments: [String]) throws {
-    var targetName: String?
-    var moduleName: String?
-    var discoveryName: String?
-    var outputPath: String?
-    var sourcePaths: [String] = []
+    var targetsManifestPath: String?
+    var workDirectoryPath: String?
+    var outputPlanPath: String?
     var index = arguments.startIndex
 
     while index < arguments.endIndex {
       let argument = arguments[index]
       switch argument {
-      case "--target-name":
-        targetName = try Self.value(after: argument, in: arguments, index: &index)
-      case "--module-name":
-        moduleName = try Self.value(after: argument, in: arguments, index: &index)
-      case "--discovery-name":
-        discoveryName = try Self.value(after: argument, in: arguments, index: &index)
-      case "--output":
-        outputPath = try Self.value(after: argument, in: arguments, index: &index)
+      case "--targets-manifest":
+        targetsManifestPath = try Self.value(after: argument, in: arguments, index: &index)
+      case "--work-directory":
+        workDirectoryPath = try Self.value(after: argument, in: arguments, index: &index)
+      case "--output-plan":
+        outputPlanPath = try Self.value(after: argument, in: arguments, index: &index)
       default:
-        sourcePaths.append(argument)
+        throw ToolError.invalidArguments("unknown argument \(argument)")
       }
       index = arguments.index(after: index)
     }
 
-    guard let targetName, let moduleName, let discoveryName, let outputPath else {
+    guard let targetsManifestPath, let workDirectoryPath, let outputPlanPath else {
       throw ToolError.invalidArguments(
-        "usage: swift-benchmark-cli __testing-bridge-discovery --target-name <name> --module-name <module> --discovery-name <name> --output <path> <swift-files...>"
+        "usage: BenchmarkDiscoveryTool discover --targets-manifest <path> --work-directory <path> --output-plan <path>"
       )
     }
 
-    self.targetName = targetName
-    self.moduleName = moduleName
-    self.discoveryName = discoveryName
-    self.outputPath = outputPath
-    self.sourcePaths = sourcePaths
+    self.targetsManifestPath = targetsManifestPath
+    self.workDirectoryPath = workDirectoryPath
+    self.outputPlanPath = outputPlanPath
   }
 
   private static func value(
@@ -89,18 +90,238 @@ private struct Options {
   }
 }
 
+struct TargetManifest: Codable {
+  var targets: [TargetDescription]
+}
+
+struct TargetDescription: Codable {
+  var name: String
+  var moduleName: String
+  var kind: String
+  var sourcePaths: [String]
+
+  var isExecutable: Bool { kind == "executable" }
+  var isMacro: Bool { kind == "macro" }
+  var isSnippet: Bool { kind == "snippet" }
+  var isTest: Bool { kind == "test" }
+}
+
+struct BenchmarkDiscoveryPlan: Codable {
+  var nativeDiscoveries: [NativeDiscoveryReference]
+  var testingBridges: [TestingBridgeReference]
+  var generatedHostSourcePath: String
+  var discoveredTargetNames: [String]
+  var requiresSwiftTesting: Bool
+  var discoveryExpressions: [String]
+
+  var isEmpty: Bool {
+    nativeDiscoveries.isEmpty && testingBridges.isEmpty
+  }
+}
+
+struct NativeDiscoveryReference: Codable {
+  var moduleName: String
+  var targetName: String
+  var typeName: String
+  var discoveryTypeName: String
+}
+
+struct TestingBridgeReference: Codable {
+  var moduleName: String
+  var targetName: String
+  var discoveryTypeName: String
+  var sourcePath: String
+}
+
+struct BenchmarkDiscoveryPlanner {
+  var manifest: TargetManifest
+  var workDirectory: URL
+
+  func makePlan() throws -> BenchmarkDiscoveryPlan {
+    var nativeDiscoveries: [NativeDiscoveryReference] = []
+    var testingBridges: [TestingBridgeReference] = []
+    var skippedExecutableTargets: [String] = []
+    var skippedTestTargets: [String] = []
+    var diagnostics: [String] = []
+
+    for target in manifest.targets where !target.isMacro && !target.isSnippet {
+      if target.isTest {
+        if let bridge = try testingBridge(for: target, diagnostics: &diagnostics) {
+          testingBridges.append(bridge)
+          continue
+        }
+        if try !NativeBenchmarkScanner(target: target).scan().isEmpty {
+          skippedTestTargets.append(target.name)
+        }
+        continue
+      }
+
+      let declarations = try NativeBenchmarkScanner(target: target).scan()
+      guard !declarations.isEmpty else {
+        continue
+      }
+
+      guard !target.isExecutable else {
+        skippedExecutableTargets.append(target.name)
+        continue
+      }
+
+      nativeDiscoveries.append(
+        contentsOf: declarations.map { declaration in
+          NativeDiscoveryReference(
+            moduleName: target.moduleName,
+            targetName: target.name,
+            typeName: declaration,
+            discoveryTypeName: "__BenchmarkDiscovery_\(sanitizedIdentifier(declaration))"
+          )
+        }
+      )
+    }
+
+    if !diagnostics.isEmpty {
+      throw ToolError.diagnostics(diagnostics)
+    }
+    if nativeDiscoveries.isEmpty, testingBridges.isEmpty, !skippedExecutableTargets.isEmpty {
+      throw ToolError.diagnostics([
+        "Benchmark declarations were found only in executable target(s) \(skippedExecutableTargets.sorted().joined(separator: ", ")). Move production benchmark declarations to a library target for no-boilerplate package discovery, or use --host as an advanced override."
+      ])
+    }
+    if nativeDiscoveries.isEmpty, testingBridges.isEmpty, !skippedTestTargets.isEmpty {
+      throw ToolError.diagnostics([
+        "Benchmark declarations were found only in test target(s) \(skippedTestTargets.sorted().joined(separator: ", ")). Move production benchmark declarations to a library target for no-boilerplate package discovery, or use --host as an advanced override."
+      ])
+    }
+
+    let discoveryExpressions = nativeDiscoveries.map {
+      "\($0.moduleName).\($0.discoveryTypeName).self"
+    } + testingBridges.map {
+      "\($0.discoveryTypeName).self"
+    }
+    let hostSourcePath = try writeGeneratedHost(
+      nativeDiscoveries: nativeDiscoveries,
+      discoveryExpressions: discoveryExpressions
+    )
+    return BenchmarkDiscoveryPlan(
+      nativeDiscoveries: nativeDiscoveries,
+      testingBridges: testingBridges,
+      generatedHostSourcePath: hostSourcePath.path,
+      discoveredTargetNames: Array(
+        Set(nativeDiscoveries.map(\.targetName) + testingBridges.map(\.targetName))
+      ).sorted(),
+      requiresSwiftTesting: !testingBridges.isEmpty,
+      discoveryExpressions: discoveryExpressions
+    )
+  }
+
+  private func testingBridge(
+    for target: TargetDescription,
+    diagnostics: inout [String]
+  ) throws -> TestingBridgeReference? {
+    let result = try TestingBridgeScanner(target: target).scan()
+    diagnostics.append(contentsOf: result.diagnostics)
+
+    guard !result.suites.isEmpty else {
+      return nil
+    }
+
+    let directory = workDirectory.appendingPathComponent("BenchmarkTestingBridge")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let discoveryName = "__BenchmarkTestingDiscovery_\(sanitizedIdentifier(target.name))"
+    let outputURL = directory.appendingPathComponent("\(sanitizedIdentifier(target.name)).swift")
+    let source = BridgeSourceGenerator(
+      moduleName: target.moduleName,
+      discoveryName: discoveryName,
+      suites: result.suites
+    ).render()
+    try source.write(to: outputURL, atomically: true, encoding: .utf8)
+
+    return TestingBridgeReference(
+      moduleName: target.moduleName,
+      targetName: target.name,
+      discoveryTypeName: discoveryName,
+      sourcePath: outputURL.path
+    )
+  }
+
+  private func writeGeneratedHost(
+    nativeDiscoveries: [NativeDiscoveryReference],
+    discoveryExpressions: [String]
+  ) throws -> URL {
+    let directory = workDirectory.appendingPathComponent("GeneratedBenchmarkHost")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let sourceURL = directory.appendingPathComponent("main.swift")
+    let imports = Set(nativeDiscoveries.map(\.moduleName)).sorted()
+      .map { "import \($0)" }
+      .joined(separator: "\n")
+    let discoveryList = discoveryExpressions
+      .map { "    \($0)" }
+      .joined(separator: ",\n")
+    let source = """
+      import Benchmark
+      import Report
+      \(imports)
+
+      @main
+      struct GeneratedBenchmarkHost {
+        static func main() async throws {
+          try await BenchmarkHost.run(discoveries: [
+      \(discoveryList)
+          ])
+        }
+      }
+      """
+    try source.write(to: sourceURL, atomically: true, encoding: .utf8)
+    return sourceURL
+  }
+}
+
+struct NativeBenchmarkScanner {
+  var target: TargetDescription
+
+  func scan() throws -> [String] {
+    var declarations: [String] = []
+    var seen = Set<String>()
+    let typePattern = try NSRegularExpression(
+      pattern: #"(?m)\b(?:struct|enum|actor|class)\s+([A-Za-z_][A-Za-z0-9_]*)"#,
+      options: []
+    )
+
+    for path in target.sourcePaths {
+      let source = stripStringLiteralsAndComments(
+        try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8)
+      )
+      let lines = source.split(separator: "\n", omittingEmptySubsequences: false)
+      for index in lines.indices where lines[index].contains("@BenchmarkSuite") {
+        let end = lines.index(index, offsetBy: 8, limitedBy: lines.endIndex) ?? lines.endIndex
+        let window = lines[index..<end].joined(separator: "\n")
+        let range = NSRange(window.startIndex..<window.endIndex, in: window)
+        guard let match = typePattern.firstMatch(in: window, range: range),
+          let typeRange = Range(match.range(at: 1), in: window)
+        else {
+          continue
+        }
+        let declaration = String(window[typeRange])
+        if seen.insert(declaration).inserted {
+          declarations.append(declaration)
+        }
+      }
+    }
+    return declarations
+  }
+}
+
 private struct TestingBridgeScanner {
-  var options: Options
+  var target: TargetDescription
 
   func scan() throws -> ScanResult {
     var suites: [DiscoveredSuite] = []
     var diagnostics: [String] = []
 
-    for path in options.sourcePaths {
+    for path in target.sourcePaths {
       let url = URL(fileURLWithPath: path)
       let source = try String(contentsOf: url, encoding: .utf8)
       var scanner = SourceScanner(
-        targetName: options.targetName,
+        targetName: target.name,
         filePath: path,
         source: source
       )
@@ -738,4 +959,74 @@ private func argumentValue(
   }.map { argument in
     String(argument.dropFirst("\(label):".count)).trimmingCharacters(in: .whitespacesAndNewlines)
   }
+}
+
+private func stripStringLiteralsAndComments(_ source: String) -> String {
+  let characters = Array(source)
+  var output: [Character] = []
+  var index = 0
+  while index < characters.count {
+    if characters[index] == "/", index + 1 < characters.count, characters[index + 1] == "/" {
+      while index < characters.count, characters[index] != "\n" {
+        output.append(" ")
+        index += 1
+      }
+      continue
+    }
+    if characters[index] == "\"" {
+      let isTriple = index + 2 < characters.count
+        && characters[index + 1] == "\""
+        && characters[index + 2] == "\""
+      if isTriple {
+        output.append(" ")
+        output.append(" ")
+        output.append(" ")
+        index += 3
+        while index < characters.count {
+          if index + 2 < characters.count,
+            characters[index] == "\"",
+            characters[index + 1] == "\"",
+            characters[index + 2] == "\""
+          {
+            output.append(" ")
+            output.append(" ")
+            output.append(" ")
+            index += 3
+            break
+          }
+          output.append(characters[index] == "\n" ? "\n" : " ")
+          index += 1
+        }
+        continue
+      }
+
+      output.append(" ")
+      index += 1
+      var escaped = false
+      while index < characters.count {
+        let character = characters[index]
+        output.append(character == "\n" ? "\n" : " ")
+        index += 1
+        if escaped {
+          escaped = false
+        } else if character == "\\" {
+          escaped = true
+        } else if character == "\"" {
+          break
+        }
+      }
+      continue
+    }
+    output.append(characters[index])
+    index += 1
+  }
+  return String(output)
+}
+
+private func sanitizedIdentifier(_ name: String) -> String {
+  let scalars = name.unicodeScalars.map { scalar -> String in
+    CharacterSet.alphanumerics.contains(scalar) ? String(scalar) : "_"
+  }
+  let identifier = scalars.joined()
+  return identifier.isEmpty ? "BenchmarkSuite" : identifier
 }

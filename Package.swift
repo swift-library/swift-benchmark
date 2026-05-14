@@ -78,6 +78,15 @@ let package = Package(
       ],
       path: "Sources/BenchmarkCLI"
     ),
+    .target(
+      name: "_BenchmarkDiscoveryCore",
+      path: "Sources/_BenchmarkDiscoveryCore"
+    ),
+    .executableTarget(
+      name: "BenchmarkDiscoveryTool",
+      dependencies: ["_BenchmarkDiscoveryCore"],
+      path: "Sources/BenchmarkDiscoveryTool"
+    ),
     .plugin(
       name: "BenchmarkPlugin",
       capability: .command(
@@ -89,6 +98,7 @@ let package = Package(
       ),
       dependencies: [
         "BenchmarkCLI",
+        "BenchmarkDiscoveryTool",
       ],
       path: "Plugins/BenchmarkPlugin"
     ),
@@ -131,6 +141,11 @@ let package = Package(
     .testTarget(
       name: "WorkflowTests",
       path: "Tests/WorkflowTests"
+    ),
+    .testTarget(
+      name: "BenchmarkDiscoveryCoreTests",
+      dependencies: ["_BenchmarkDiscoveryCore"],
+      path: "Tests/BenchmarkDiscoveryCoreTests"
     ),
   ]
 )

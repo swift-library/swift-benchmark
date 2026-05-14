@@ -65,12 +65,15 @@ Current package facts:
   `BenchmarkTesting`, and `BenchmarkXCTest`.
 - Executable/plugin products today: `swift-benchmark-cli`,
   `BenchmarkCLI`, and `BenchmarkPlugin`.
+- Package workflow implementation tools today: `BenchmarkDiscoveryTool` and
+  `_BenchmarkDiscoveryCore`. They are not public product domains.
 - Runtime/API target today: `Sources/Instruments`.
 - Macro implementation target today: `Sources/InstrumentsMacro`.
 - Benchmark target today: `Sources/Benchmark`.
 - Report and adapter targets today: `Sources/Report`, `Sources/Memory`,
   `Sources/BenchmarkTesting`, `Sources/BenchmarkXCTest`,
-  `Sources/BenchmarkCLI`, and `Plugins/BenchmarkPlugin`.
+  `Sources/BenchmarkCLI`, `Sources/BenchmarkDiscoveryTool`,
+  `Sources/_BenchmarkDiscoveryCore`, and `Plugins/BenchmarkPlugin`.
 - Tests today: `Tests/InstrumentsTests`, `Tests/BenchmarkTests`,
   `Tests/ReportTests`, `Tests/MemoryTests`, `Tests/AdapterTests`, and
   `Tests/WorkflowTests`.
