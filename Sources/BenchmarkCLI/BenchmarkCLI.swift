@@ -57,8 +57,6 @@ struct BenchmarkCLI {
       return try compare(Array(arguments.dropFirst()), failOnRegression: false)
     case "baseline":
       return try await baseline(Array(arguments.dropFirst()))
-    case "__testing-bridge-discovery":
-      return try BenchmarkTestingBridgeDiscoveryCommand.run(Array(arguments.dropFirst()))
     default:
       throw CLIError.unknownCommand(command)
     }
