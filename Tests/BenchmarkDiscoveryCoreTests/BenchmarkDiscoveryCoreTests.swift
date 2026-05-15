@@ -84,6 +84,11 @@ struct BenchmarkDiscoveryCoreTests {
         func suiteNoop() {
           blackHole(3)
         }
+
+        @Benchmark("Suite Native Arguments", arguments: [1, 2])
+        func suiteNativeArguments(_ value: Int) {
+          blackHole(value)
+        }
       }
 
       struct StandaloneTestingBenchmarks {
@@ -129,12 +134,14 @@ struct BenchmarkDiscoveryCoreTests {
     #expect(bridgeSource.contains("@testable import FixtureBenchmarkTests"))
     #expect(bridgeSource.contains("TestingFixture"))
     #expect(bridgeSource.contains("Suite Noop"))
+    #expect(bridgeSource.contains("Suite Native Arguments"))
+    #expect(bridgeSource.contains("arguments: [1, 2]"))
     #expect(bridgeSource.contains("Standalone Testing Benchmark"))
     #expect(!bridgeSource.contains("Plain Test"))
   }
 
   @Test
-  func testingBridgeReportsPrivateAndArgumentsDiagnostics() throws {
+  func testingBridgeReportsPrivateDiagnosticsAndAcceptsArguments() throws {
     let directory = try temporaryDirectory()
     let source = directory.appendingPathComponent("InvalidTestingBenchmarks.swift")
     try """
@@ -169,9 +176,40 @@ struct BenchmarkDiscoveryCoreTests {
       Issue.record("Expected benchmark testing diagnostics")
     } catch {
       let message = String(describing: error)
-      #expect(message.contains("private/fileprivate @Test(.benchmark) cannot be bridged"))
-      #expect(message.contains("@Test(arguments:) is not mapped to Benchmark.Dimension"))
+      #expect(message.contains("private/fileprivate benchmark declarations cannot be bridged"))
+      #expect(!message.contains("@Test(arguments:) is not mapped to Benchmark.Dimension"))
     }
+
+    let validDirectory = try temporaryDirectory()
+    let validSource = validDirectory.appendingPathComponent("ArgumentBenchmarks.swift")
+    try """
+      import BenchmarkTesting
+      import Testing
+
+      @Suite(.benchmark(configuration: .init(warmup: .none, iterations: .iterations(1))))
+      struct ArgumentBenchmarks {
+        @Test("Arguments", arguments: [1, 2])
+        func argumentBenchmark(_ value: Int) {}
+      }
+      """
+      .write(to: validSource, atomically: true, encoding: .utf8)
+
+    let plan = try BenchmarkDiscoveryPlanner(
+      manifest: TargetManifest(
+        targets: [
+          TargetDescription(
+            name: "ArgumentTests",
+            moduleName: "ArgumentTests",
+            kind: "test",
+            sourcePaths: [validSource.path]
+          )
+        ]
+      ),
+      workDirectory: validDirectory
+    ).makePlan()
+    let bridgeSource = try String(contentsOfFile: plan.testingBridges[0].sourcePath, encoding: .utf8)
+    #expect(bridgeSource.contains("arguments: [1, 2]"))
+    #expect(bridgeSource.contains("__benchmarkArgument0"))
   }
 
   @Test

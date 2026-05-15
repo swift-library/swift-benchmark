@@ -84,13 +84,13 @@ topology. It is a Benchmark core measurement concept.
 It describes:
 
 - one Apple-aligned input-size Dimension,
-- `Benchmark.Dimension.Size` values,
+- `Benchmark.Scale` values,
 - a generator that creates the input for each size,
 - setup semantics that keep generation outside measured iterations,
 - amortized metric semantics.
 
 Discovery preserves `Benchmark.Dimension` metadata. `BenchmarkRunner.Plan`
-expands each `Benchmark.Dimension.Size` into executable steps.
+expands each `Benchmark.Scale` into executable steps.
 `Benchmark.Event.Context` carries Dimension context. `Benchmark.Measurement`
 stores one row per size, and ordinary benchmarks use one row with
 `size == nil`.

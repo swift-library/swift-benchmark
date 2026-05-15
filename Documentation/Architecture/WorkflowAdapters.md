@@ -54,7 +54,7 @@ Implemented production benchmark workflow:
 This is the primary production benchmark entry point. It preserves Benchmark
 semantics that a plain Swift Testing `@Test` body does not provide by itself:
 warmup, measured iterations, adaptive/min/max-duration policies, samples,
-Dimension rows, `ReportDocument`, baseline/budget verdicts, CI exit codes,
+argument/scale rows, `ReportDocument`, baseline/budget verdicts, CI exit codes,
 Memory/allocation evidence, timeline attribution, and xctrace artifacts.
 
 Package workflow rules:
@@ -66,8 +66,9 @@ Package workflow rules:
   SwiftSyntax discovery tool specified by `SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH`,
 - reference native macro-generated `_BenchmarkDiscovery` records for
   production `@BenchmarkSuite` declarations,
-- bridge supported test-target `@Suite(.benchmark...)` /
-  `@Test(.benchmark...)` declarations into generated `_BenchmarkDiscovery`
+- bridge supported test-target `@Suite(.benchmark...)`,
+  `@Test(.benchmark...)`, `@Test(arguments:)`, and suite-local
+  `@Benchmark(arguments:)` declarations into generated `_BenchmarkDiscovery`
   records,
 - build `BenchmarkRunner.Plan` before execution,
 - consume `ReportDocument` for baseline/check/diff,

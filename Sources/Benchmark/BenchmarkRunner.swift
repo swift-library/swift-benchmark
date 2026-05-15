@@ -73,8 +73,6 @@ public struct BenchmarkRunner: Sendable {
       )
       let row = try await runRow(
         step: step,
-        size: step.size,
-        benchmarkCase: step.benchmarkCase,
         suite: step.suite,
         policy: policy,
         observers: observers,
@@ -123,8 +121,6 @@ public struct BenchmarkRunner: Sendable {
 
   private func runRow(
     step: Plan.Step,
-    size: Benchmark.Dimension.Size?,
-    benchmarkCase: BenchmarkCase,
     suite: BenchmarkSuite,
     policy: BenchmarkExecutionPolicy,
     observers: [any BenchmarkExecutionObserver],
@@ -137,12 +133,17 @@ public struct BenchmarkRunner: Sendable {
     )
     let operation: @Sendable () async throws -> Void
     do {
-      operation = try await benchmarkCase.makeOperation(size)
+      guard step.action.isMeasure, let row = step.caseRow else {
+        throw BenchmarkRunnerError.invalidConfiguration(
+          "Step '\(step.id)' does not contain a measurement row."
+        )
+      }
+      operation = try await row.makeOperation()
     } catch {
       throw BenchmarkRunnerError.caseFailed(
         suite: suite.name,
-        case: benchmarkCase.name,
-        phase: .dimensionSetup(size: size),
+        case: step.benchmarkCase.name,
+        phase: .dimensionSetup(size: step.size),
         underlying: error
       )
     }
@@ -150,8 +151,9 @@ public struct BenchmarkRunner: Sendable {
     for iteration in 0..<policy.warmupCount {
       let context = BenchmarkExecutionContext(
         suiteName: suite.name,
-        caseName: benchmarkCase.name,
-        size: size,
+        caseName: step.benchmarkCase.name,
+        size: step.size,
+        arguments: step.arguments,
         phase: .warmup(iteration: iteration)
       )
       await record(
@@ -177,7 +179,7 @@ public struct BenchmarkRunner: Sendable {
         )
         throw BenchmarkRunnerError.caseFailed(
           suite: suite.name,
-          case: benchmarkCase.name,
+          case: step.benchmarkCase.name,
           phase: .warmup(iteration: iteration),
           underlying: error
         )
@@ -190,8 +192,9 @@ public struct BenchmarkRunner: Sendable {
       let iteration = samples.count
       let context = BenchmarkExecutionContext(
         suiteName: suite.name,
-        caseName: benchmarkCase.name,
-        size: size,
+        caseName: step.benchmarkCase.name,
+        size: step.size,
+        arguments: step.arguments,
         phase: .measurement(iteration: iteration)
       )
       await record(
@@ -212,7 +215,7 @@ public struct BenchmarkRunner: Sendable {
         )
         throw BenchmarkRunnerError.caseFailed(
           suite: suite.name,
-          case: benchmarkCase.name,
+          case: step.benchmarkCase.name,
           phase: .measurement(iteration: iteration),
           underlying: error
         )
@@ -250,7 +253,12 @@ public struct BenchmarkRunner: Sendable {
       context: Benchmark.Event.Context(step: step),
       eventRecorders: eventRecorders
     )
-    return Benchmark.Measurement.Row(size: size, samples: samples)
+    return Benchmark.Measurement.Row(
+      id: step.argumentRow?.id,
+      size: step.size,
+      arguments: step.arguments,
+      samples: samples
+    )
   }
 
   private func notifyWillRun(
@@ -313,7 +321,7 @@ private struct CaseAccumulator {
 
 public enum BenchmarkPhase: Sendable, Equatable {
   case configuration
-  case dimensionSetup(size: Benchmark.Dimension.Size?)
+  case dimensionSetup(size: Benchmark.Scale?)
   case warmup(iteration: Int)
   case measurement(iteration: Int)
 }

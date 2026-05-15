@@ -85,5 +85,42 @@ struct BenchmarkMacroExpansionTests {
       macros: macros
     )
   }
+
+  @Test
+  func benchmarkSuiteLowersArgumentsIntoDiscoverySuites() {
+    assertMacroExpansion(
+      """
+      @BenchmarkSuite("Parser")
+      struct ParserBenchmarks {
+        @Benchmark("Parse", arguments: [1, 2])
+        func parse(_ size: Int) {
+          blackHole(size)
+        }
+      }
+      """,
+      expandedSource: """
+      struct ParserBenchmarks {
+        @Benchmark("Parse", arguments: [1, 2])
+        func parse(_ size: Int) {
+          blackHole(size)
+        }
+
+        static var __benchmarkSuites: [BenchmarkSuite] {
+          [
+            BenchmarkSuite("Parser", traits: []) {
+              Benchmark("Parse", arguments: [1, 2], traits: []) { __benchmarkArgument0 in
+                Self().parse(__benchmarkArgument0)
+              }
+            }
+          ]
+        }
+      }
+
+      extension ParserBenchmarks: _BenchmarkDiscovery {
+      }
+      """,
+      macros: macros
+    )
+  }
 }
 #endif

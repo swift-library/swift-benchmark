@@ -79,9 +79,9 @@ public struct ReportBuilder: Sendable {
             let measurement = Report.Measurement(
               rows: accumulator.rows
                 .sorted { lhs, rhs in
-                  switch (lhs.key, rhs.key) {
+                  switch (lhs.key.scale, rhs.key.scale) {
                   case (nil, nil):
-                    return false
+                    return (lhs.key.id ?? "") < (rhs.key.id ?? "")
                   case (nil, _):
                     return true
                   case (_, nil):
@@ -90,9 +90,11 @@ public struct ReportBuilder: Sendable {
                     return lhs < rhs
                   }
                 }
-                .map { size, samples in
+                .map { row, samples in
                   Report.Measurement.Row(
-                    size: size,
+                    id: row.id,
+                    size: row.scale,
+                    arguments: row.arguments,
                     samples: samples.sorted { $0.iteration < $1.iteration }
                   )
                 }
@@ -171,18 +173,25 @@ public struct ReportBuilder: Sendable {
           suiteName: suiteName,
           caseName: caseName,
           size: record.context.size,
+          rowID: record.context.argumentRowID,
           iteration: iteration
         ),
         iterationID: ReportIDFactory.iteration(
           suiteName: suiteName,
           caseName: caseName,
           size: record.context.size,
+          rowID: record.context.argumentRowID,
           iteration: iteration
         ),
         iteration: iteration,
         durationNanoseconds: duration
       )
-      cases[key]?.rows[record.context.size, default: []].append(sample)
+      let row = Benchmark.ArgumentRow(
+        id: record.context.argumentRowID,
+        arguments: record.context.arguments,
+        scale: record.context.size
+      )
+      cases[key]?.rows[row, default: []].append(sample)
     }
     return cases.filter { !$0.value.rows.isEmpty }
   }
@@ -244,7 +253,7 @@ private struct CaseAccumulator {
   var sourceLocation: BenchmarkSourceLocation?
   var configurationWarmup: String?
   var configurationIterations: String?
-  var rows: [Benchmark.Dimension.Size?: [SampleReport]] = [:]
+  var rows: [Benchmark.ArgumentRow: [SampleReport]] = [:]
 
   mutating func merge(context: Benchmark.Event.Context) {
     if tags.isEmpty, !context.tags.isEmpty {

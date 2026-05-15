@@ -522,15 +522,18 @@ private struct SourceScanner {
     _ function: FunctionDeclaration,
     suiteType: TypeDeclaration?
   ) -> DiscoveredCase? {
-    guard let testAttribute = pendingAttribute(named: "Test") else {
+    let benchmarkAttribute = pendingAttribute(named: "Benchmark")
+    let testAttribute = pendingAttribute(named: "Test")
+    guard let bridgeAttribute = benchmarkAttribute ?? testAttribute else {
       pendingAttributes.removeAll()
       return nil
     }
     pendingAttributes.removeAll()
 
-    let testInfo = attributeInfo(from: testAttribute)
+    let testInfo = attributeInfo(from: bridgeAttribute)
     let context = contexts.last
-    let isEnrolled = context?.isEnrolled == true || testInfo.hasBenchmark
+    let isNativeBenchmark = bridgeAttribute.name == "Benchmark"
+    let isEnrolled = isNativeBenchmark || context?.isEnrolled == true || testInfo.hasBenchmark
     guard isEnrolled else {
       return nil
     }
@@ -538,13 +541,44 @@ private struct SourceScanner {
     let diagnosticPrefix = "\(filePath):\(function.line):\(function.column):"
     if function.isPrivate {
       diagnostics.append(
-        "\(diagnosticPrefix) private/fileprivate @Test(.benchmark) cannot be bridged from generated source; make it internal or use @BenchmarkSuite/@Benchmark for same-scope discovery."
+        "\(diagnosticPrefix) private/fileprivate benchmark declarations cannot be bridged from generated source; make them internal or use @BenchmarkSuite/@Benchmark for same-scope discovery."
       )
       return nil
     }
-    if testInfo.hasArguments || !function.parametersAreEmpty {
+    if !testInfo.argumentExpressions.isEmpty, function.parameters.isEmpty {
       diagnostics.append(
-        "\(diagnosticPrefix) @Test(arguments:) is not mapped to Benchmark.Dimension; use Benchmark.Dimension for input-size benchmarks."
+        "\(diagnosticPrefix) parameterized benchmark declarations require at least one function parameter."
+      )
+      return nil
+    }
+    if testInfo.argumentExpressions.count > 2 {
+      diagnostics.append(
+        "\(diagnosticPrefix) benchmark argument discovery currently supports one collection, two collections, or zip(...)."
+      )
+      return nil
+    }
+    let argumentBinding = invocationBinding(
+      parameterCount: function.parameters.count,
+      argumentExpressions: testInfo.argumentExpressions
+    )
+    if !testInfo.argumentExpressions.isEmpty, argumentBinding == nil {
+      diagnostics.append(
+        "\(diagnosticPrefix) benchmark argument count does not match the function parameters."
+      )
+      return nil
+    }
+    if testInfo.argumentExpressions.isEmpty,
+      testInfo.dimensionExpression == nil,
+      !function.parameters.isEmpty
+    {
+      diagnostics.append(
+        "\(diagnosticPrefix) parameterized benchmark declarations require arguments: or .dimension(sizes:)."
+      )
+      return nil
+    }
+    if testInfo.dimensionExpression != nil, function.parameters.count > 1 {
+      diagnostics.append(
+        "\(diagnosticPrefix) Dimension benchmark declarations support at most one Benchmark.Scale parameter."
       )
       return nil
     }
@@ -570,7 +604,15 @@ private struct SourceScanner {
         line: function.line,
         column: function.column
       ),
-      invocation: invocationExpression(for: function, suiteType: suiteType)
+      argumentExpressions: testInfo.argumentExpressions,
+      closureParameters: argumentBinding?.closureParameters ?? [],
+      dimensionExpression: testInfo.dimensionExpression,
+      invocation: invocationExpression(
+        for: function,
+        suiteType: suiteType,
+        argumentValues: argumentBinding?.invocationArguments
+          ?? (testInfo.dimensionExpression != nil && function.parameters.count == 1 ? ["__benchmarkScale"] : [])
+      )
     )
 
     if contexts.indices.contains(contexts.count - 1) {
@@ -589,19 +631,27 @@ private struct SourceScanner {
 
   private func invocationExpression(
     for function: FunctionDeclaration,
-    suiteType: TypeDeclaration?
+    suiteType: TypeDeclaration?,
+    argumentValues: [String] = []
   ) -> String {
     let effectPrefix = "\(function.isThrowing ? "try " : "")\(function.isAsync ? "await " : "")"
+    let call = "\(function.name)(\(callParameterArguments(for: function, values: argumentValues)))"
     guard let suiteType else {
-      return "\(effectPrefix)\(function.name)()"
+      return "\(effectPrefix)\(call)"
     }
     if function.isStatic {
-      return "\(effectPrefix)\(suiteType.qualifiedName).\(function.name)()"
+      return "\(effectPrefix)\(suiteType.qualifiedName).\(call)"
     }
     return """
       var suite = \(suiteType.qualifiedName)()
-      \(effectPrefix)suite.\(function.name)()
+      \(effectPrefix)suite.\(call)
       """
+  }
+
+  private func callParameterArguments(for function: FunctionDeclaration, values: [String]) -> String {
+    zip(function.parameters, values)
+      .map { parameter, value in "\(callLabel(parameter))\(value)" }
+      .joined(separator: ", ")
   }
 
   private mutating func popClosedContexts() {
@@ -701,7 +751,7 @@ private struct SourceScanner {
       isStatic: prefix.contains("static ") || prefix.contains("class "),
       isAsync: effects.contains(" async"),
       isThrowing: effects.contains(" throws") || effects.contains(" rethrows"),
-      parametersAreEmpty: parameters.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      parameters: functionParameters(from: parameters)
     )
   }
 
@@ -710,7 +760,8 @@ private struct SourceScanner {
     return AttributeInfo(
       displayName: firstStringLiteral(in: text),
       hasBenchmark: containsBenchmarkTrait(text),
-      hasArguments: text.contains("arguments:"),
+      argumentExpressions: benchmarkArgumentExpressions(from: attribute),
+      dimensionExpression: benchmarkDimensionExpression(from: text),
       traits: benchmarkTraits(from: text) + tagTraits(from: text)
     )
   }
@@ -744,6 +795,11 @@ private struct SourceScanner {
     }
     return trimmed.split(separator: ".").last.map(String.init)
   }
+}
+
+private struct InvocationBinding {
+  var closureParameters: [String]
+  var invocationArguments: [String]
 }
 
 public struct BridgeSourceGenerator {
@@ -788,7 +844,32 @@ public struct BridgeSourceGenerator {
   }
 
   private func renderCase(_ benchmarkCase: DiscoveredCase) -> String {
+    if !benchmarkCase.argumentExpressions.isEmpty {
+      return """
+            Benchmark(
+              \(String(reflecting: benchmarkCase.name)),
+              arguments: \(benchmarkCase.argumentExpressions.joined(separator: ", ")),
+              traits: \(renderCaseTraits(benchmarkCase.traits)),
+              sourceLocation: \(benchmarkCase.sourceLocation.rendered)
+            ) { \(benchmarkCase.closureParameters.joined(separator: ", ")) in
+    \(indent(benchmarkCase.invocation, spaces: 10))
+            }
     """
+    }
+    if let dimension = benchmarkCase.dimensionExpression {
+      return """
+            Benchmark(
+              \(String(reflecting: benchmarkCase.name)),
+              dimension: \(dimension),
+              traits: \(renderCaseTraits(benchmarkCase.traits)),
+              sourceLocation: \(benchmarkCase.sourceLocation.rendered),
+              input: { $0 }
+            ) { __benchmarkScale in
+    \(indent(benchmarkCase.invocation, spaces: 10))
+            }
+    """
+    }
+    return """
             Benchmark(
               \(String(reflecting: benchmarkCase.name)),
               traits: \(renderCaseTraits(benchmarkCase.traits)),
@@ -857,7 +938,12 @@ private struct FunctionDeclaration {
   var isStatic: Bool
   var isAsync: Bool
   var isThrowing: Bool
-  var parametersAreEmpty: Bool
+  var parameters: [FunctionParameter]
+}
+
+private struct FunctionParameter {
+  var firstName: String
+  var secondName: String?
 }
 
 public struct DiscoveredSuite {
@@ -876,17 +962,26 @@ public struct DiscoveredCase {
   public var name: String
   public var traits: [String]
   public var sourceLocation: BenchmarkSourceLocationLiteral
+  public var argumentExpressions: [String]
+  public var closureParameters: [String]
+  public var dimensionExpression: String?
   public var invocation: String
 
   public init(
     name: String,
     traits: [String],
     sourceLocation: BenchmarkSourceLocationLiteral,
+    argumentExpressions: [String] = [],
+    closureParameters: [String] = [],
+    dimensionExpression: String? = nil,
     invocation: String
   ) {
     self.name = name
     self.traits = traits
     self.sourceLocation = sourceLocation
+    self.argumentExpressions = argumentExpressions
+    self.closureParameters = closureParameters
+    self.dimensionExpression = dimensionExpression
     self.invocation = invocation
   }
 }
@@ -912,14 +1007,16 @@ public struct BenchmarkSourceLocationLiteral {
 private struct AttributeInfo {
   var displayName: String?
   var hasBenchmark: Bool
-  var hasArguments: Bool
+  var argumentExpressions: [String]
+  var dimensionExpression: String?
   var traits: [String]
 
   static var empty: AttributeInfo {
     AttributeInfo(
       displayName: nil,
       hasBenchmark: false,
-      hasArguments: false,
+      argumentExpressions: [],
+      dimensionExpression: nil,
       traits: []
     )
   }
@@ -1056,6 +1153,8 @@ private func callArguments(named name: String, in text: String) -> [String] {
   }
   var index = range.upperBound
   var balance = 1
+  var bracketBalance = 0
+  var braceBalance = 0
   var current = ""
   var arguments: [String] = []
   var inString = false
@@ -1087,7 +1186,19 @@ private func callArguments(named name: String, in text: String) -> [String] {
         break
       }
       current.append(character)
-    } else if character == ",", balance == 1 {
+    } else if character == "[" {
+      bracketBalance += 1
+      current.append(character)
+    } else if character == "]" {
+      bracketBalance -= 1
+      current.append(character)
+    } else if character == "{" {
+      braceBalance += 1
+      current.append(character)
+    } else if character == "}" {
+      braceBalance -= 1
+      current.append(character)
+    } else if character == ",", balance == 1 && bracketBalance == 0 && braceBalance == 0 {
       let argument = current.trimmingCharacters(in: .whitespacesAndNewlines)
       if !argument.isEmpty {
         arguments.append(argument)
@@ -1111,6 +1222,146 @@ private func argumentValue(
   }.map { argument in
     String(argument.dropFirst("\(label):".count)).trimmingCharacters(in: .whitespacesAndNewlines)
   }
+}
+
+private func benchmarkArgumentExpressions(from attribute: PendingAttribute) -> [String] {
+  let arguments = callArguments(named: attribute.name, in: attribute.text)
+  guard let startIndex = arguments.firstIndex(where: {
+    $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("arguments:")
+  }) else {
+    return []
+  }
+  let first = arguments[startIndex]
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+    .dropFirst("arguments:".count)
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+  var result = [String(first)]
+  var index = arguments.index(after: startIndex)
+  while index < arguments.endIndex {
+    let argument = arguments[index].trimmingCharacters(in: .whitespacesAndNewlines)
+    if argument.contains(":") {
+      break
+    }
+    result.append(argument)
+    index = arguments.index(after: index)
+  }
+  return result.filter { !$0.isEmpty }
+}
+
+private func benchmarkDimensionExpression(from text: String) -> String? {
+  for callName in ["Benchmark", "Test"] {
+    for argument in callArguments(named: callName, in: text) {
+      let trimmed = argument.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmed.hasPrefix(".dimension(") {
+        return "Benchmark.Dimension\(trimmed.dropFirst(".dimension".count))"
+      }
+    }
+  }
+  return nil
+}
+
+private func invocationBinding(
+  parameterCount: Int,
+  argumentExpressions: [String]
+) -> InvocationBinding? {
+  guard !argumentExpressions.isEmpty else {
+    return nil
+  }
+  if argumentExpressions.count == 1,
+    argumentExpressions[0].trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("zip("),
+    parameterCount == 2
+  {
+    return InvocationBinding(
+      closureParameters: ["__benchmarkArgument0", "__benchmarkArgument1"],
+      invocationArguments: ["__benchmarkArgument0", "__benchmarkArgument1"]
+    )
+  }
+  if argumentExpressions.count == 1, parameterCount > 1 {
+    return InvocationBinding(
+      closureParameters: ["__benchmarkArguments"],
+      invocationArguments: (0..<parameterCount).map { "__benchmarkArguments.\($0)" }
+    )
+  }
+  guard argumentExpressions.count == parameterCount else {
+    return nil
+  }
+  let parameters = (0..<parameterCount).map { "__benchmarkArgument\($0)" }
+  return InvocationBinding(closureParameters: parameters, invocationArguments: parameters)
+}
+
+private func functionParameters(from text: String) -> [FunctionParameter] {
+  splitTopLevel(text, separator: ",").compactMap { raw in
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+      return nil
+    }
+    let signature = trimmed.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: true)
+      .first
+      .map(String.init) ?? trimmed
+    let names = signature.split(whereSeparator: \.isWhitespace).map(String.init)
+    guard let first = names.first else {
+      return nil
+    }
+    let second = names.dropFirst().first
+    return FunctionParameter(firstName: first, secondName: second)
+  }
+}
+
+private func callLabel(_ parameter: FunctionParameter) -> String {
+  parameter.firstName == "_" ? "" : "\(parameter.firstName): "
+}
+
+private func splitTopLevel(_ text: String, separator: Character) -> [String] {
+  var result: [String] = []
+  var current = ""
+  var paren = 0
+  var bracket = 0
+  var angle = 0
+  var inString = false
+  var escaped = false
+  for character in text {
+    if inString {
+      current.append(character)
+      if escaped {
+        escaped = false
+      } else if character == "\\" {
+        escaped = true
+      } else if character == "\"" {
+        inString = false
+      }
+      continue
+    }
+    switch character {
+    case "\"":
+      inString = true
+      current.append(character)
+    case "(":
+      paren += 1
+      current.append(character)
+    case ")":
+      paren -= 1
+      current.append(character)
+    case "[":
+      bracket += 1
+      current.append(character)
+    case "]":
+      bracket -= 1
+      current.append(character)
+    case "<":
+      angle += 1
+      current.append(character)
+    case ">":
+      angle -= 1
+      current.append(character)
+    case separator where paren == 0 && bracket == 0 && angle == 0:
+      result.append(current)
+      current = ""
+    default:
+      current.append(character)
+    }
+  }
+  result.append(current)
+  return result
 }
 
 private func stripStringLiteralsAndComments(_ source: String) -> String {

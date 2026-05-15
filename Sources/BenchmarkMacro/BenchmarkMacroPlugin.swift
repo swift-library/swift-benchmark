@@ -28,10 +28,23 @@ public struct BenchmarkSuiteMacro: MemberMacro, ExtensionMacro, PeerMacro {
         return nil
       }
       let caseName = benchmarkNameExpression(from: function)
-      let caseTraits = function.attributes.compactMap(benchmarkAttribute).first
-        .map(traitArrayExpression(from:)) ?? "[]"
+      let benchmarkAttribute = function.attributes.compactMap(benchmarkAttribute).first
+      let caseTraits = benchmarkAttribute.map(traitArrayExpression(from:)) ?? "[]"
       let target = isStatic(function) ? "Self." : "Self()."
       let parameters = Array(function.signature.parameterClause.parameters)
+      if let benchmarkAttribute,
+        let arguments = argumentExpressions(from: benchmarkAttribute),
+        !arguments.isEmpty
+      {
+        return parameterizedBenchmarkExpression(
+          caseName: caseName,
+          caseTraits: caseTraits,
+          arguments: arguments,
+          target: target,
+          function: function,
+          parameters: parameters
+        )
+      }
       if parameters.isEmpty {
         let invocation = "\(throwingPrefix(function))\(asyncPrefix(function))\(target)\(function.name.text)()"
         return """
@@ -41,7 +54,7 @@ public struct BenchmarkSuiteMacro: MemberMacro, ExtensionMacro, PeerMacro {
           """
       }
       guard parameters.count == 1,
-        let attribute = function.attributes.compactMap(benchmarkAttribute).first,
+        let attribute = benchmarkAttribute,
         let dimension = dimensionExpression(from: attribute)
       else {
         return nil
@@ -114,7 +127,7 @@ private func suiteNameExpression(
   from attribute: AttributeSyntax,
   declaration: some DeclGroupSyntax
 ) -> String {
-  if let expression = parsedArguments(from: attribute).name {
+  if let expression = parsedMacroArguments(from: attribute).name {
     return expression.trimmedDescription
   }
   if let named = declaration.asProtocol(NamedDeclSyntax.self) {
@@ -125,7 +138,7 @@ private func suiteNameExpression(
 
 private func benchmarkNameExpression(from function: FunctionDeclSyntax) -> String {
   guard let attribute = function.attributes.compactMap(benchmarkAttribute).first,
-    let expression = parsedArguments(from: attribute).name
+    let expression = parsedMacroArguments(from: attribute).name
   else {
     return String(reflecting: function.name.text)
   }
@@ -133,7 +146,7 @@ private func benchmarkNameExpression(from function: FunctionDeclSyntax) -> Strin
 }
 
 private func traitArrayExpression(from attribute: AttributeSyntax) -> String {
-  let traits = parsedArguments(from: attribute).traits
+  let traits = parsedMacroArguments(from: attribute).traits
   guard !traits.isEmpty else {
     return "[]"
   }
@@ -141,7 +154,7 @@ private func traitArrayExpression(from attribute: AttributeSyntax) -> String {
 }
 
 private func dimensionExpression(from attribute: AttributeSyntax) -> String? {
-  for expression in parsedArguments(from: attribute).traits {
+  for expression in parsedMacroArguments(from: attribute).traits {
     let text = expression.trimmedDescription
     if text.hasPrefix(".dimension(") {
       return "Benchmark.Dimension\(text.dropFirst(".dimension".count))"
@@ -150,23 +163,90 @@ private func dimensionExpression(from attribute: AttributeSyntax) -> String? {
   return nil
 }
 
-private func parsedArguments(from attribute: AttributeSyntax) -> (name: ExprSyntax?, traits: [ExprSyntax]) {
+private func parameterizedBenchmarkExpression(
+  caseName: String,
+  caseTraits: String,
+  arguments: [String],
+  target: String,
+  function: FunctionDeclSyntax,
+  parameters: [FunctionParameterSyntax]
+) -> String? {
+  guard !parameters.isEmpty else {
+    return nil
+  }
+  let argumentList = arguments.joined(separator: ", ")
+  let closureParameters: [String]
+  let invocationArguments: [String]
+  if arguments.count == 1,
+    arguments[0].trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("zip("),
+    parameters.count == 2
+  {
+    closureParameters = ["__benchmarkArgument0", "__benchmarkArgument1"]
+    invocationArguments = closureParameters
+  } else if arguments.count == 1, parameters.count > 1 {
+    closureParameters = ["__benchmarkArguments"]
+    invocationArguments = parameters.indices.map { "__benchmarkArguments.\($0)" }
+  } else {
+    guard arguments.count == parameters.count else {
+      return nil
+    }
+    closureParameters = parameters.indices.map { "__benchmarkArgument\($0)" }
+    invocationArguments = closureParameters
+  }
+
+  let callArguments = zip(parameters, invocationArguments)
+    .map { parameter, value in "\(callLabel(parameter))\(value)" }
+    .joined(separator: ", ")
+  let invocation = "\(throwingPrefix(function))\(asyncPrefix(function))\(target)\(function.name.text)(\(callArguments))"
+  return """
+        Benchmark(\(caseName), arguments: \(argumentList), traits: \(caseTraits)) { \(closureParameters.joined(separator: ", ")) in
+          \(invocation)
+        }
+    """
+}
+
+private func argumentExpressions(from attribute: AttributeSyntax) -> [String]? {
+  parsedMacroArguments(from: attribute).arguments.map { $0.map(\.trimmedDescription) }
+}
+
+private struct ParsedMacroArguments {
+  var name: ExprSyntax?
+  var traits: [ExprSyntax]
+  var arguments: [ExprSyntax]?
+}
+
+private func parsedMacroArguments(from attribute: AttributeSyntax) -> ParsedMacroArguments {
   guard let arguments = attribute.arguments else {
-    return (nil, [])
+    return ParsedMacroArguments(name: nil, traits: [], arguments: nil)
   }
   switch arguments {
   case .argumentList(let list):
-    var expressions = list.map(\.expression)
-    let name: ExprSyntax?
-    if let first = expressions.first, isNameExpression(first) {
-      name = first
-      expressions.removeFirst()
-    } else {
+    var expressions: [ExprSyntax] = []
+    var argumentExpressions: [ExprSyntax]?
+    var name: ExprSyntax?
+    var sawName = false
+    for element in list {
+      if element.label?.text == "arguments" {
+        argumentExpressions = [element.expression]
+        continue
+      }
+      if argumentExpressions != nil, element.label == nil {
+        argumentExpressions?.append(element.expression)
+        continue
+      }
+      if !sawName, element.label == nil, isNameExpression(element.expression) {
+        name = element.expression
+        sawName = true
+        continue
+      }
+      expressions.append(element.expression)
+    }
+    if !sawName {
       name = nil
     }
-    return (name, expressions)
+    return ParsedMacroArguments(name: name, traits: expressions, arguments: argumentExpressions)
   default:
-    return (nil, [])
+    return ParsedMacroArguments(name: nil, traits: [], arguments: nil)
   }
 }
 

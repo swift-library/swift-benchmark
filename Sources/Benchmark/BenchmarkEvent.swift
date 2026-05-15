@@ -36,7 +36,9 @@ public extension Benchmark.Event {
     public var suiteName: String?
     public var caseName: String?
     public var stepID: String?
-    public var size: Benchmark.Dimension.Size?
+    public var size: Benchmark.Scale?
+    public var argumentRowID: String?
+    public var arguments: [Benchmark.ArgumentValue]
     public var iteration: Int?
     public var phase: String?
     public var durationNanoseconds: UInt64?
@@ -50,7 +52,9 @@ public extension Benchmark.Event {
       suiteName: String? = nil,
       caseName: String? = nil,
       stepID: String? = nil,
-      size: Benchmark.Dimension.Size? = nil,
+      size: Benchmark.Scale? = nil,
+      argumentRowID: String? = nil,
+      arguments: [Benchmark.ArgumentValue] = [],
       iteration: Int? = nil,
       phase: String? = nil,
       durationNanoseconds: UInt64? = nil,
@@ -64,6 +68,8 @@ public extension Benchmark.Event {
       self.caseName = caseName
       self.stepID = stepID
       self.size = size
+      self.argumentRowID = argumentRowID
+      self.arguments = arguments
       self.iteration = iteration
       self.phase = phase
       self.durationNanoseconds = durationNanoseconds
@@ -86,6 +92,8 @@ public extension Benchmark.Event {
         caseName: step.caseName,
         stepID: step.id,
         size: step.size,
+        argumentRowID: step.argumentRow?.id,
+        arguments: step.arguments,
         iteration: iteration,
         phase: phase.map(String.init(describing:)),
         durationNanoseconds: durationNanoseconds,

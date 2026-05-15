@@ -48,15 +48,16 @@ public extension BenchmarkRunner {
             continue
           }
 
-          let sizes = Self.dimensionSizes(for: resolved)
-          for action in sizes {
+          let rowActions = Self.measurementRows(for: resolved)
+          for planned in rowActions {
             steps.append(
               Step(
                 suite: suite,
                 benchmarkCase: benchmarkCase,
                 configuration: resolved.configuration,
                 tags: resolved.tags,
-                action: action
+                action: planned.action,
+                caseRow: planned.caseRow
               )
             )
           }
@@ -65,24 +66,59 @@ public extension BenchmarkRunner {
       self.steps = steps
     }
 
-    private static func dimensionSizes(for resolved: ResolvedCase) -> [Action] {
+    private static func measurementRows(for resolved: ResolvedCase) -> [PlannedAction] {
+      if let rows = resolved.parameterizedRows {
+        guard !rows.isEmpty else {
+          return [.action(.planningFailure(.invalidArguments(benchmarkName: resolved.caseName, reason: "requires at least one argument")))]
+        }
+        if let invalid = rows.first(where: { ($0.metadata.scale?.rawValue ?? 1) <= 0 }) {
+          return [
+            .action(.planningFailure(
+              .invalidDimension(
+                benchmarkName: resolved.caseName,
+                reason: "has invalid scale \(invalid.metadata.scale?.rawValue ?? 0)"
+              )
+            ))
+          ]
+        }
+        return rows.map { .measure($0) }
+      }
+
       guard let dimension = resolved.dimension else {
-        return [.measure(size: nil)]
-      }
-      guard !dimension.sizes.isEmpty else {
-        return [.planningFailure(.invalidDimension(benchmarkName: resolved.caseName, reason: "requires at least one size"))]
-      }
-      if let invalid = dimension.sizes.first(where: { $0.rawValue <= 0 }) {
         return [
-          .planningFailure(
-            .invalidDimension(
-              benchmarkName: resolved.caseName,
-              reason: "has invalid size \(invalid.rawValue)"
+          .measure(
+            BenchmarkCaseRow(
+              metadata: .unparameterized,
+              makeOperation: { try await resolved.makeOperation(nil) }
             )
           )
         ]
       }
-      return dimension.sizes.map { .measure(size: $0) }
+      guard !dimension.sizes.isEmpty else {
+        return [.action(.planningFailure(.invalidDimension(benchmarkName: resolved.caseName, reason: "requires at least one size")))]
+      }
+      if let invalid = dimension.sizes.first(where: { $0.rawValue <= 0 }) {
+        return [
+          .action(.planningFailure(
+            .invalidDimension(
+              benchmarkName: resolved.caseName,
+              reason: "has invalid size \(invalid.rawValue)"
+            )
+          ))
+        ]
+      }
+      return dimension.sizes.map { size in
+        .measure(
+          BenchmarkCaseRow(
+            metadata: Benchmark.ArgumentRow(
+              id: "scale-\(size.rawValue)",
+              arguments: [Benchmark.ArgumentValue(label: String(size.rawValue), scale: size)],
+              scale: size
+            ),
+            makeOperation: { try await resolved.makeOperation(size) }
+          )
+        )
+      }
     }
   }
 }
@@ -163,13 +199,14 @@ public extension BenchmarkRunner.Plan {
     public var configuration: BenchmarkConfiguration
     public var tags: [String]
     public var action: Action
+    var caseRow: BenchmarkCaseRow?
 
     public var id: String {
       [
         "benchmark",
         stableIDComponent(suiteName),
         stableIDComponent(caseName),
-        size.map { "size-\($0.rawValue)" },
+        rowID,
       ]
       .compactMap { $0 }
       .joined(separator: ":")
@@ -183,27 +220,56 @@ public extension BenchmarkRunner.Plan {
       benchmarkCase.name
     }
 
-    public var size: Benchmark.Dimension.Size? {
+    public var size: Benchmark.Scale? {
       switch action {
-      case .measure(let size):
-        return size
+      case .measure(let row):
+        return row.scale
       case .skip, .planningFailure:
         return nil
       }
     }
 
-    public init(
+    public var arguments: [Benchmark.ArgumentValue] {
+      switch action {
+      case .measure(let row):
+        return row.arguments
+      case .skip, .planningFailure:
+        return []
+      }
+    }
+
+    var argumentRow: Benchmark.ArgumentRow? {
+      switch action {
+      case .measure(let row):
+        return row
+      case .skip, .planningFailure:
+        return nil
+      }
+    }
+
+    private var rowID: String? {
+      switch action {
+      case .measure(let row):
+        return row.id
+      case .skip, .planningFailure:
+        return nil
+      }
+    }
+
+    init(
       suite: BenchmarkSuite,
       benchmarkCase: BenchmarkCase,
       configuration: BenchmarkConfiguration,
       tags: [String] = [],
-      action: Action
+      action: Action,
+      caseRow: BenchmarkCaseRow? = nil
     ) {
       self.suite = suite
       self.benchmarkCase = benchmarkCase
       self.configuration = configuration
       self.tags = tags
       self.action = action
+      self.caseRow = caseRow
     }
 
     private func stableIDComponent(_ value: String) -> String {
@@ -223,10 +289,32 @@ public extension BenchmarkRunner.Plan {
     }
   }
 
-  enum Action: Sendable, Equatable {
-    case measure(size: Benchmark.Dimension.Size?)
+  enum Action: Sendable {
+    case measure(Benchmark.ArgumentRow)
     case skip(reason: String)
     case planningFailure(BenchmarkPlanningIssue)
+  }
+}
+
+private struct PlannedAction: Sendable {
+  var action: BenchmarkRunner.Plan.Action
+  var caseRow: BenchmarkCaseRow?
+
+  static func measure(_ row: BenchmarkCaseRow) -> PlannedAction {
+    PlannedAction(action: .measure(row.metadata), caseRow: row)
+  }
+
+  static func action(_ action: BenchmarkRunner.Plan.Action) -> PlannedAction {
+    PlannedAction(action: action, caseRow: nil)
+  }
+}
+
+extension BenchmarkRunner.Plan.Action {
+  var isMeasure: Bool {
+    if case .measure = self {
+      return true
+    }
+    return false
   }
 }
 
@@ -234,6 +322,7 @@ public enum BenchmarkPlanningIssue: Sendable, Equatable, CustomStringConvertible
   case conflictingConfiguration(benchmarkName: String)
   case conflictingDimension(benchmarkName: String)
   case invalidDimension(benchmarkName: String, reason: String)
+  case invalidArguments(benchmarkName: String, reason: String)
 
   public var description: String {
     switch self {
@@ -243,6 +332,8 @@ public enum BenchmarkPlanningIssue: Sendable, Equatable, CustomStringConvertible
       return "Benchmark '\(benchmarkName)' has conflicting Dimension traits."
     case .invalidDimension(let benchmarkName, let reason):
       return "Dimension benchmark '\(benchmarkName)' \(reason)."
+    case .invalidArguments(let benchmarkName, let reason):
+      return "Parameterized benchmark '\(benchmarkName)' \(reason)."
     }
   }
 }
@@ -275,9 +366,11 @@ private struct ResolvedCase {
   var caseName: String
   var configuration: BenchmarkConfiguration
   var dimension: Benchmark.Dimension?
+  var parameterizedRows: [BenchmarkCaseRow]?
   var skipReason: String?
   var tags: [String]
   var issue: BenchmarkPlanningIssue?
+  var makeOperation: @Sendable (Benchmark.Scale?) async throws -> @Sendable () async throws -> Void
 
   init(
     suite: BenchmarkSuite,
@@ -285,6 +378,8 @@ private struct ResolvedCase {
     benchmarkCase: BenchmarkCase
   ) {
     caseName = benchmarkCase.name
+    parameterizedRows = benchmarkCase.parameterizedRows
+    makeOperation = benchmarkCase.makeOperation
     var configurationIssue = false
     var dimensionIssue = false
     var caseConfigurations: [BenchmarkConfiguration] = []
@@ -316,6 +411,9 @@ private struct ResolvedCase {
     }
 
     if caseDimensions.containsConflict {
+      dimensionIssue = true
+    }
+    if benchmarkCase.parameterizedRows != nil, !caseDimensions.isEmpty {
       dimensionIssue = true
     }
     if let directDimension = benchmarkCase.dimension,

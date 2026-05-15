@@ -161,7 +161,7 @@ public enum TimelineCorrelator {
     runID: ReportID,
     suiteName: String,
     caseName: String,
-    size: Benchmark.Dimension.Size? = nil,
+    size: Benchmark.Scale? = nil,
     iteration: Int
   ) -> TimelineAttribution {
     let suiteID = ReportIDFactory.suite(suiteName)
@@ -244,7 +244,7 @@ public enum TimelineCorrelator {
     _ attributes: SpanAttributes,
     suiteName: String,
     caseName: String,
-    size: Benchmark.Dimension.Size?,
+    size: Benchmark.Scale?,
     iteration: Int
   ) -> Bool {
     attributes.values[TimelineCorrelationKeys.suite] == .string(suiteName)
@@ -255,7 +255,7 @@ public enum TimelineCorrelator {
 
   private static func matchesDimension(
     _ attributes: SpanAttributes,
-    size: Benchmark.Dimension.Size?
+    size: Benchmark.Scale?
   ) -> Bool {
     guard let size else {
       return attributes.values[TimelineCorrelationKeys.dimensionSize] == nil

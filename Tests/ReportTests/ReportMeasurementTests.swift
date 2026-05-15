@@ -69,14 +69,14 @@ struct ReportMeasurementTests {
           configuration: .default,
           measurement: Measurement(rows: [
             Measurement.Row(
-              size: Benchmark.Dimension.Size(10),
+              size: Benchmark.Scale(10),
               samples: [
                 Sample(iteration: 0, durationNanoseconds: 10),
                 Sample(iteration: 1, durationNanoseconds: 20),
               ]
             ),
             Measurement.Row(
-              size: Benchmark.Dimension.Size(100),
+              size: Benchmark.Scale(100),
               samples: [
                 Sample(iteration: 0, durationNanoseconds: 100),
                 Sample(iteration: 1, durationNanoseconds: 200),

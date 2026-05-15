@@ -9,7 +9,7 @@ Proposal only. Not part of the implemented single-Dimension architecture.
 The accepted active architecture is single-Dimension:
 
 ```text
-Benchmark.Dimension.Size
+Benchmark.Scale
   -> Benchmark.Measurement.Row(size:samples:)
   -> Report.Measurement.Row.metrics
   -> Report.DimensionCurve

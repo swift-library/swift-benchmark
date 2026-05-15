@@ -185,14 +185,16 @@ private struct SyntaxSuiteContext {
 private struct SyntaxAttributeInfo {
   var displayName: String?
   var hasBenchmark: Bool
-  var hasArguments: Bool
+  var argumentExpressions: [String]
+  var dimensionExpression: String?
   var traits: [String]
 
   static var empty: SyntaxAttributeInfo {
     SyntaxAttributeInfo(
       displayName: nil,
       hasBenchmark: false,
-      hasArguments: false,
+      argumentExpressions: [],
+      dimensionExpression: nil,
       traits: []
     )
   }
@@ -355,13 +357,16 @@ private final class SyntaxDiscoveryVisitor: SyntaxVisitor {
   }
 
   private func scanFunction(_ node: FunctionDeclSyntax) {
-    guard let testAttribute = attribute(named: "Test", in: node.attributes) else {
+    let benchmarkAttribute = attribute(named: "Benchmark", in: node.attributes)
+    let testAttribute = attribute(named: "Test", in: node.attributes)
+    guard let bridgeAttribute = benchmarkAttribute ?? testAttribute else {
       return
     }
 
-    let testInfo = attributeInfo(from: testAttribute)
+    let testInfo = attributeInfo(from: bridgeAttribute)
     let context = contexts.last
-    let isEnrolled = context?.isEnrolled == true || testInfo.hasBenchmark
+    let isNativeBenchmark = benchmarkAttribute != nil
+    let isEnrolled = isNativeBenchmark || context?.isEnrolled == true || testInfo.hasBenchmark
     guard isEnrolled else {
       return
     }
@@ -373,13 +378,45 @@ private final class SyntaxDiscoveryVisitor: SyntaxVisitor {
 
     if isPrivate(node.modifiers) {
       diagnostics.append(
-        "\(diagnosticPrefix) private/fileprivate @Test(.benchmark) cannot be bridged from generated source; make it internal or use @BenchmarkSuite/@Benchmark for same-scope discovery."
+        "\(diagnosticPrefix) private/fileprivate benchmark declarations cannot be bridged from generated source; make them internal or use @BenchmarkSuite/@Benchmark for same-scope discovery."
       )
       return
     }
-    if testInfo.hasArguments || !node.signature.parameterClause.parameters.isEmpty {
+    let parameterCount = node.signature.parameterClause.parameters.count
+    if !testInfo.argumentExpressions.isEmpty, parameterCount == 0 {
       diagnostics.append(
-        "\(diagnosticPrefix) @Test(arguments:) is not mapped to Benchmark.Dimension; use Benchmark.Dimension for input-size benchmarks."
+        "\(diagnosticPrefix) parameterized benchmark declarations require at least one function parameter."
+      )
+      return
+    }
+    if testInfo.argumentExpressions.count > 2 {
+      diagnostics.append(
+        "\(diagnosticPrefix) benchmark argument discovery currently supports one collection, two collections, or zip(...)."
+      )
+      return
+    }
+    let argumentBinding = invocationBinding(
+      parameterCount: parameterCount,
+      argumentExpressions: testInfo.argumentExpressions
+    )
+    if !testInfo.argumentExpressions.isEmpty, argumentBinding == nil {
+      diagnostics.append(
+        "\(diagnosticPrefix) benchmark argument count does not match the function parameters."
+      )
+      return
+    }
+    if testInfo.argumentExpressions.isEmpty,
+      testInfo.dimensionExpression == nil,
+      !node.signature.parameterClause.parameters.isEmpty
+    {
+      diagnostics.append(
+        "\(diagnosticPrefix) parameterized benchmark declarations require arguments: or .dimension(sizes:)."
+      )
+      return
+    }
+    if testInfo.dimensionExpression != nil, parameterCount > 1 {
+      diagnostics.append(
+        "\(diagnosticPrefix) Dimension benchmark declarations support at most one Benchmark.Scale parameter."
       )
       return
     }
@@ -405,7 +442,15 @@ private final class SyntaxDiscoveryVisitor: SyntaxVisitor {
         line: line,
         column: column
       ),
-      invocation: invocationExpression(for: node, suiteType: context?.type)
+      argumentExpressions: testInfo.argumentExpressions,
+      closureParameters: argumentBinding?.closureParameters ?? [],
+      dimensionExpression: testInfo.dimensionExpression,
+      invocation: invocationExpression(
+        for: node,
+        suiteType: context?.type,
+        argumentValues: argumentBinding?.invocationArguments
+          ?? (testInfo.dimensionExpression != nil && parameterCount == 1 ? ["__benchmarkScale"] : [])
+      )
     )
 
     if contexts.indices.contains(contexts.count - 1) {
@@ -423,19 +468,27 @@ private final class SyntaxDiscoveryVisitor: SyntaxVisitor {
 
   private func invocationExpression(
     for node: FunctionDeclSyntax,
-    suiteType: SyntaxTypeDeclaration?
+    suiteType: SyntaxTypeDeclaration?,
+    argumentValues: [String] = []
   ) -> String {
     let effectPrefix = "\(node.signature.effectSpecifiers?.throwsClause == nil ? "" : "try ")\(node.signature.effectSpecifiers?.asyncSpecifier == nil ? "" : "await ")"
+    let call = "\(node.name.text)(\(callArguments(for: node, values: argumentValues)))"
     guard let suiteType else {
-      return "\(effectPrefix)\(node.name.text)()"
+      return "\(effectPrefix)\(call)"
     }
     if isStatic(node.modifiers) {
-      return "\(effectPrefix)\(suiteType.qualifiedName).\(node.name.text)()"
+      return "\(effectPrefix)\(suiteType.qualifiedName).\(call)"
     }
     return """
       var suite = \(suiteType.qualifiedName)()
-      \(effectPrefix)suite.\(node.name.text)()
+      \(effectPrefix)suite.\(call)
       """
+  }
+
+  private func callArguments(for node: FunctionDeclSyntax, values: [String]) -> String {
+    zip(node.signature.parameterClause.parameters, values)
+      .map { parameter, value in "\(callLabel(parameter))\(value)" }
+      .joined(separator: ", ")
   }
 }
 
@@ -457,7 +510,8 @@ private func attributeInfo(from attribute: AttributeSyntax) -> SyntaxAttributeIn
   return SyntaxAttributeInfo(
     displayName: firstStringLiteral(in: text),
     hasBenchmark: containsBenchmarkTrait(text),
-    hasArguments: text.contains("arguments:"),
+    argumentExpressions: benchmarkArgumentExpressions(from: attribute),
+    dimensionExpression: benchmarkDimensionExpression(from: attribute),
     traits: benchmarkTraits(from: text) + tagTraits(from: text)
   )
 }
@@ -476,8 +530,82 @@ private func isStatic(_ modifiers: DeclModifierListSyntax) -> Bool {
   }
 }
 
+private struct InvocationBinding {
+  var closureParameters: [String]
+  var invocationArguments: [String]
+}
+
+private func invocationBinding(
+  parameterCount: Int,
+  argumentExpressions: [String]
+) -> InvocationBinding? {
+  guard !argumentExpressions.isEmpty else {
+    return nil
+  }
+  if argumentExpressions.count == 1,
+    argumentExpressions[0].trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("zip("),
+    parameterCount == 2
+  {
+    return InvocationBinding(
+      closureParameters: ["__benchmarkArgument0", "__benchmarkArgument1"],
+      invocationArguments: ["__benchmarkArgument0", "__benchmarkArgument1"]
+    )
+  }
+  if argumentExpressions.count == 1, parameterCount > 1 {
+    return InvocationBinding(
+      closureParameters: ["__benchmarkArguments"],
+      invocationArguments: (0..<parameterCount).map { "__benchmarkArguments.\($0)" }
+    )
+  }
+  guard argumentExpressions.count == parameterCount else {
+    return nil
+  }
+  let parameters = (0..<parameterCount).map { "__benchmarkArgument\($0)" }
+  return InvocationBinding(closureParameters: parameters, invocationArguments: parameters)
+}
+
+private func callLabel(_ parameter: FunctionParameterSyntax) -> String {
+  parameter.firstName.text == "_" ? "" : "\(parameter.firstName.text): "
+}
+
 private func containsBenchmarkTrait(_ text: String) -> Bool {
   text.contains(".benchmark") || text.contains("benchmark(")
+}
+
+private func benchmarkArgumentExpressions(from attribute: AttributeSyntax) -> [String] {
+  guard case .argumentList(let list) = attribute.arguments else {
+    return []
+  }
+  var result: [String] = []
+  var collecting = false
+  for element in list {
+    if element.label?.text == "arguments" {
+      result.append(element.expression.trimmedDescription)
+      collecting = true
+      continue
+    }
+    if collecting, element.label == nil {
+      result.append(element.expression.trimmedDescription)
+      continue
+    }
+    if collecting {
+      break
+    }
+  }
+  return result
+}
+
+private func benchmarkDimensionExpression(from attribute: AttributeSyntax) -> String? {
+  guard case .argumentList(let list) = attribute.arguments else {
+    return nil
+  }
+  for element in list {
+    let text = element.expression.trimmedDescription
+    if text.hasPrefix(".dimension(") {
+      return "Benchmark.Dimension\(text.dropFirst(".dimension".count))"
+    }
+  }
+  return nil
 }
 
 private func benchmarkTraits(from text: String) -> [String] {
