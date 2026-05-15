@@ -1,18 +1,21 @@
 public struct BenchmarkExecutionContext: Sendable, Equatable {
   public var suiteName: String
   public var caseName: String
-  public var size: Benchmark.Dimension.Size?
+  public var size: Benchmark.Scale?
+  public var arguments: [Benchmark.ArgumentValue]
   public var phase: BenchmarkPhase
 
   public init(
     suiteName: String,
     caseName: String,
-    size: Benchmark.Dimension.Size? = nil,
+    size: Benchmark.Scale? = nil,
+    arguments: [Benchmark.ArgumentValue] = [],
     phase: BenchmarkPhase
   ) {
     self.suiteName = suiteName
     self.caseName = caseName
     self.size = size
+    self.arguments = arguments
     self.phase = phase
   }
 }

@@ -85,7 +85,7 @@ Raw samples are the source of truth for measurement.
 rows and samples:
 
 - ordinary benchmarks produce one `Measurement.Row(size: nil, samples: ...)`,
-- Dimension benchmarks produce one row per `Benchmark.Dimension.Size`,
+- Dimension benchmarks produce one row per `Benchmark.Scale`,
 - the Dimension generator runs before measured iterations and is not sampled.
 
 Report projects measurement rows into `Report.Measurement`. Derived metrics

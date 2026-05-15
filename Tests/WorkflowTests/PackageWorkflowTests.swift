@@ -517,7 +517,7 @@ struct PackageWorkflowTests {
       atPath: argumentsScratch,
       withIntermediateDirectories: true
     )
-    let argumentsFailure = try runProcessFailure(
+    let argumentsList = try runProcess(
       executable: "/usr/bin/env",
       arguments: [
         "swift",
@@ -536,10 +536,11 @@ struct PackageWorkflowTests {
       ]
     )
 
-    #expect(privateFailure.contains("private/fileprivate @Test(.benchmark) cannot be bridged"))
-    #expect(privateFailure.contains("make it internal"))
-    #expect(argumentsFailure.contains("@Test(arguments:) is not mapped to Benchmark.Dimension"))
-    #expect(argumentsFailure.contains("use Benchmark.Dimension"))
+    #expect(privateFailure.contains("private/fileprivate benchmark declarations cannot be bridged"))
+    #expect(privateFailure.contains("make them internal"))
+    #expect(argumentsList.contains("\"dimensionSizes\""))
+    #expect(argumentsList.contains("1"))
+    #expect(argumentsList.contains("2"))
   }
 
   private func runProcess(executable: String, arguments: [String]) throws -> String {

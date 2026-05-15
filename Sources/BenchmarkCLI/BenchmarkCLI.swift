@@ -1,4 +1,5 @@
 import Benchmark
+import Dispatch
 import Foundation
 import Report
 
@@ -206,10 +207,14 @@ struct BenchmarkCLI {
     process.standardOutput = stdout
     process.standardError = stderr
     try process.run()
+    let stdoutCapture = PipeCapture()
+    let stderrCapture = PipeCapture()
+    stdoutCapture.startReading(stdout.fileHandleForReading)
+    stderrCapture.startReading(stderr.fileHandleForReading)
     process.waitUntilExit()
 
-    let output = String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    let errorOutput = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    let output = stdoutCapture.string()
+    let errorOutput = stderrCapture.string()
     guard process.terminationStatus == 0 else {
       throw CLIError.hostFailure(status: process.terminationStatus, stderr: errorOutput)
     }
@@ -228,6 +233,31 @@ struct BenchmarkCLI {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     return String(decoding: try encoder.encode(value), as: UTF8.self)
+  }
+}
+
+private final class PipeCapture: @unchecked Sendable {
+  private let group = DispatchGroup()
+  private let lock = NSLock()
+  private var data = Data()
+
+  func startReading(_ fileHandle: FileHandle) {
+    group.enter()
+    DispatchQueue.global(qos: .utility).async { [self] in
+      let captured = fileHandle.readDataToEndOfFile()
+      lock.lock()
+      data.append(captured)
+      lock.unlock()
+      group.leave()
+    }
+  }
+
+  func string() -> String {
+    group.wait()
+    lock.lock()
+    let captured = data
+    lock.unlock()
+    return String(decoding: captured, as: UTF8.self)
   }
 }
 

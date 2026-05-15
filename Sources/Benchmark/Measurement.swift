@@ -9,7 +9,7 @@ public extension Benchmark {
     }
 
     public init(samples: [Sample]) {
-      self.init(rows: [Row(size: nil, samples: samples)])
+      self.init(rows: [Row(size: nil, arguments: [], samples: samples)])
     }
 
     public var samples: [Sample] {
@@ -20,11 +20,20 @@ public extension Benchmark {
 
 public extension Benchmark.Measurement {
   struct Row: Sendable, Equatable {
-    public var size: Benchmark.Dimension.Size?
+    public var id: String?
+    public var size: Benchmark.Scale?
+    public var arguments: [Benchmark.ArgumentValue]
     public var samples: [Sample]
 
-    public init(size: Benchmark.Dimension.Size?, samples: [Sample]) {
+    public init(
+      id: String? = nil,
+      size: Benchmark.Scale?,
+      arguments: [Benchmark.ArgumentValue] = [],
+      samples: [Sample]
+    ) {
+      self.id = id
       self.size = size
+      self.arguments = arguments
       self.samples = samples
     }
   }

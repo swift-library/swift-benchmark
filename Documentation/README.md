@@ -10,6 +10,8 @@ This tree contains repository-level documentation for `swift-benchmark`.
 - `Archive/`: retired or superseded historical material.
 - `Reference/`: durable implementation checklists and detailed reference
   material that supports the current architecture.
+- `Findings.md`: observed implementation findings that are not yet accepted
+  architecture truth.
 
 User-facing package usage is split by depth: the root `README.md` is the
 quick-start and best-practice entrypoint, while `Documentation/UsageManual.md` is the
@@ -44,6 +46,8 @@ Documentation roles:
 - `Documentation/Decisions/*`: accepted decisions and ADRs.
 - `Documentation/Migrations/*`: migration records and breaking semantic shifts.
 - `Documentation/Archive/*`: superseded historical material.
+- `Documentation/Findings.md`: observed findings to promote or retire after
+  validation.
 
 `Documentation/Architecture/*` is current truth. Proposal, decision,
 migration, archive, and reference documents can support that truth, but they do

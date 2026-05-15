@@ -58,6 +58,86 @@ struct BenchmarkRunnerTests {
   }
 
   @Test
+  func runnerProducesRowsAndCurvesForIntegerArguments() async throws {
+    let measured = Counter()
+    let suite = BenchmarkSuite(
+      "Arguments",
+      configuration: BenchmarkConfiguration(warmup: .iterations(1), iterations: .iterations(2))
+    ) {
+      Benchmark("Integer", arguments: [1, 2, 4]) { value in
+        measured.increment(by: value)
+      }
+    }
+
+    let results = try await BenchmarkRunner(clock: StepClock(step: 5)).run(suite)
+    let rows = try #require(results.first?.measurement.rows)
+
+    #expect(measured.value == (1 + 2 + 4) * 3)
+    #expect(rows.map(\.size?.rawValue) == [1, 2, 4])
+    #expect(rows.map { $0.arguments.map(\.label) } == [["1"], ["2"], ["4"]])
+  }
+
+  @Test
+  func runnerProducesRowsWithoutCurvesForStringArguments() async throws {
+    let suite = BenchmarkSuite(
+      "Arguments",
+      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+    ) {
+      Benchmark("Files", arguments: ["small.md", "large.md"]) { file in
+        blackHole(file)
+      }
+    }
+
+    let results = try await BenchmarkRunner(clock: StepClock(step: 5)).run(suite)
+    let rows = try #require(results.first?.measurement.rows)
+
+    #expect(rows.map(\.size?.rawValue) == [nil, nil])
+    #expect(rows.map { $0.arguments.map(\.label) } == [["small.md"], ["large.md"]])
+  }
+
+  @Test
+  func runnerInfersScaleFromRawRepresentableIntegerArguments() async throws {
+    enum Fixture: Int, Sendable {
+      case small = 10
+      case large = 100
+    }
+
+    let suite = BenchmarkSuite(
+      "Arguments",
+      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+    ) {
+      Benchmark("Raw", arguments: [Fixture.small, .large]) { fixture in
+        blackHole(fixture)
+      }
+    }
+
+    let rows = try await BenchmarkRunner(clock: StepClock(step: 5)).run(suite)
+      .first?.measurement.rows
+
+    #expect(rows?.map(\.size?.rawValue) == [10, 100])
+  }
+
+  @Test
+  func runnerSupportsCartesianAndZippedArguments() async throws {
+    let cartesian = BenchmarkSuite(
+      "Arguments",
+      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+    ) {
+      Benchmark("Cartesian", arguments: [1, 2], ["a", "b"]) { number, string in
+        blackHole((number, string))
+      }
+      Benchmark("Zipped", arguments: zip([1, 2], ["a", "b"])) { number, string in
+        blackHole((number, string))
+      }
+    }
+
+    let plan = try BenchmarkRunner.Plan(suites: [cartesian])
+
+    #expect(plan.steps.filter { $0.caseName == "Cartesian" }.count == 4)
+    #expect(plan.steps.filter { $0.caseName == "Zipped" }.count == 2)
+  }
+
+  @Test
   func planFiltersAndExpandsDimensionSteps() async throws {
     let suite = BenchmarkSuite(
       "Plan",

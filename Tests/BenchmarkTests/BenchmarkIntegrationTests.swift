@@ -21,7 +21,7 @@ struct MacroTraitDiscoveredBenchmarks {
 @BenchmarkSuite("Macro Dimension")
 struct MacroDimensionDiscoveredBenchmarks {
   @Benchmark("Sized", .dimension(sizes: [3, 5]))
-  func sized(size: Benchmark.Dimension.Size) {
+  func sized(size: Benchmark.Scale) {
     blackHole(size.rawValue)
   }
 }

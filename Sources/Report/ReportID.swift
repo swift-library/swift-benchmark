@@ -75,10 +75,14 @@ enum ReportIDFactory {
   static func row(
     suiteName: String,
     caseName: String,
-    size: Benchmark.Dimension.Size?
+    size: Benchmark.Scale?,
+    rowID: String? = nil
   ) -> ReportID {
     if let size {
       return ReportID(rawValue: "row:\(stable(suiteName)).\(stable(caseName)).size-\(size.rawValue)")
+    }
+    if let rowID, !rowID.isEmpty {
+      return ReportID(rawValue: "row:\(stable(suiteName)).\(stable(caseName)).\(stable(rowID))")
     }
     return ReportID(rawValue: "row:\(stable(suiteName)).\(stable(caseName))")
   }
@@ -86,21 +90,23 @@ enum ReportIDFactory {
   static func iteration(
     suiteName: String,
     caseName: String,
-    size: Benchmark.Dimension.Size? = nil,
+    size: Benchmark.Scale? = nil,
+    rowID: String? = nil,
     iteration: Int
   ) -> ReportID {
     ReportID(
-      rawValue: "iteration:\(stable(suiteName)).\(stable(caseName))\(dimensionSuffix(size)).\(iteration)"
+      rawValue: "iteration:\(stable(suiteName)).\(stable(caseName))\(rowSuffix(size: size, rowID: rowID)).\(iteration)"
     )
   }
 
   static func sample(
     suiteName: String,
     caseName: String,
-    size: Benchmark.Dimension.Size? = nil,
+    size: Benchmark.Scale? = nil,
+    rowID: String? = nil,
     iteration: Int
   ) -> ReportID {
-    ReportID(rawValue: "sample:\(stable(suiteName)).\(stable(caseName))\(dimensionSuffix(size)).\(iteration)")
+    ReportID(rawValue: "sample:\(stable(suiteName)).\(stable(caseName))\(rowSuffix(size: size, rowID: rowID)).\(iteration)")
   }
 
   static func dimensionCurve(
@@ -126,10 +132,13 @@ enum ReportIDFactory {
       .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
   }
 
-  private static func dimensionSuffix(_ size: Benchmark.Dimension.Size?) -> String {
-    guard let size else {
+  private static func rowSuffix(size: Benchmark.Scale?, rowID: String?) -> String {
+    if let size {
+      return ".size-\(size.rawValue)"
+    }
+    guard let rowID, !rowID.isEmpty else {
       return ""
     }
-    return ".size-\(size.rawValue)"
+    return ".\(stable(rowID))"
   }
 }

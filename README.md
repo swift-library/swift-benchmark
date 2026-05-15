@@ -15,18 +15,17 @@ repeatable measurement:
 The implemented current scope includes:
 
 1. Instruments-first runtime and macro alignment.
-2. Swift-Testing-shaped Benchmark declarations, traits/tags, discovery, runner
-   plans, event streams, fixed/adaptive measurement, and structured Dimension
-   measurement.
-3. Report JSON, baseline/budget checks, Dimension curves, adapter helpers,
+2. Swift-Testing-shaped Benchmark declarations, arguments, traits/tags,
+   discovery, runner plans, event streams, fixed/adaptive measurement, and
+   structured scale measurement.
+3. Report JSON, baseline/budget checks, argument rows and Dimension curves, adapter helpers,
    Memory/allocation evidence, xctrace/Instruments trace evidence, and
    host-backed plus no-host SwiftPM package workflows.
 
-The accepted active architecture is Dimension-first: `Benchmark.Dimension`
-describes one input-size measurement dimension, `Benchmark.Measurement`
-preserves the measured rows and samples, and `Report.Measurement` projects that
-truth into derived metrics, baselines, budgets, and `Report.DimensionCurve`
-records.
+The accepted active architecture is arguments-first: benchmark declarations use
+Swift Testing-style `arguments` for parameterized rows. Numeric arguments are
+projected into `Benchmark.Scale` for curves, amortized metrics, and
+`Report.DimensionCurve` records.
 
 Signpost is not a product domain; it is the Apple backend that should live
 behind the Instruments recorder model. Benchmark remains a separate product
@@ -74,13 +73,13 @@ core paths:
 - Native library-target `@BenchmarkSuite` / `@Benchmark` authoring.
 - No-host `swift package benchmark list/run/check/trace` for supported package
   declarations.
-- `ReportDocument` JSON, baselines, budgets, Dimension rows/curves, timeline
+- `ReportDocument` JSON, baselines, budgets, argument rows/curves, timeline
   attribution, memory/allocation evidence, xctrace attachments, and stable CI
   exit semantics.
 
 Known boundaries are explicit: executable-only declarations use advanced
 `--host`, `private`/`fileprivate` Testing bridge declarations are diagnosed,
-`@Test(arguments:)` is not mapped to `Benchmark.Dimension`, and MetricKit is
+ambiguous multi-numeric argument rows do not infer a curve key, and MetricKit is
 future optional production diagnostics evidence.
 
 ### Discovery Backend
@@ -130,9 +129,9 @@ extension Tag {
   .tags(.parser)
 )
 struct ParserPerformanceTests {
-  @Test("Parse document")
-  func parseDocument() throws {
-    let document = makeDocument()
+  @Test("Parse document", arguments: [1, 2, 4, 8])
+  func parseDocument(scale: Int) throws {
+    let document = makeDocument(scale: scale)
     try blackHole(parse(document))
   }
 }
@@ -195,8 +194,8 @@ also continue through Signpost/xctrace for deeper Instruments analysis.
 - Put day-to-day benchmark workloads in `Tests` and run them separately with
   `swift package benchmark`.
 - Use tags to define fast local subsets and slower CI/release gates.
-- Use `Benchmark.Dimension` for input-size curves; do not overload
-  Swift Testing `@Test(arguments:)` for performance scaling.
+- Use Swift Testing-style `arguments` for input rows. Integer arguments, and
+  integer-backed `RawRepresentable` arguments, produce `Benchmark.Scale` curves.
 - Treat `ReportDocument` JSON as the contract for agents, dashboards, and
   downstream renderers.
 - Use native `@BenchmarkSuite` / `@Benchmark` when a benchmark should live in a
@@ -212,9 +211,9 @@ The README is intentionally the quick-start path. The complete usage manual is
 
 - Tests-first BenchmarkTesting authoring.
 - Native `@BenchmarkSuite` / `@Benchmark` authoring.
-- Dimension input-size measurements.
+- Argument and scale input-size measurements.
 - CLI/plugin commands for list, run, check, baseline, diff, trace, and render.
-- `ReportDocument` JSON, baselines, budgets, and Dimension curves.
+- `ReportDocument` JSON, baselines, budgets, argument rows, and Dimension curves.
 - Memory/allocation evidence, xctrace/Instruments trace evidence, XCTest
   adapters, advanced `--host` workflows, and troubleshooting boundaries.
 

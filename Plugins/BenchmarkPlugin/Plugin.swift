@@ -69,6 +69,9 @@ struct BenchmarkPlugin: CommandPlugin {
     let testingArguments = plan.requiresSwiftTesting
       ? try swiftTestingLibraryArguments()
       : []
+    let moduleMapArguments = moduleMapImportArguments(
+      packageDirectory: context.package.directoryURL
+    )
 
     try runProcess(
       executable: URL(fileURLWithPath: "/usr/bin/env"),
@@ -80,10 +83,39 @@ struct BenchmarkPlugin: CommandPlugin {
         buildDirectory.appendingPathComponent("Modules").path,
         "-o",
         host.path,
-      ] + testingArguments + generatedSources.map(\.path) + objectFiles.map(\.path),
+      ] + moduleMapArguments + testingArguments + generatedSources.map(\.path)
+        + objectFiles.map(\.path),
       captureOutputOnFailure: true
     )
     return host
+  }
+
+  private func moduleMapImportArguments(
+    packageDirectory: URL
+  ) -> [String] {
+    let searchRoots = [
+      packageDirectory.appendingPathComponent(".build/checkouts"),
+    ]
+    var includeDirectories: Set<String> = []
+
+    for root in searchRoots {
+      guard
+        FileManager.default.fileExists(atPath: root.path),
+        let enumerator = FileManager.default.enumerator(
+          at: root,
+          includingPropertiesForKeys: nil
+        )
+      else {
+        continue
+      }
+
+      for case let file as URL in enumerator
+      where file.lastPathComponent == "module.modulemap" {
+        includeDirectories.insert(file.deletingLastPathComponent().path)
+      }
+    }
+
+    return includeDirectories.sorted().flatMap { ["-I", $0] }
   }
 
   private func discoverBenchmarks(
@@ -247,21 +279,44 @@ struct BenchmarkPlugin: CommandPlugin {
     var files: [URL] = []
     for targetName in targetNames.sorted() {
       let directory = buildDirectory.appendingPathComponent("\(targetName).build")
-      guard let enumerator = FileManager.default.enumerator(
-        at: directory,
-        includingPropertiesForKeys: nil
-      ) else {
-        continue
-      }
-      for case let file as URL in enumerator
-      where file.pathExtension == "o" && file.lastPathComponent != "main.swift.o" {
-        files.append(file)
-      }
+      files += objectFiles(in: directory)
     }
+    files += nativeObjectFiles(in: buildDirectory)
+    files = Array(Dictionary(grouping: files, by: \.path).values.compactMap(\.first))
     guard !files.isEmpty else {
       throw PluginError.noObjectFiles(buildDirectory.path)
     }
     return files
+  }
+
+  private func objectFiles(in directory: URL) -> [URL] {
+    guard let enumerator = FileManager.default.enumerator(
+      at: directory,
+      includingPropertiesForKeys: nil
+    ) else {
+      return []
+    }
+
+    var files: [URL] = []
+    for case let file as URL in enumerator
+    where file.pathExtension == "o" && file.lastPathComponent != "main.swift.o" {
+      files.append(file)
+    }
+    return files
+  }
+
+  private func nativeObjectFiles(in buildDirectory: URL) -> [URL] {
+    guard let targetDirectories = try? FileManager.default.contentsOfDirectory(
+      at: buildDirectory,
+      includingPropertiesForKeys: nil
+    ) else {
+      return []
+    }
+
+    return targetDirectories
+      .filter { $0.pathExtension == "build" && !$0.lastPathComponent.hasSuffix("-tool.build") }
+      .flatMap(objectFiles(in:))
+      .filter { !$0.lastPathComponent.hasSuffix(".swift.o") }
   }
 
   @discardableResult

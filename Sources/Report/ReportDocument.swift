@@ -467,19 +467,23 @@ public struct ReportDocument: Sendable, Equatable, Codable {
     Report.Measurement(
       rows: result.measurement.rows.map { row in
         Report.Measurement.Row(
+          id: row.id,
           size: row.size,
+          arguments: row.arguments,
           samples: row.samples.map { sample in
             SampleReport(
               id: ReportIDFactory.sample(
                 suiteName: result.suiteName,
                 caseName: result.caseName,
                 size: row.size,
+                rowID: row.id,
                 iteration: sample.iteration
               ),
               iterationID: ReportIDFactory.iteration(
                 suiteName: result.suiteName,
                 caseName: result.caseName,
                 size: row.size,
+                rowID: row.id,
                 iteration: sample.iteration
               ),
               iteration: sample.iteration,

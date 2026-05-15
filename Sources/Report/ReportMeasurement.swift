@@ -11,7 +11,7 @@ public extension Report {
     }
 
     public init(samples: [SampleReport]) {
-      self.init(rows: [Row(size: nil, samples: samples)])
+      self.init(rows: [Row(size: nil, arguments: [], samples: samples)])
     }
 
     public var samples: [SampleReport] {
@@ -26,22 +26,58 @@ public extension Report {
 
 public extension Report.Measurement {
   struct Row: Sendable, Equatable, Codable {
-    public var size: Benchmark.Dimension.Size?
+    public var id: String?
+    public var size: Benchmark.Scale?
+    public var arguments: [Benchmark.ArgumentValue]
     public var samples: [SampleReport]
     public var metrics: Metrics
     public var amortized: Metrics?
 
     public init(
-      size: Benchmark.Dimension.Size?,
+      id: String? = nil,
+      size: Benchmark.Scale?,
+      arguments: [Benchmark.ArgumentValue] = [],
       samples: [SampleReport],
       metrics: Metrics? = nil,
       amortized: Metrics? = nil
     ) {
       let computedMetrics = metrics ?? Metrics(samples: samples)
+      self.id = id
       self.size = size
+      self.arguments = arguments
       self.samples = samples
       self.metrics = computedMetrics
       self.amortized = amortized ?? size.map { computedMetrics.amortized(by: $0) }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+      case size
+      case id
+      case arguments
+      case samples
+      case metrics
+      case amortized
+    }
+
+    public init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      let size = try container.decodeIfPresent(Benchmark.Scale.self, forKey: .size)
+      let id = try container.decodeIfPresent(String.self, forKey: .id)
+      let arguments = try container.decodeIfPresent(
+        [Benchmark.ArgumentValue].self,
+        forKey: .arguments
+      ) ?? []
+      let samples = try container.decode([SampleReport].self, forKey: .samples)
+      let metrics = try container.decodeIfPresent(Metrics.self, forKey: .metrics)
+      let amortized = try container.decodeIfPresent(Metrics.self, forKey: .amortized)
+      self.init(
+        id: id,
+        size: size,
+        arguments: arguments,
+        samples: samples,
+        metrics: metrics,
+        amortized: amortized
+      )
     }
   }
 
@@ -113,7 +149,7 @@ public extension Report.Measurement {
       self.p99 = Self.percentile(0.99, values: values)
     }
 
-    public func amortized(by size: Benchmark.Dimension.Size) -> Metrics {
+    public func amortized(by size: Benchmark.Scale) -> Metrics {
       let divisor = Double(size.rawValue)
       guard divisor != 0 else {
         return self
@@ -205,14 +241,14 @@ public extension Report {
 
 public extension Report.DimensionCurve {
   struct Point: Sendable, Equatable, Codable {
-    public var size: Benchmark.Dimension.Size
+    public var size: Benchmark.Scale
     public var valueNanoseconds: Double
     public var amortizedNanosecondsPerUnit: Double
     public var sampleCount: Int
     public var sourceLocation: SourceLocationReport?
 
     public init(
-      size: Benchmark.Dimension.Size,
+      size: Benchmark.Scale,
       valueNanoseconds: Double,
       amortizedNanosecondsPerUnit: Double,
       sampleCount: Int,

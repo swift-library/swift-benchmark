@@ -250,13 +250,13 @@ The user-facing Dimension model is trait-driven parameterization over
 Benchmark declarations. Users write `.dimension(sizes: [10, 100]) { size in
 makeInput(size) }` on `@Benchmark`; discovery preserves
 `Benchmark.Dimension` metadata; `BenchmarkRunner.Plan` expands each
-`Benchmark.Dimension.Size` into executable steps; `Benchmark.Event.Context`
+`Benchmark.Scale` into executable steps; `Benchmark.Event.Context`
 carries Dimension context; and `Benchmark.Measurement` stores rows and samples.
 
 It owns:
 
 - `.dimension(sizes:)` / `Benchmark.Dimension.Trait` case-trait semantics,
-- `Benchmark.Dimension.Size` as an Apple-aligned `Int` wrapper,
+- `Benchmark.Scale` as an Apple-aligned `Int` wrapper,
 - one generator per size, run outside measured iterations,
 - single-Dimension plan expansion,
 - `Benchmark.Measurement.Row(size:samples:)`,

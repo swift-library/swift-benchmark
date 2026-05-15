@@ -9,8 +9,8 @@ Date: 2026-05-13
 `BenchmarkTesting` exposes Swift Testing trait UX through
 `@Suite(.benchmark...)` and `@Test(.benchmark...)`. Those declarations must run
 through `BenchmarkRunner`, not the Swift Testing runner, so Benchmark keeps
-warmup, iterations, samples, Dimension rows, ReportDocument output, diagnostics,
-and CI verdict semantics.
+warmup, iterations, samples, argument/scale rows, ReportDocument output,
+diagnostics, and CI verdict semantics.
 
 Swift Testing's own `@Test` macro emits records into `__swift5_tests`, but that
 record/accessor path is owned by Swift Testing. The generated thunks and
@@ -131,8 +131,9 @@ record/accessor path is owned by Swift Testing. The generated thunks and
   bridge because the generated bridge source is outside the original lexical
   scope. Users should make those tests internal or use `@BenchmarkSuite` /
   `@Benchmark` for same-scope discovery.
-- `@Test(arguments:)` is not mapped to `Benchmark.Dimension`. Benchmark input
-  scale remains an explicit Dimension concept.
+- `@Test(arguments:)` is mapped to Benchmark argument rows when the declaration
+  is benchmark-enrolled. Numeric and integer-raw-value arguments infer
+  `Benchmark.Scale`; non-numeric arguments produce rows without curves.
 - `Benchmark` core must not import or depend on the `Testing` runtime.
 
 ## Consequences
@@ -142,7 +143,7 @@ The common test-target shape, where tests are internal by default, works through
 member path remains covered by native `@BenchmarkSuite` / `@Benchmark`, whose
 macros generate discovery in the original declaration scope.
 
-The bridge intentionally extracts only Benchmark-owned semantics from Testing
-traits: benchmark configuration and tags. Parameterized Testing data remains
-separate from `Benchmark.Dimension`, and unsupported declarations fail with
-explicit diagnostics instead of being silently skipped.
+The bridge intentionally extracts Benchmark-owned semantics from Testing:
+benchmark configuration, tags, and parameterized argument rows. Unsupported
+argument shapes fail with explicit diagnostics instead of being silently
+skipped.

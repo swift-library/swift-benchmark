@@ -5,17 +5,20 @@ public struct BenchmarkListEntry: Sendable, Equatable, Codable {
   public var suite: String
   public var caseName: String
   public var tags: [String]
+  public var arguments: [Benchmark.ArgumentValue]
   public var dimensionSizes: [Int]
 
   public init(
     suite: String,
     caseName: String,
     tags: [String] = [],
+    arguments: [Benchmark.ArgumentValue] = [],
     dimensionSizes: [Int] = []
   ) {
     self.suite = suite
     self.caseName = caseName
     self.tags = tags
+    self.arguments = arguments
     self.dimensionSizes = dimensionSizes
   }
 }
@@ -64,6 +67,7 @@ public enum BenchmarkHost {
           suite: step.suiteName,
           caseName: step.caseName,
           tags: step.tags,
+          arguments: step.arguments,
           dimensionSizes: step.size.map { [$0.rawValue] } ?? []
         )
       }
@@ -75,8 +79,11 @@ public enum BenchmarkHost {
       }
       return entries.map { entry in
         let tags = entry.tags.isEmpty ? "" : " tags=\(entry.tags.joined(separator: ","))"
+        let arguments = entry.arguments.isEmpty
+          ? ""
+          : " arguments=\(entry.arguments.map(\.label).joined(separator: ","))"
         let suffix = entry.dimensionSizes.isEmpty ? "" : " size=\(entry.dimensionSizes[0])"
-        return "\(entry.suite).\(entry.caseName)\(tags)\(suffix)"
+        return "\(entry.suite).\(entry.caseName)\(tags)\(arguments)\(suffix)"
       }.joined(separator: "\n")
     case "run", "check", "trace":
       guard !plan.steps.isEmpty else {

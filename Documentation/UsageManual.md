@@ -230,26 +230,39 @@ Executable-only declarations are an advanced boundary. Use `--host` or move
 the declaration into a library/test target for ordinary no-host package
 workflow support.
 
-## Dimension Measurements
+## Argument And Scale Measurements
 
-`Benchmark.Dimension` represents one input-size measurement dimension. The
-macro authoring surface is:
+Use `arguments` when a benchmark should produce one row per input. Integer
+arguments, and `RawRepresentable` arguments backed by an integer raw value,
+also produce a `Benchmark.Scale` key for curves and amortized metrics:
 
 ```swift
 @BenchmarkSuite("Parser")
 struct ParserBenchmarks {
-  @Benchmark("Parse by size", .dimension(sizes: [10, 100, 1_000]))
-  func parseBySize(_ size: Benchmark.Dimension.Size) throws {
-    let input = makeInput(byteCount: size.rawValue)
+  @Benchmark("Parse by size", arguments: [10, 100, 1_000])
+  func parseBySize(_ byteCount: Int) throws {
+    let input = makeInput(byteCount: byteCount)
     try blackHole(parse(input))
   }
 }
 ```
 
-Each size becomes one `Benchmark.Measurement.Row`. Ordinary benchmarks produce
-one row with `size == nil`. The Dimension generator runs once per size outside
-the measured iterations; measured samples capture only the workload for that
-row.
+The same shape works in Swift Testing suites:
+
+```swift
+@Suite(.benchmark(configuration: .init(warmup: .iterations(2), iterations: .iterations(20))))
+struct ParserBenchmarks {
+  @Test("Parse fixtures", arguments: ["small.md", "large.md"])
+  func parseFixture(_ fixture: String) throws {
+    try blackHole(parse(loadFixture(fixture)))
+  }
+}
+```
+
+Each argument value becomes one `Benchmark.Measurement.Row`. Ordinary
+benchmarks produce one row with `size == nil`. Argument setup runs outside the
+measured iterations; measured samples capture only the workload for that row.
+String/file/object arguments produce rows without numeric curves.
 
 Report projects measurement rows into:
 
@@ -257,11 +270,10 @@ Report projects measurement rows into:
 - baseline and budget verdicts for selected metrics,
 - `Report.DimensionCurve` records,
 - `amortized` values where selected metric is divided by
-  `Benchmark.Dimension.Size.rawValue`.
+  `Benchmark.Scale.rawValue`.
 
-Do not use Swift Testing `@Test(arguments:)` as a benchmark Dimension. The
-BenchmarkTesting bridge diagnoses that form and points users to
-`Benchmark.Dimension`.
+The older `.dimension(sizes:)` spelling remains a compatibility authoring path
+for native benchmarks and lowers to `Benchmark.Scale` rows.
 
 ## ReportDocument
 
@@ -465,6 +477,8 @@ Supported:
   that suite.
 - `@Test(.benchmark...)` opts a single test into benchmark discovery or
   refines suite defaults.
+- `@Test(arguments:)` and `@Benchmark(arguments:)` produce benchmark rows when
+  the declaration is benchmark-enrolled.
 - Swift Testing tags flow into benchmark plan filtering and report metadata.
 - Supported bridge cases run through `BenchmarkRunner`, not the Swift Testing
   runner.
@@ -474,7 +488,7 @@ Diagnosed boundaries:
 - `private` and `fileprivate` benchmark-marked tests are not supported in the
   pure generated bridge path. Use `internal`, or use native
   `@BenchmarkSuite` / `@Benchmark` in the same source scope.
-- `@Test(arguments:)` is not automatically mapped to `Benchmark.Dimension`.
+- Unsupported argument shapes fail with explicit diagnostics.
 - Unsupported declarations fail with explicit diagnostics rather than being
   silently skipped.
 - Ordinary `@Test` declarations without `.benchmark` are ignored by the
@@ -523,7 +537,8 @@ declarations.
 - Use tags to separate fast local benchmarks from slower CI or release gates.
 - Use fixed iterations by default; opt into adaptive or duration policies only
   when the workload needs it.
-- Use `Benchmark.Dimension` for input-size curves.
+- Use `arguments` for input rows; integer arguments produce `Benchmark.Scale`
+  curves.
 - Store baselines under a reviewed path such as `Benchmarks/*.json`.
 - Treat `ReportDocument` JSON as the contract for agents, dashboards, and
   downstream renderers.
@@ -540,8 +555,8 @@ declarations.
   declarations.
 - If a Testing benchmark is diagnosed as private, change it to `internal` or
   use native `@BenchmarkSuite` / `@Benchmark`.
-- If `@Test(arguments:)` is diagnosed, move the input sizes into
-  `Benchmark.Dimension`.
+- If `@Test(arguments:)` is diagnosed, check for unsupported parameter shapes
+  such as ambiguous argument counts.
 - If an executable-only declaration is not discovered by no-host package
   workflow, move it to a library/test target or use `--host`.
 - If an Apple diagnostic is required but unavailable, the command should fail
