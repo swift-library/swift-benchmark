@@ -147,21 +147,21 @@ methods async-only. Synchronize mutable concrete recorders internally.
 - `@InstrumentedMembers`
 - `@Span("Name")`
 
-Do not ship attached macros that compile but do not instrument the function
-body.
+Do not ship attached macros that compile but do not instrument the function or
+initializer body.
 
 Macro semantics to verify:
 
-- `@Span` wraps function bodies with begin/end span cleanup.
-- Function-level `@Instrumented` behaves like `@Span` with a default stable
-  name.
+- `@Span` wraps function and initializer bodies with begin/end span cleanup.
+- Function/initializer-level `@Instrumented` behaves like `@Span` with a
+  default stable name.
 - `@InstrumentedMembers` applies span instrumentation to eligible member
-  functions in the annotated type or extension body.
+  functions and initializers in the annotated type or extension body.
 - `@InstrumentedMembers` does not silently instrument separate extensions,
-  protocol requirements without bodies, properties, property accessors, `init`,
-  or `deinit`.
+  protocol requirements without bodies, properties, property accessors, or
+  `deinit`.
 - Generated names use stable `StaticString` operation identities such as
-  `functionName` or `TypeName.methodName`.
+  `functionName`, `TypeName.methodName`, or `TypeName.init(labels:)`.
 
 `#span` must preserve or explicitly document gaps for:
 

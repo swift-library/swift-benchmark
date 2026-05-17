@@ -456,8 +456,17 @@ func buildIndex() throws -> Index {
   ...
 }
 
+@Span("Store.init(path:)")
+init(path: String) {
+  ...
+}
+
 @InstrumentedMembers
 struct Store {
+  init(path: String) {
+    ...
+  }
+
   func load() throws -> Item {
     ...
   }
@@ -465,9 +474,12 @@ struct Store {
 ```
 
 `#span` records duration, `#event` records a point-in-time marker, and
-function-body macros preserve return values, thrown errors, and async behavior
-where supported. Signpost is the Apple backend behind the Instruments recorder
-model, not a public product domain.
+function/initializer body macros preserve return values, initializer semantics,
+thrown errors, and async behavior where supported. `@Instrumented` initializer
+names use `Type.init(labels:)`; `@InstrumentedMembers` applies the same naming
+to eligible initializers declared directly in the annotated type or extension.
+Signpost is the Apple backend behind the Instruments recorder model, not a
+public product domain.
 
 ## Swift Testing Bridge Boundaries
 
@@ -543,8 +555,8 @@ declarations.
 - Treat `ReportDocument` JSON as the contract for agents, dashboards, and
   downstream renderers.
 - Keep instrumentation explicit with `#span`, `@Span`, or `@Instrumented`; the
-  benchmark macro does not automatically insert spans. Run with `--timeline`
-  when those spans should be correlated into `ReportDocument`.
+  benchmark macro does not automatically insert spans. Function and initializer
+  body spans can be correlated into `ReportDocument` when run with `--timeline`.
 - Use native `@BenchmarkSuite` when the workload must not be an ordinary Swift
   Testing test.
 

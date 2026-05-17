@@ -78,8 +78,9 @@ implementation, not only the first slice.
   Instruments target using real macro expansion. Run a preflight macro smoke
   test as verification, not as a new design decision. Do not ship fake attached
   macros.
-- `@Span` is the function-level body macro. `@Instrumented` on a function is
-  ergonomic syntax over the same span semantics with a default stable name.
+- `@Span` is the function/initializer-level body macro. `@Instrumented` on a
+  function or initializer is ergonomic syntax over the same span semantics with
+  a default stable name.
 - Same-name type-level `@Instrumented` was the desired spelling, but Swift
   6.3.1 rejects one public macro declaration that combines function `body` and
   type `memberAttribute` roles and also rejects duplicate same-name declarations
