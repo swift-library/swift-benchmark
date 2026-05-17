@@ -70,7 +70,8 @@ struct BenchmarkPlugin: CommandPlugin {
       ? try swiftTestingLibraryArguments()
       : []
     let moduleMapArguments = moduleMapImportArguments(
-      packageDirectory: context.package.directoryURL
+      packageDirectory: context.package.directoryURL,
+      buildDirectory: buildDirectory
     )
 
     try runProcess(
@@ -91,12 +92,15 @@ struct BenchmarkPlugin: CommandPlugin {
   }
 
   private func moduleMapImportArguments(
-    packageDirectory: URL
+    packageDirectory: URL,
+    buildDirectory: URL
   ) -> [String] {
-    let searchRoots = [
-      packageDirectory.appendingPathComponent(".build/checkouts"),
-    ]
-    var includeDirectories: Set<String> = []
+    let searchRoots = moduleMapCheckoutRoots(
+      packageDirectory: packageDirectory,
+      buildDirectory: buildDirectory
+    )
+    var includeDirectoriesByModule: [String: String] = [:]
+    var anonymousIncludeDirectories: Set<String> = []
 
     for root in searchRoots {
       guard
@@ -111,11 +115,131 @@ struct BenchmarkPlugin: CommandPlugin {
 
       for case let file as URL in enumerator
       where file.lastPathComponent == "module.modulemap" {
-        includeDirectories.insert(file.deletingLastPathComponent().path)
+        let includeDirectory = file.deletingLastPathComponent().path
+        if let moduleName = moduleMapName(at: file) {
+          includeDirectoriesByModule[moduleName] = includeDirectoriesByModule[moduleName]
+            ?? includeDirectory
+        } else {
+          anonymousIncludeDirectories.insert(includeDirectory)
+        }
       }
     }
 
+    let includeDirectories = Set(includeDirectoriesByModule.values)
+      .union(anonymousIncludeDirectories)
     return includeDirectories.sorted().flatMap { ["-I", $0] }
+  }
+
+  private func moduleMapCheckoutRoots(
+    packageDirectory: URL,
+    buildDirectory: URL
+  ) -> [URL] {
+    let packageBuildDirectory = packageDirectory.appendingPathComponent(".build")
+    let activeBuildRoot = swiftPMBuildRoot(containing: buildDirectory)
+    var roots: [URL] = []
+    var seen: Set<String> = []
+
+    if let activeBuildRoot {
+      appendUnique(
+        activeBuildRoot.appendingPathComponent("checkouts"),
+        to: &roots,
+        seen: &seen
+      )
+    }
+
+    let shouldSearchPackageBuildRoot = activeBuildRoot.map {
+      samePath($0, packageBuildDirectory)
+    } ?? true
+    if shouldSearchPackageBuildRoot {
+      appendUnique(
+        packageBuildDirectory.appendingPathComponent("checkouts"),
+        to: &roots,
+        seen: &seen
+      )
+      for root in nestedCheckoutRoots(in: packageBuildDirectory) {
+        appendUnique(root, to: &roots, seen: &seen)
+      }
+    }
+
+    return roots.filter { FileManager.default.fileExists(atPath: $0.path) }
+  }
+
+  private func swiftPMBuildRoot(containing buildDirectory: URL) -> URL? {
+    var current = buildDirectory.standardizedFileURL
+    for _ in 0..<8 {
+      if FileManager.default.fileExists(
+        atPath: current.appendingPathComponent("workspace-state.json").path
+      ) || FileManager.default.fileExists(
+        atPath: current.appendingPathComponent("checkouts").path
+      ) || FileManager.default.fileExists(
+        atPath: current.appendingPathComponent("repositories").path
+      ) {
+        return current
+      }
+
+      let parent = current.deletingLastPathComponent()
+      if parent.path == current.path {
+        return nil
+      }
+      current = parent
+    }
+
+    return nil
+  }
+
+  private func nestedCheckoutRoots(in buildDirectory: URL) -> [URL] {
+    guard
+      let buildEntries = try? FileManager.default.contentsOfDirectory(
+        at: buildDirectory,
+        includingPropertiesForKeys: nil
+      )
+    else {
+      return []
+    }
+
+    return buildEntries.map { $0.appendingPathComponent("checkouts") }
+  }
+
+  private func appendUnique(_ url: URL, to urls: inout [URL], seen: inout Set<String>) {
+    let path = url.standardizedFileURL.path
+    if seen.insert(path).inserted {
+      urls.append(url)
+    }
+  }
+
+  private func samePath(_ lhs: URL, _ rhs: URL) -> Bool {
+    lhs.standardizedFileURL.path == rhs.standardizedFileURL.path
+  }
+
+  private func moduleMapName(at file: URL) -> String? {
+    guard let text = try? String(contentsOf: file, encoding: .utf8) else {
+      return nil
+    }
+    for line in text.split(separator: "\n").prefix(8) {
+      let trimmed = line.trimmingCharacters(in: .whitespaces)
+      let parts = trimmed.split(whereSeparator: { $0 == " " || $0 == "\t" })
+      var index = 0
+      if parts.indices.contains(index), parts[index] == "explicit" {
+        index += 1
+      }
+      if parts.indices.contains(index), parts[index] == "framework" {
+        index += 1
+      }
+      if parts.indices.contains(index + 1), parts[index] == "module" {
+        return normalizedModuleName(parts[index + 1])
+      }
+    }
+    return nil
+  }
+
+  private func normalizedModuleName(_ token: Substring) -> String {
+    let trimmed = token.trimmingCharacters(
+      in: CharacterSet(charactersIn: "\"'")
+    )
+    if let index = trimmed.firstIndex(where: { $0 == "{" || $0 == "[" }) {
+      return String(trimmed[..<index])
+    }
+    return trimmed
   }
 
   private func discoverBenchmarks(

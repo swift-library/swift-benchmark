@@ -482,6 +482,56 @@ struct PackageWorkflowTests {
     #expect(FileManager.default.fileExists(atPath: testingTracePath))
   }
 
+  @Test(.timeLimit(.minutes(3)))
+  func fixturePackageCommandFindsCModuleMapsInExternalScratchPath() throws {
+    let sourceRoot = URL(fileURLWithPath: scratchPath("fixture-c-module-package-source"))
+    let scratch = URL(fileURLWithPath: scratchPath("fixture-c-module-package-external-scratch"))
+    try? FileManager.default.removeItem(at: sourceRoot)
+    try? FileManager.default.removeItem(at: scratch)
+    try FileManager.default.createDirectory(
+      at: sourceRoot,
+      withIntermediateDirectories: true
+    )
+
+    let dependency = sourceRoot.appendingPathComponent("CModuleDependency")
+    let package = sourceRoot.appendingPathComponent("CModuleBenchmarkPackage")
+    try writeCModuleDependencyPackage(at: dependency)
+    try initializeGitRepository(at: dependency)
+    try writeCModuleBenchmarkPackage(
+      at: package,
+      dependency: dependency,
+      swiftBenchmarkRoot: repositoryRoot()
+    )
+    try FileManager.default.createDirectory(
+      at: scratch,
+      withIntermediateDirectories: true
+    )
+
+    let list = try runProcess(
+      executable: "/usr/bin/env",
+      arguments: [
+        "swift",
+        "package",
+        "-q",
+        "--package-path",
+        package.path,
+        "--scratch-path",
+        scratch.path,
+        "--allow-writing-to-directory",
+        scratch.path,
+        "benchmark",
+        "list",
+        "--tag",
+        "cModule",
+        "--format",
+        "json",
+      ]
+    )
+
+    #expect(list.contains("\"suite\" : \"CModuleFixture\""))
+    #expect(list.contains("\"caseName\" : \"CModuleNoop\""))
+  }
+
   @Test(.timeLimit(.minutes(2)))
   func fixturePackageCommandReportsTestingBridgeDiagnostics() throws {
     let privatePackage = fixturePath("BenchmarkTestingPrivatePackage")
@@ -598,10 +648,7 @@ struct PackageWorkflowTests {
   }
 
   private func cliPath() throws -> String {
-    let root = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
+    let root = repositoryRoot()
     let build = root.appendingPathComponent(".build")
     let fileManager = FileManager.default
     if let enumerator = fileManager.enumerator(at: build, includingPropertiesForKeys: nil) {
@@ -622,6 +669,13 @@ struct PackageWorkflowTests {
     fixturePath("BenchmarkPackage")
   }
 
+  private func repositoryRoot() -> URL {
+    URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+  }
+
   private func fixturePath(_ name: String) -> String {
     URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()
@@ -631,12 +685,177 @@ struct PackageWorkflowTests {
   }
 
   private func scratchPath(_ name: String) -> String {
-    URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
+    repositoryRoot()
       .appendingPathComponent(".build/\(name)")
       .path
+  }
+
+  private func writeCModuleDependencyPackage(at package: URL) throws {
+    try writeFile(
+      """
+      // swift-tools-version: 6.0
+      import PackageDescription
+
+      let package = Package(
+        name: "CModuleDependency",
+        products: [
+          .library(name: "CModuleDependency", targets: ["CModuleDependency"])
+        ],
+        targets: [
+          .target(
+            name: "CModuleDependency",
+            path: "Sources/CModuleDependency",
+            publicHeadersPath: "include"
+          )
+        ]
+      )
+      """,
+      to: package.appendingPathComponent("Package.swift")
+    )
+    try writeFile(
+      """
+      #ifndef CMODULE_DEPENDENCY_H
+      #define CMODULE_DEPENDENCY_H
+
+      int c_module_dependency_value(void);
+
+      #endif
+      """,
+      to: package.appendingPathComponent(
+        "Sources/CModuleDependency/include/CModuleDependency.h"
+      )
+    )
+    try writeFile(
+      """
+      module CModuleDependency {
+        header "CModuleDependency.h"
+        export *
+      }
+      """,
+      to: package.appendingPathComponent(
+        "Sources/CModuleDependency/include/module.modulemap"
+      )
+    )
+    try writeFile(
+      """
+      #include "CModuleDependency.h"
+
+      int c_module_dependency_value(void) {
+        return 42;
+      }
+      """,
+      to: package.appendingPathComponent("Sources/CModuleDependency/CModuleDependency.c")
+    )
+  }
+
+  private func initializeGitRepository(at directory: URL) throws {
+    _ = try runProcess(
+      executable: "/usr/bin/env",
+      arguments: ["git", "-C", directory.path, "init", "-q"]
+    )
+    _ = try runProcess(
+      executable: "/usr/bin/env",
+      arguments: ["git", "-C", directory.path, "checkout", "-q", "-B", "main"]
+    )
+    _ = try runProcess(
+      executable: "/usr/bin/env",
+      arguments: ["git", "-C", directory.path, "add", "."]
+    )
+    _ = try runProcess(
+      executable: "/usr/bin/env",
+      arguments: [
+        "git",
+        "-C",
+        directory.path,
+        "-c",
+        "user.name=swift-benchmark-tests",
+        "-c",
+        "user.email=swift-benchmark-tests@example.invalid",
+        "commit",
+        "-q",
+        "-m",
+        "Initial test fixture",
+      ]
+    )
+  }
+
+  private func writeCModuleBenchmarkPackage(
+    at package: URL,
+    dependency: URL,
+    swiftBenchmarkRoot: URL
+  ) throws {
+    let dependencyURL = dependency.absoluteURL
+    try writeFile(
+      """
+      // swift-tools-version: 6.0
+      import PackageDescription
+
+      let package = Package(
+        name: "CModuleBenchmarkPackage",
+        platforms: [.macOS(.v15)],
+        dependencies: [
+          .package(path: \(swiftStringLiteral(swiftBenchmarkRoot.path))),
+          .package(url: \(swiftStringLiteral(dependencyURL.absoluteString)), branch: "main")
+        ],
+        targets: [
+          .target(
+            name: "CModuleBenchmarkLibrary",
+            dependencies: [
+              .product(name: "Benchmark", package: "swift-benchmark"),
+              .product(name: "CModuleDependency", package: "CModuleDependency")
+            ]
+          )
+        ]
+      )
+      """,
+      to: package.appendingPathComponent("Package.swift")
+    )
+    try writeFile(
+      """
+      import Benchmark
+      import CModuleDependency
+
+      @BenchmarkSuite("CModuleFixture", .tag("cModule"))
+      struct CModuleFixtureBenchmarks {
+        @Benchmark("CModuleNoop")
+        func noop() {
+          blackHole(c_module_dependency_value())
+        }
+      }
+      """,
+      to: package.appendingPathComponent(
+        "Sources/CModuleBenchmarkLibrary/LibraryBenchmarks.swift"
+      )
+    )
+  }
+
+  private func writeFile(_ contents: String, to url: URL) throws {
+    try FileManager.default.createDirectory(
+      at: url.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    try contents.write(to: url, atomically: true, encoding: .utf8)
+  }
+
+  private func swiftStringLiteral(_ value: String) -> String {
+    var escaped = ""
+    for character in value {
+      switch character {
+      case "\\":
+        escaped += "\\\\"
+      case "\"":
+        escaped += "\\\""
+      case "\n":
+        escaped += "\\n"
+      case "\r":
+        escaped += "\\r"
+      case "\t":
+        escaped += "\\t"
+      default:
+        escaped.append(character)
+      }
+    }
+    return "\"\(escaped)\""
   }
 
   private func writeFakeXcrun(to path: String) throws {
