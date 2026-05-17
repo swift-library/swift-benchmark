@@ -347,6 +347,11 @@ host generation. `BenchmarkPlugin` is orchestration; `BenchmarkDiscoveryTool`
 and `_BenchmarkDiscoveryCore` own package discovery and generated bridge/host
 sources.
 
+During generated host compilation, the package plugin adds import search paths
+for C module maps found in the active SwiftPM checkout root. This supports
+packages whose benchmarked library depends on C or Objective-C modulemap-backed
+targets, including workflows that use an external `--scratch-path`.
+
 ## Diagnostics And Traces
 
 Timeline attribution captures the Benchmark/Instruments execution path:
@@ -571,6 +576,9 @@ declarations.
   such as ambiguous argument counts.
 - If an executable-only declaration is not discovered by no-host package
   workflow, move it to a library/test target or use `--host`.
+- If generated host compilation fails with a missing C module, confirm the
+  dependency is resolved through SwiftPM checkouts and rerun with a clean
+  scratch path.
 - If an Apple diagnostic is required but unavailable, the command should fail
   with a diagnostic-unavailable error instead of producing fake data.
 - If a report renderer is not enough, consume `ReportDocument` JSON and build a
