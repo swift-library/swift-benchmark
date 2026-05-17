@@ -102,8 +102,8 @@ baseline `swift test` result.
   compile.
 - Keep a disabled or fallback instrumentation path available for unsupported
   platforms, tests, explicit disablement, and release toggles.
-- Do not fake attached function instrumentation. `@Instrumented` and `@Span`
-  require real function-body macro expansion.
+- Do not fake attached body instrumentation. `@Instrumented` and `@Span`
+  require real function/initializer body macro expansion.
 - Treat `@InstrumentedMembers` as macro ergonomics over the same runtime model,
   not as a separate instrumentation backend.
 
@@ -122,15 +122,17 @@ Current package facts:
 Current implementation facts:
 
 - Public APIs are Instruments-first: `#span`, `#event`, `@Span`,
-  function-level `@Instrumented`, type/extension-level
+  function/initializer-level `@Instrumented`, type/extension-level
   `@InstrumentedMembers`, `Recorder`, `SpanToken`, `SpanAttributes`,
   `Timeline`, `InMemoryRecorder`, `EmptyRecorder`, and `SignpostRecorder`.
 - Public Signpost-named macros and the transitional `SignpostMacros` product have
   been removed.
 - Macro expansion calls Instruments runtime APIs rather than Apple Signpost APIs.
-- `@Span` and function-level `@Instrumented` are real attached body macros.
+- `@Span` and function/initializer-level `@Instrumented` are real attached body
+  macros.
 - `@InstrumentedMembers` is a real member-attribute macro that applies `@Span`
-  to eligible methods declared directly in an annotated type or extension.
+  to eligible methods and initializers declared directly in an annotated type or
+  extension.
 - Same-name type-level `@Instrumented` is blocked by current Swift macro role
   constraints; this document records the compiler evidence behind the public
   spelling split.
@@ -157,9 +159,10 @@ The implementation pass should align code around these goals:
     literals; put dynamic context in attributes.
 11. Ensure every successful span begin is ended exactly once on success, thrown
     error, and cancellation paths where `defer` runs.
-12. Support `@Span` as the function-level body macro, function-level
-    `@Instrumented` as ergonomic syntax over the same span semantics, and
-    `@InstrumentedMembers` as type/extension bulk member instrumentation.
+12. Support `@Span` as the function/initializer body macro,
+    function/initializer-level `@Instrumented` as ergonomic syntax over the same
+    span semantics, and `@InstrumentedMembers` as type/extension bulk member
+    instrumentation.
 13. Do not introduce Benchmark runner behavior in this Instruments layer.
 
 ## Current-To-Target Status
@@ -169,7 +172,7 @@ The implementation pass should align code around these goals:
 | Public model | Instruments-first APIs are implemented. | Keep public semantics centered on Instruments. |
 | Runtime | `Recorder`, `SpanToken`, `SpanAttributes`, `Instruments.current`, fallback, and timeline are implemented. | Continue keeping runtime sync-friendly and backend-general. |
 | Backend | `SignpostRecorder` owns Apple Signpost behavior. | Keep Apple-specific APIs isolated behind the backend. |
-| Macros | `#span`, `#event`, `@Span`, function-level `@Instrumented`, and `@InstrumentedMembers` are implemented. | Preserve the spelling split until the Swift macro role model supports one same-name macro for function and type attachment. |
+| Macros | `#span`, `#event`, `@Span`, function/initializer-level `@Instrumented`, and `@InstrumentedMembers` are implemented. | Preserve the spelling split until the Swift macro role model supports one same-name macro for function and type attachment. |
 | Disabled path | `EmptyRecorder` is implemented. | Keep unsupported/disabled paths cheap. |
 | Timeline | `Timeline` / `InMemoryRecorder` are implemented. | Later Benchmark/Report integration consumes public timeline snapshots. |
 | Documentation | README, architecture docs, migration docs, and tests describe implemented status plus the same-name type-level macro blocker. | Keep architecture truth current. |
@@ -412,6 +415,11 @@ func buildIndex() throws -> Index {
   ...
 }
 
+@Span("Store.init(path:)")
+init(path: String) {
+  ...
+}
+
 ```
 
 Do not add new public APIs named `#signpost`, `@Signpost`, or `@Signposted`.
@@ -422,7 +430,8 @@ Macro priority:
 
 - `#span` and `#event`.
 - `@Span("Name")` using real body macro expansion.
-- `@Instrumented` on functions as a semantic alias over `@Span`.
+- `@Instrumented` on functions and initializers as a semantic alias over
+  `@Span`.
 - `@Instrumented` on types as bulk member instrumentation over `@Span` remains
   blocked by current Swift macro role constraints.
 
@@ -464,9 +473,9 @@ It must not create a span token or duration record.
 
 ### `@Span`
 
-`@Span` is the function-level attached body macro. It wraps the existing function
-body in a `beginSpan` / `endSpan` pair and preserves the original declaration
-shape.
+`@Span` is the function/initializer-level attached body macro. It wraps the
+existing body in a `beginSpan` / `endSpan` pair and preserves the original
+declaration shape.
 
 Conceptual expansion:
 
@@ -487,15 +496,36 @@ func buildIndex() throws -> Index {
 }
 ```
 
+Initializer instrumentation uses inline begin/defer statements rather than a
+closure wrapper so Swift initialization rules are preserved:
+
+```swift
+@Span("Store.init(path:)")
+init(path: String) {
+  self.path = path
+}
+```
+
+becomes:
+
+```swift
+init(path: String) {
+  let token = Instruments.current.beginSpan("Store.init(path:)", attributes: .empty)
+  defer { Instruments.current.endSpan(token) }
+  self.path = path
+}
+```
+
 The macro must preserve access control, generics, attributes, async/throws/
-rethrows, return values, and where clauses. It must not swallow, transform, or
-mask user errors.
+rethrows, failable initializers, return values, and where clauses. It must not
+swallow, transform, or mask user errors.
 
 When no explicit name is provided, default span names should be stable
 `StaticString` operation identities:
 
 - `functionName` for free functions,
 - `TypeName.methodName` for methods where type context is available.
+- `TypeName.init(labels:)` for initializers where type context is available.
 
 Dynamic values belong in `SpanAttributes`, not in the span name.
 
@@ -503,23 +533,29 @@ Dynamic values belong in `SpanAttributes`, not in the span name.
 
 `@Instrumented` is ergonomic syntax over `@Span`, not a separate runtime model.
 
-On a function, `@Instrumented` behaves like `@Span` with the default stable span
-name:
+On a function or initializer, `@Instrumented` behaves like `@Span` with the
+default stable span name:
 
 ```swift
 @Instrumented
 func openProject() async throws -> Project {
   ...
 }
+
+@Instrumented
+init(_ path: String, mode: Mode) {
+  ...
+}
 ```
 
 For a nominal type or extension, the implemented bulk instrumentation spelling is
-`@InstrumentedMembers`. It applies `@Span` to eligible methods in that
-declaration body, then lets `@Span` perform the body rewrite:
+`@InstrumentedMembers`. It applies `@Span` to eligible methods and initializers
+in that declaration body, then lets `@Span` perform the body rewrite:
 
 ```swift
 @InstrumentedMembers
 struct Store {
+  init(path: String) { ... }
   func load() async throws -> Item { ... }
   static func warmCache() throws { ... }
 }
@@ -529,6 +565,9 @@ is semantically equivalent to:
 
 ```swift
 struct Store {
+  @Span("Store.init(path:)")
+  init(path: String) { ... }
+
   @Span("Store.load")
   func load() async throws -> Item { ... }
 
@@ -539,25 +578,27 @@ struct Store {
 
 `@InstrumentedMembers` rules:
 
-- instrument methods declared directly in the annotated type or extension body,
-- do not automatically instrument methods in separate extensions unless that
+- instrument methods and initializers declared directly in the annotated type or
+  extension body,
+- do not automatically instrument members in separate extensions unless that
   extension is also annotated,
 - do not instrument protocol requirements without bodies,
-- do not implicitly instrument properties, property accessors, `init`, or
-  `deinit` unless a later architecture decision explicitly extends the macro
-  surface,
+- do not implicitly instrument properties, property accessors, or `deinit`
+  unless a later architecture decision explicitly extends the macro surface,
 - preserve member access control and declaration attributes,
-- use stable `TypeName.methodName` span names.
+- use stable `TypeName.methodName` and `TypeName.init(labels:)` span names.
 
 Current implementation note: the local Swift macro system rejects a single
 public `@Instrumented` macro declaration that combines function `body` and type
 `memberAttribute` roles, and it also rejects duplicate `Instrumented()` macro
-declarations with separate roles. Function-level `@Instrumented` is implemented;
-type/extension bulk instrumentation is implemented as `@InstrumentedMembers`.
-Do not reintroduce fake same-name type-level instrumentation.
+declarations with separate roles. Function/initializer-level `@Instrumented` is
+implemented; type/extension bulk instrumentation is implemented as
+`@InstrumentedMembers`. Do not reintroduce fake same-name type-level
+instrumentation.
 
-Attached function instrumentation requires real function-body macro expansion.
-Do not ship attached macros that compile but do not instrument the function body.
+Attached function/initializer instrumentation requires real body macro
+expansion. Do not ship attached macros that compile but do not instrument the
+body.
 
 Before implementing them, verify:
 
@@ -566,7 +607,7 @@ Before implementing them, verify:
 - attached body macro role availability,
 - plugin registration support,
 - preservation of access control, generics, attributes, async/throws/rethrows,
-  return values, and where clauses.
+  failable initializers, return values, and where clauses.
 
 Run a body macro smoke test before implementing them in the package. The smoke
 test verifies implementation mechanics; it is not a new architecture decision.
@@ -681,9 +722,9 @@ Implementation status for the unified implementation pass:
 4. `#span` and `#event` expand to Instruments runtime APIs.
 5. Signpost-named public macros and transitional Signpost-facing surfaces are
    removed.
-6. `@Span` and function-level `@Instrumented` use real function-body macro
+6. `@Span` and function/initializer-level `@Instrumented` use real body macro
    expansion; `@InstrumentedMembers` uses real member-attribute expansion to
-   apply `@Span` to eligible methods.
+   apply `@Span` to eligible methods and initializers.
 7. `Timeline` and `InMemoryRecorder` are implemented.
 8. Tests are Instruments-first.
 9. Benchmark core and the first Report product layer are implemented as

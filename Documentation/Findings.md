@@ -5,9 +5,10 @@ architecture truth. Promote a finding into `Documentation/Architecture/*`,
 `Documentation/Reference/*`, or a decision document when it becomes durable
 product behavior or an accepted implementation requirement.
 
-## 2026-05-15: Nested `#span` Macro Expansion Fails
+## 2026-05-15: Nested `#span` Macro Expansion Failure
 
-Finding: using `#span` inside another `#span` body currently fails to compile.
+Finding: using `#span` inside another `#span` body failed to compile before the
+nested Instruments macro lowering fix.
 
 Observed in `swift-markdown-syntax` while adding temporary materialization
 probes:
@@ -26,9 +27,9 @@ probes:
 }
 ```
 
-The compiler reports recursive macro expansion for the inner `#span` calls.
-The immediate workaround is to keep probe spans as siblings rather than nesting
-them inside an outer `#span` macro body:
+The compiler reported recursive macro expansion for the inner `#span` calls.
+Before the fix, the immediate workaround was to keep probe spans as siblings
+rather than nesting them inside an outer `#span` macro body:
 
 ```swift
 var attributed = #span("projection.materialize.base_string") {
@@ -43,16 +44,13 @@ var attributed = #span("projection.materialize.base_string") {
 Impact:
 
 - Fine-grained timeline attribution can still be collected with sibling spans.
-- A parent aggregate span currently has to be provided by surrounding stable
-  instrumentation, not by nesting `#span` around inner `#span` probes.
-- This is a macro expansion/tooling limitation, not a benchmark measurement
+- Nested `#span` is part of the accepted Instruments macro contract.
+- This was a macro expansion implementation limitation, not a benchmark measurement
   semantics issue.
 
-Follow-up:
+Resolution:
 
-- Decide whether nested `#span` should be supported as part of the Instruments
-  macro contract.
-- If supported, add a focused macro expansion test that covers nested
-  expression/body spans, return-value preservation, and throwing behavior.
-- If not supported, document sibling spans as the supported pattern in
-  `Documentation/UsageManual.md` and the Instruments architecture docs.
+- The freestanding `#span` macro now recursively lowers nested `#span` and
+  `#event` calls inside its body before emitting the outer macro expansion.
+- Focused macro expansion and runtime tests cover recursive nesting,
+  return-value preservation, throwing cleanup, and async nesting.

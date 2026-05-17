@@ -201,8 +201,9 @@ also continue through Signpost/xctrace for deeper Instruments analysis.
 - Use native `@BenchmarkSuite` / `@Benchmark` when a benchmark should live in a
   library target or must not run as an ordinary Swift Testing test.
 - Keep instrumentation explicit with `#span`, `@Span`, or `@Instrumented`; the
-  benchmark macro does not insert spans automatically. Use `--timeline` when
-  those spans should appear in `ReportDocument` attribution.
+  benchmark macro does not insert spans automatically. Function and initializer
+  body spans can appear in `ReportDocument` attribution when run with
+  `--timeline`.
 
 ## Usage Manual
 

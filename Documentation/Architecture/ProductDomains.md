@@ -152,12 +152,14 @@ It owns:
 Macros should emit Instruments semantics. They should not emit Signpost
 semantics directly.
 
-`@Span` is the function-level body macro. Function-level `@Instrumented` is
-ergonomic syntax over the same span semantics with a default stable name.
+`@Span` is the function/initializer-level body macro. Function/initializer-level
+`@Instrumented` is ergonomic syntax over the same span semantics with a default
+stable name.
 Type/extension bulk instrumentation is exposed as `@InstrumentedMembers`, which
-applies `@Span("Type.method")` to eligible methods in the annotated declaration
-body. The current Swift macro system rejects one public `@Instrumented` macro
-name that is both a function `body` macro and a type `memberAttribute` macro;
+applies `@Span("Type.member")` to eligible methods and initializers in the
+annotated declaration body. The current Swift macro system rejects one public
+`@Instrumented` macro name that is both a function `body` macro and a type
+`memberAttribute` macro;
 `Documentation/Architecture/Instruments.md` records the compiler evidence behind the
 split.
 

@@ -99,8 +99,9 @@ The migration is implemented for the public Signpost-first surface:
 - `EmptyRecorder`, `InMemoryRecorder`, and `Timeline` provide fallback and
   inspection behavior.
 
-Function-level `@Span` and `@Instrumented` are implemented as real body macros.
-Type/extension bulk instrumentation is implemented as `@InstrumentedMembers`.
+Function/initializer-level `@Span` and `@Instrumented` are implemented as real
+body macros. Type/extension bulk instrumentation is implemented as
+`@InstrumentedMembers`.
 The originally desired same-name type-level `@Instrumented` spelling remains
 blocked by the current Swift macro attachment-role model; see
 `Documentation/Architecture/Instruments.md` for the compiler evidence behind the spelling
