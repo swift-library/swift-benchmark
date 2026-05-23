@@ -43,6 +43,10 @@ Generated host compilation supplies Swift module search paths and C modulemap
 include paths discovered from SwiftPM checkout roots. The active build/scratch
 root takes precedence, and package `.build` checkout roots are fallback
 behavior for default or older local layouts.
+The plugin builds discovered package/test targets with the same SwiftPM
+configuration as the plugin tool path, so `swift package --configuration
+release benchmark ...` can discover and link release object files from a clean
+`.build` without requiring a separate prebuild step.
 
 ## SwiftPM Package Workflow
 
@@ -116,10 +120,11 @@ Success, no regression, and improvement all use exit code `0`.
 Generated host compilation is a plugin implementation detail. When the plugin
 invokes `swiftc` directly, it must provide only the search paths needed to
 match the package build. C modulemap include paths come from SwiftPM checkout
-roots. The plugin must not scan every generated
-`.build/**/include/module.modulemap`, because those directories can contain
-SwiftPM-generated module maps for Swift targets and can create duplicate module
-definitions.
+roots and from the discovered benchmark target's recursive source-module
+dependency roots, so edited/path dependencies keep working. The plugin must not
+scan every generated `.build/**/include/module.modulemap`, because those
+directories can contain SwiftPM-generated module maps for Swift targets and can
+create duplicate module definitions.
 
 ## Swift Testing Adapter
 
