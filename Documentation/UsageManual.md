@@ -333,6 +333,16 @@ swift package benchmark diff --input <report.json> --baseline <baseline.json> --
 swift package benchmark render --input <report.json> --format console|json|markdown|speedscope
 ```
 
+For performance baselines and CI gates, run the package workflow with SwiftPM's
+release configuration. Put `--configuration release` before `benchmark`,
+because it is a SwiftPM package option:
+
+```bash
+swift package --configuration release benchmark list
+swift package --configuration release benchmark run --format json --output .build/release-benchmark-report.json
+swift package --configuration release benchmark check --baseline Benchmarks/baseline.json
+```
+
 Advanced/debug host-backed CLI usage is available through the executable:
 
 ```bash

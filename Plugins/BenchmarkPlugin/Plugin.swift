@@ -96,10 +96,30 @@ struct BenchmarkPlugin: CommandPlugin {
   private func buildConfiguration(
     matching toolURL: URL
   ) -> PackageManager.BuildConfiguration {
-    let pathComponents = toolURL.standardizedFileURL.pathComponents
-    if pathComponents.contains("release") {
-      return .release
+    let buildDirectory = toolURL.deletingLastPathComponent().standardizedFileURL
+    let buildRoot = swiftPMBuildRoot(containing: buildDirectory)
+    var current = buildDirectory
+
+    for _ in 0..<8 {
+      if let buildRoot, samePath(current, buildRoot) {
+        break
+      }
+      switch current.lastPathComponent.lowercased() {
+      case "release":
+        return .release
+      case "debug":
+        return .debug
+      default:
+        break
+      }
+
+      let parent = current.deletingLastPathComponent()
+      if parent.path == current.path {
+        break
+      }
+      current = parent
     }
+
     return .debug
   }
 
