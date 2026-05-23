@@ -482,6 +482,43 @@ struct PackageWorkflowTests {
     #expect(FileManager.default.fileExists(atPath: testingTracePath))
   }
 
+  @Test(.timeLimit(.minutes(4)))
+  func fixturePackageCommandGeneratesReleaseHostWithoutPrebuild() throws {
+    let fixturePath = fixturePackagePath()
+    let scratchPath = scratchPath("fixture-benchmark-package-plugin-release")
+    try? FileManager.default.removeItem(atPath: scratchPath)
+    try FileManager.default.createDirectory(
+      atPath: scratchPath,
+      withIntermediateDirectories: true
+    )
+
+    let list = try runProcess(
+      executable: "/usr/bin/env",
+      arguments: [
+        "swift",
+        "package",
+        "-q",
+        "--package-path",
+        fixturePath,
+        "--scratch-path",
+        scratchPath,
+        "--configuration",
+        "release",
+        "--allow-writing-to-directory",
+        scratchPath,
+        "benchmark",
+        "list",
+        "--tag",
+        "fast",
+        "--format",
+        "json",
+      ]
+    )
+
+    #expect(list.contains("\"suite\" : \"LibraryFixture\""))
+    #expect(list.contains("\"caseName\" : \"Noop\""))
+  }
+
   @Test(.timeLimit(.minutes(3)))
   func fixturePackageCommandFindsCModuleMapsInExternalScratchPath() throws {
     let sourceRoot = URL(fileURLWithPath: scratchPath("fixture-c-module-package-source"))
