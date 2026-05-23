@@ -47,7 +47,7 @@ struct BenchmarkPlugin: CommandPlugin {
     }
 
     let parameters = PackageManager.BuildParameters(
-      configuration: .debug,
+      configuration: buildConfiguration(matching: cliTool.url),
       logging: .concise,
       echoLogs: false
     )
@@ -70,6 +70,8 @@ struct BenchmarkPlugin: CommandPlugin {
       ? try swiftTestingLibraryArguments()
       : []
     let moduleMapArguments = moduleMapImportArguments(
+      package: context.package,
+      discoveredTargetNames: plan.discoveredTargetNames,
       packageDirectory: context.package.directoryURL,
       buildDirectory: buildDirectory
     )
@@ -91,7 +93,19 @@ struct BenchmarkPlugin: CommandPlugin {
     return host
   }
 
+  private func buildConfiguration(
+    matching toolURL: URL
+  ) -> PackageManager.BuildConfiguration {
+    let pathComponents = toolURL.standardizedFileURL.pathComponents
+    if pathComponents.contains("release") {
+      return .release
+    }
+    return .debug
+  }
+
   private func moduleMapImportArguments(
+    package: Package,
+    discoveredTargetNames: [String],
     packageDirectory: URL,
     buildDirectory: URL
   ) -> [String] {
@@ -99,6 +113,10 @@ struct BenchmarkPlugin: CommandPlugin {
       packageDirectory: packageDirectory,
       buildDirectory: buildDirectory
     )
+      + moduleMapSourceRoots(
+        forTargetNames: discoveredTargetNames,
+        in: package
+      )
     var includeDirectoriesByModule: [String: String] = [:]
     var anonymousIncludeDirectories: Set<String> = []
 
@@ -128,6 +146,63 @@ struct BenchmarkPlugin: CommandPlugin {
     let includeDirectories = Set(includeDirectoriesByModule.values)
       .union(anonymousIncludeDirectories)
     return includeDirectories.sorted().flatMap { ["-I", $0] }
+  }
+
+  private func moduleMapSourceRoots(
+    forTargetNames discoveredTargetNames: [String],
+    in package: Package
+  ) -> [URL] {
+    var sourceTargetsByName: [String: any SourceModuleTarget] = [:]
+    for target in package.sourceModules {
+      sourceTargetsByName[target.name] = target
+    }
+
+    var roots: [URL] = []
+    var seen: Set<String> = []
+
+    func appendSourceModule(_ module: any SourceModuleTarget) {
+      guard let root = sourceRoot(for: module) else {
+        return
+      }
+      appendUnique(root, to: &roots, seen: &seen)
+    }
+
+    for targetName in discoveredTargetNames {
+      guard let target = sourceTargetsByName[targetName] else {
+        continue
+      }
+      appendSourceModule(target)
+      for dependency in target.recursiveTargetDependencies {
+        if let sourceModule = dependency.sourceModule {
+          appendSourceModule(sourceModule)
+        }
+      }
+    }
+
+    return roots.filter { FileManager.default.fileExists(atPath: $0.path) }
+  }
+
+  private func sourceRoot(for module: any SourceModuleTarget) -> URL? {
+    let directories = module.sourceFiles
+      .filter { $0.type == .source }
+      .map { $0.url.deletingLastPathComponent().standardizedFileURL }
+    guard !directories.isEmpty else {
+      return nil
+    }
+
+    var commonComponents = directories[0].pathComponents
+    for directory in directories.dropFirst() {
+      commonComponents = Array(
+        zip(commonComponents, directory.pathComponents)
+          .prefix { $0 == $1 }
+          .map(\.0)
+      )
+      if commonComponents.isEmpty {
+        return nil
+      }
+    }
+
+    return URL(fileURLWithPath: NSString.path(withComponents: commonComponents))
   }
 
   private func moduleMapCheckoutRoots(
