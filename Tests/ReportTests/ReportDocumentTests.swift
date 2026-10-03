@@ -1,6 +1,8 @@
-import Foundation
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
 
 import Benchmark
+import Foundation
 import Instruments
 import Report
 import Testing
@@ -111,7 +113,9 @@ struct ReportDocumentTests {
     #expect(eventReport.name == directReport.name)
     #expect(eventReport.tags == ["event-report"])
     #expect(eventReport.samples.map(\.durationNanoseconds) == [11, 11])
-    #expect(eventReport.samples.map(\.durationNanoseconds) == directReport.samples.map(\.durationNanoseconds))
+    #expect(
+      eventReport.samples.map(\.durationNanoseconds)
+        == directReport.samples.map(\.durationNanoseconds))
     #expect(eventReport.configuration == directReport.configuration)
     #expect(eventReport.sourceLocation == directReport.sourceLocation)
   }
@@ -257,7 +261,8 @@ struct ReportDocumentTests {
 
     #expect(object["$schema"] as? String == "https://www.speedscope.app/file-format-schema.json")
     #expect(frames.map { $0["name"] as? String } == ["ParseAST"])
-    #expect(profiles.first?["name"] as? String == "Parser.ParseDocument sample:parser.parsedocument.1")
+    #expect(
+      profiles.first?["name"] as? String == "Parser.ParseDocument sample:parser.parsedocument.1")
   }
 
   @Test

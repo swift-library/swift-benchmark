@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Benchmark
 import Foundation
 import Report
@@ -37,7 +40,8 @@ public struct BenchmarkXCTestAdapter: Sendable {
     guard document.summary.verdict == .failed else {
       return nil
     }
-    return "Benchmark report \(document.metadata.id.rawValue) failed with \(document.summary.failedRegressionCount) regression(s), \(document.summary.failedBudgetCount) budget failure(s), and \(document.summary.failedDiagnosticCount) failed diagnostic(s)."
+    return
+      "Benchmark report \(document.metadata.id.rawValue) failed with \(document.summary.failedRegressionCount) regression(s), \(document.summary.failedBudgetCount) budget failure(s), and \(document.summary.failedDiagnosticCount) failed diagnostic(s)."
   }
 
   public func failureContexts(for document: ReportDocument) -> [BenchmarkXCTestFailureContext] {
@@ -58,7 +62,9 @@ public struct BenchmarkXCTestAdapter: Sendable {
     }
   }
 
-  public func reportAttachmentPayloads(for document: ReportDocument) throws -> [BenchmarkXCTestAttachmentPayload] {
+  public func reportAttachmentPayloads(for document: ReportDocument) throws
+    -> [BenchmarkXCTestAttachmentPayload]
+  {
     let json = try JSONReportRenderer.render(document)
     return [
       BenchmarkXCTestAttachmentPayload(

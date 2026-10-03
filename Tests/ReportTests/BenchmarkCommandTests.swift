@@ -1,6 +1,8 @@
-import Foundation
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
 
 import Benchmark
+import Foundation
 import Instruments
 import Report
 import Testing
@@ -25,11 +27,12 @@ struct BenchmarkCommandTests {
         blackHole(1)
       }
     }
-    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100))).run(
-      suites: [suite],
-      metadata: .fixture(),
-      format: .json
-    )
+    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100)))
+      .run(
+        suites: [suite],
+        metadata: .fixture(),
+        format: .json
+      )
     let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
     let report = try #require(document.suites.first?.cases.first)
 
@@ -48,14 +51,15 @@ struct BenchmarkCommandTests {
         blackHole(1)
       }
     }
-    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100))).run(
-      suites: [suite],
-      metadata: .fixture(),
-      metricProviders: [
-        UnavailableMetricProvider(metricName: "metrickit.cpu", reason: "MetricKit unavailable")
-      ],
-      format: .json
-    )
+    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100)))
+      .run(
+        suites: [suite],
+        metadata: .fixture(),
+        metricProviders: [
+          UnavailableMetricProvider(metricName: "metrickit.cpu", reason: "MetricKit unavailable")
+        ],
+        format: .json
+      )
     let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
     let report = try #require(document.suites.first?.cases.first)
 
@@ -74,25 +78,28 @@ struct BenchmarkCommandTests {
         blackHole(1)
       }
     }
-    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100))).run(
-      suites: [suite],
-      metadata: .fixture(),
-      timelineCapture: .benchmarkIterations,
-      format: .json
-    )
+    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100)))
+      .run(
+        suites: [suite],
+        metadata: .fixture(),
+        timelineCapture: .benchmarkIterations,
+        format: .json
+      )
     let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
     let report = try #require(document.suites.first?.cases.first)
 
     #expect(report.attributions.count == 2)
-    #expect(report.attributions.map { $0.scope.sampleID?.rawValue } == [
-      "sample:command.measured.0",
-      "sample:command.measured.1",
-    ])
-    #expect(report.attributions.allSatisfy { attribution in
-      attribution.spans.map(\.name) == ["BenchmarkIteration"]
-        && attribution.events.map(\.name) == ["BenchmarkIterationMeasured"]
-        && attribution.spanSummaries.map(\.name) == ["BenchmarkIteration"]
-    })
+    #expect(
+      report.attributions.map { $0.scope.sampleID?.rawValue } == [
+        "sample:command.measured.0",
+        "sample:command.measured.1",
+      ])
+    #expect(
+      report.attributions.allSatisfy { attribution in
+        attribution.spans.map(\.name) == ["BenchmarkIteration"]
+          && attribution.events.map(\.name) == ["BenchmarkIterationMeasured"]
+          && attribution.spanSummaries.map(\.name) == ["BenchmarkIteration"]
+      })
   }
 
   @Test
@@ -108,12 +115,13 @@ struct BenchmarkCommandTests {
         }
       }
     }
-    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100))).run(
-      suites: [suite],
-      metadata: .fixture(),
-      timelineCapture: .benchmarkIterations,
-      format: .json
-    )
+    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100)))
+      .run(
+        suites: [suite],
+        metadata: .fixture(),
+        timelineCapture: .benchmarkIterations,
+        format: .json
+      )
     let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
     let report = try #require(document.suites.first?.cases.first)
     let attribution = try #require(report.attributions.first)

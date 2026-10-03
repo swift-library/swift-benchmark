@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Benchmark
 import Foundation
 
@@ -79,7 +82,8 @@ enum ReportIDFactory {
     rowID: String? = nil
   ) -> ReportID {
     if let size {
-      return ReportID(rawValue: "row:\(stable(suiteName)).\(stable(caseName)).size-\(size.rawValue)")
+      return ReportID(
+        rawValue: "row:\(stable(suiteName)).\(stable(caseName)).size-\(size.rawValue)")
     }
     if let rowID, !rowID.isEmpty {
       return ReportID(rawValue: "row:\(stable(suiteName)).\(stable(caseName)).\(stable(rowID))")
@@ -95,7 +99,8 @@ enum ReportIDFactory {
     iteration: Int
   ) -> ReportID {
     ReportID(
-      rawValue: "iteration:\(stable(suiteName)).\(stable(caseName))\(rowSuffix(size: size, rowID: rowID)).\(iteration)"
+      rawValue:
+        "iteration:\(stable(suiteName)).\(stable(caseName))\(rowSuffix(size: size, rowID: rowID)).\(iteration)"
     )
   }
 
@@ -106,7 +111,10 @@ enum ReportIDFactory {
     rowID: String? = nil,
     iteration: Int
   ) -> ReportID {
-    ReportID(rawValue: "sample:\(stable(suiteName)).\(stable(caseName))\(rowSuffix(size: size, rowID: rowID)).\(iteration)")
+    ReportID(
+      rawValue:
+        "sample:\(stable(suiteName)).\(stable(caseName))\(rowSuffix(size: size, rowID: rowID)).\(iteration)"
+    )
   }
 
   static func dimensionCurve(

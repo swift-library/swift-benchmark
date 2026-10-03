@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Report
 import Testing
 
@@ -5,7 +8,8 @@ import Testing
 struct AppleDiagnosticsTests {
   @Test
   func metricKitProviderReportsUnavailableWithoutPlatformPayload() async {
-    let scope = ReportScope(runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
+    let scope = ReportScope(
+      runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
     let metrics = await MetricKitDiagnosticProvider().metrics(for: scope)
 
     #expect(metrics.map(\.name) == [AppleDiagnosticMetricName.metricKitPayload])
@@ -15,7 +19,8 @@ struct AppleDiagnosticsTests {
 
   @Test
   func metricKitProviderMapsSnapshotToRunScopedMetrics() async {
-    let scope = ReportScope(runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
+    let scope = ReportScope(
+      runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
     let provider = MetricKitDiagnosticProvider(
       source: StaticMetricKitSnapshotSource(
         snapshot: MetricKitDiagnosticSnapshot(
@@ -30,20 +35,22 @@ struct AppleDiagnosticsTests {
 
     let metrics = await provider.metrics(for: scope)
 
-    #expect(metrics.map(\.name) == [
-      AppleDiagnosticMetricName.metricKitCPUTimeSeconds,
-      AppleDiagnosticMetricName.metricKitPeakMemoryBytes,
-      AppleDiagnosticMetricName.metricKitLogicalWritesBytes,
-      AppleDiagnosticMetricName.metricKitHangCount,
-      AppleDiagnosticMetricName.metricKitDiagnosticCount,
-    ])
+    #expect(
+      metrics.map(\.name) == [
+        AppleDiagnosticMetricName.metricKitCPUTimeSeconds,
+        AppleDiagnosticMetricName.metricKitPeakMemoryBytes,
+        AppleDiagnosticMetricName.metricKitLogicalWritesBytes,
+        AppleDiagnosticMetricName.metricKitHangCount,
+        AppleDiagnosticMetricName.metricKitDiagnosticCount,
+      ])
     #expect(metrics.map(\.state.kind).allSatisfy { $0 == .measured })
     #expect(metrics.map(\.state.value) == [1.5, 4096, 2048, 1, 2])
   }
 
   @Test
   func metricKitAttachmentExporterReturnsStructuredPayloadAttachments() async {
-    let scope = ReportScope(runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
+    let scope = ReportScope(
+      runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
     let attachment = DiagnosticAttachment(
       id: "attachment:metrickit-payload",
       scope: scope,
@@ -66,7 +73,8 @@ struct AppleDiagnosticsTests {
 
   @Test
   func traceArtifactExporterAttachesTraceAndOfficialExportsOnlyWhenPresent() async {
-    let scope = ReportScope(runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
+    let scope = ReportScope(
+      runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
     let exporter = TraceArtifactExporter(
       artifact: TraceArtifact(
         tracePath: "/tmp/run.trace",
@@ -83,17 +91,19 @@ struct AppleDiagnosticsTests {
     let attachments = await exporter.attachments(for: scope)
 
     #expect(attachments.map(\.kind) == [.trace, .structuredData, .structuredData])
-    #expect(attachments.map(\.contentType) == [
-      "application/vnd.apple.instruments.trace",
-      "application/xml",
-      "application/xml",
-    ])
+    #expect(
+      attachments.map(\.contentType) == [
+        "application/vnd.apple.instruments.trace",
+        "application/xml",
+        "application/xml",
+      ])
     #expect(attachments.allSatisfy { $0.metadata["command"]?.contains("xctrace export") == true })
   }
 
   @Test
   func requiredMissingTraceArtifactIsValidatedByBenchmarkCommand() async throws {
-    let scope = ReportScope(runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
+    let scope = ReportScope(
+      runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
     let exporter = TraceArtifactExporter(
       artifact: TraceArtifact(tracePath: "/tmp/missing.trace"),
       requirement: .required,
@@ -108,14 +118,15 @@ struct AppleDiagnosticsTests {
   @Test
   func xctraceRecorderBuildsRecordCommandAndTraceArtifactProvenance() async throws {
     let recorder = XctraceRecorder(xcrunPath: "/usr/bin/xcrun") { arguments in
-      #expect(arguments.prefix(6) == [
-        "xctrace",
-        "record",
-        "--template",
-        "Time Profiler",
-        "--output",
-        "/tmp/run.trace",
-      ])
+      #expect(
+        arguments.prefix(6) == [
+          "xctrace",
+          "record",
+          "--template",
+          "Time Profiler",
+          "--output",
+          "/tmp/run.trace",
+        ])
       #expect(arguments.contains("--launch"))
       #expect(arguments.suffix(2) == ["--format", "json"])
       return XctraceCommandResult(terminationStatus: 0)

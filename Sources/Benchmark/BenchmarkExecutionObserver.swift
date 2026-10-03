@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 public struct BenchmarkExecutionContext: Sendable, Equatable {
   public var suiteName: String
   public var caseName: String
@@ -26,8 +29,10 @@ public protocol BenchmarkExecutionObserver: Sendable {
   func benchmarkDidFail(context: BenchmarkExecutionContext, error: any Error) async
 }
 
-public extension BenchmarkExecutionObserver {
-  func benchmarkWillRun(context: BenchmarkExecutionContext) async {}
-  func benchmarkDidRun(context: BenchmarkExecutionContext, durationNanoseconds: UInt64?) async {}
-  func benchmarkDidFail(context: BenchmarkExecutionContext, error: any Error) async {}
+extension BenchmarkExecutionObserver {
+  public func benchmarkWillRun(context: BenchmarkExecutionContext) async {}
+  public func benchmarkDidRun(context: BenchmarkExecutionContext, durationNanoseconds: UInt64?)
+    async
+  {}
+  public func benchmarkDidFail(context: BenchmarkExecutionContext, error: any Error) async {}
 }

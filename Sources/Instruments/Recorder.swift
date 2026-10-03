@@ -1,23 +1,26 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 public protocol Recorder: Sendable {
   func beginSpan(_ name: StaticString, attributes: SpanAttributes) -> SpanToken
   func endSpan(_ token: SpanToken)
   func recordEvent(_ name: StaticString, attributes: SpanAttributes)
 }
 
-public extension Recorder {
-  func beginSpan(_ name: StaticString) -> SpanToken {
+extension Recorder {
+  public func beginSpan(_ name: StaticString) -> SpanToken {
     beginSpan(name, attributes: .empty)
   }
 
-  func recordEvent(_ name: StaticString) {
+  public func recordEvent(_ name: StaticString) {
     recordEvent(name, attributes: .empty)
   }
 
-  func event(_ name: StaticString, attributes: SpanAttributes = .empty) {
+  public func event(_ name: StaticString, attributes: SpanAttributes = .empty) {
     recordEvent(name, attributes: attributes)
   }
 
-  func span<T>(
+  public func span<T>(
     _ name: StaticString,
     attributes: SpanAttributes = .empty,
     _ operation: () throws -> T
@@ -29,7 +32,7 @@ public extension Recorder {
     return try operation()
   }
 
-  func span<T>(
+  public func span<T>(
     _ name: StaticString,
     attributes: SpanAttributes = .empty,
     _ operation: () async throws -> T

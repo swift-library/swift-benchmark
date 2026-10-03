@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Benchmark
 import BenchmarkTesting
 import BenchmarkXCTest
@@ -50,7 +53,8 @@ struct AdapterTests {
     #expect(testingContexts.map(\.suiteName) == ["Adapters", "Adapters"])
     #expect(testingContexts.map(\.caseName) == ["Parse", "Parse"])
     #expect(testingContexts.map(\.cause.kind) == [.baselineRegression, .budgetExceeded])
-    #expect(testingContexts.allSatisfy { $0.sourceLocation?.fileID.contains("AdapterTests") == true })
+    #expect(
+      testingContexts.allSatisfy { $0.sourceLocation?.fileID.contains("AdapterTests") == true })
     #expect(xctestContexts.map(\.message) == testingContexts.map(\.message))
     #expect(attachmentPayloads.first?.uniformTypeIdentifier == "public.json")
     #expect(attachmentPayloads.first?.content.contains("\"verdictCauses\"") == true)

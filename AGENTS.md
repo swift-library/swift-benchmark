@@ -1,6 +1,21 @@
-# AGENTS.md
+# swift-benchmark Agent Guide
 
 - Read `README.md` first.
+
+## First-Principles Work
+
+- Name the behavior, root cause, invariant, owner, data flow, and validation
+  before changing reusable files.
+- Change the owning layer: runtime/API code, macro implementation, report
+  layer, current architecture truth, reference checklist, or docs.
+- Keep changes traceable to the request, source evidence, or owning invariant.
+- Validate code/API changes with `swift test` unless the task explicitly
+  narrows validation.
+
+## Task Route
+
+Read `Documentation/Architecture/VersioningAndRelease.md` before changing
+versions, requirements, dependencies or release workflows.
 
 ## Scope
 
@@ -35,6 +50,60 @@ specialized architecture or decision document needs a narrowly scoped example.
   Architecture truth lives in `Documentation/Architecture/`; user-facing usage
   lives in `README.md` and `Documentation/UsageManual.md`.
 
+## Canonical Artifacts
+
+- Treat conversation, review feedback, plans, and intermediate attempts as
+  editing input. Recompute the complete accepted result before finalizing.
+- Active artifacts depend only on that result and their repository role, not
+  on the editing path. Apply this to code, symbols, files, wrappers, branches,
+  configuration, schemas, defaults, generated sources, scripts, templates,
+  automation, comments, DocC, diagrams, tests, fixtures, snapshots, examples,
+  and normative docs.
+- If an intermediate result is `A + B` and the accepted result is `A`, express
+  `A` directly. Remove `B` and its residual surface rather than retaining names
+  such as `AOnly` or `AWithoutB`, or prose such as "B was removed."
+- Normalize by semantic identity and artifact role, not by token. A rejected
+  current capability does not invalidate a distinct historical fact,
+  migration, ownership record, or safety boundary that uses the same term.
+- Keep a negative constraint only when excluding `B` is independently required
+  by a current compatibility, safety, or ownership invariant.
+- A disabled B flag, skipped B test, dead B branch, retained B fixture, or
+  "do not add B" rule is residue when it exists only because B was attempted;
+  disabled state alone is not an invariant.
+- Keep change history only in commits, pull requests, changelogs, release
+  records, migrations, archives, or accepted decision records with durable
+  value. Do not create a history artifact merely to preserve a correction.
+- Preserve role-owned facts unless separate evidence changes them; do not
+  rewrite history or ownership merely to make a rejected term disappear.
+- Leave an already-correct history, migration, provenance, ownership, or safety
+  artifact unchanged when the task does not change its facts. Do not polish or
+  restate it merely because it is relevant to the current edit.
+- Comments explain non-obvious current semantics and invariants, not the
+  sequence of edits.
+- Before handoff, verify that a new agent with no editing conversation can
+  derive the complete current behavior, boundaries, and operating guidance
+  without mentally subtracting a rejected concept.
+
+## Authority
+
+- `AGENTS.md` is the agent guide for maintainer and agent work.
+- `README.md` and `Documentation/UsageManual.md` own user-facing usage.
+- `Documentation/Architecture/*` owns current architecture truth.
+- `Documentation/Reference/*` owns implementation checklists and supporting
+  reference material.
+- `Package.swift` owns SwiftPM package structure.
+
+## Boundary Guardrails
+
+- Do not promote machine-local paths, one-run state, fixture-only values, or
+  temporary execution state into reusable docs, scripts, templates, or
+  automation.
+- If a value changes by input, toolchain, benchmark host, or environment, pass
+  it in, configure it, derive it, or link to the owning artifact.
+- Do not duplicate end-user usage examples outside the user-facing docs unless
+  a specialized architecture or decision document needs a narrowly scoped
+  example.
+
 ## Current Completion State
 
 The repository has completed the Instruments-first foundation and a first
@@ -49,15 +118,15 @@ Benchmark/Report implementation foundation:
    Testing/XCTest adapter helpers, Memory/allocation seams, diagnostics
    adapters, and Benchmark/Instruments timeline aggregation.
 
-The Benchmark scope is active closure work. Current
-implemented foundations include Swift-Testing-shaped traits/discovery/plan,
+The implemented Benchmark/Report scope is defined by the architecture
+documents. Current capabilities include Swift-Testing-shaped traits/discovery/plan,
 `Benchmark.Event.Stream`, no-`--host` package workflow for library
 declarations, BenchmarkTesting bridge support for supported test-target
 `@Suite(.benchmark...)` / `@Test(.benchmark...)` declarations, adaptive and
 duration policies, CLI/plugin flag wiring, Memory/allocation seams, and
 `xctrace` orchestration. Known boundaries remain: executable-only declarations
 use the advanced `--host` override, the BenchmarkTesting bridge diagnoses
-`private`/`fileprivate` tests and `@Test(arguments:)`, Testing/XCTest adapter
+`private`/`fileprivate` tests; argument rows are supported. Testing/XCTest adapter
 depth stays behind available APIs, platform memory/allocation hooks vary, and
 MetricKit is future optional production diagnostics evidence.
 
@@ -184,8 +253,12 @@ useful.
     refs tracking belongs in `.refs.yaml` / canonical refs only
   - keep `LICENSE` copyright holder/year accurate
   - for new source files, prefer SPDX + copyright header
-    (for example `// SPDX-License-Identifier: AGPL-3.0-or-later`)
+    (for example `// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception`)
   - preserve third-party license/notice lines when code is copied or adapted
+
+## Operating Notes
+
+Keep validation tied to the changed behavior and owning layer.
 
 ## Validation
 

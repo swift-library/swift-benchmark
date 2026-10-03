@@ -17,7 +17,7 @@ let package = Package(
     .plugin(name: "BenchmarkPlugin", targets: ["BenchmarkPlugin"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0"),
+    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0")
   ],
   targets: [
     .target(
@@ -116,13 +116,22 @@ let package = Package(
       ],
       path: "Plugins/BenchmarkPlugin"
     ),
+    .target(
+      name: "MacroTesting",
+      dependencies: [
+        .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"),
+        .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+        .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
+      ],
+      path: "Tests/MacroTesting"
+    ),
     .testTarget(
       name: "InstrumentsTests",
       dependencies: [
         "Instruments",
         "InstrumentsMacro",
+        "MacroTesting",
         .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-        .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
       ],
       path: "Tests/InstrumentsTests"
     ),
@@ -131,8 +140,8 @@ let package = Package(
       dependencies: [
         "Benchmark",
         "BenchmarkMacro",
+        "MacroTesting",
         .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-        .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
       ],
       path: "Tests/BenchmarkTests"
     ),

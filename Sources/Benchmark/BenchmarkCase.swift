@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 
 public struct BenchmarkSourceLocation: Sendable, Equatable, Codable {
@@ -21,8 +24,7 @@ public struct BenchmarkCase: Sendable {
   public let traits: [any BenchmarkCaseTrait]
   public let dimension: Benchmark.Dimension?
   let parameterizedRows: [BenchmarkCaseRow]?
-  let makeOperation:
-    @Sendable (Benchmark.Scale?) async throws -> @Sendable () async throws -> Void
+  let makeOperation: @Sendable (Benchmark.Scale?) async throws -> @Sendable () async throws -> Void
 
   private init(
     _ name: String,
@@ -35,17 +37,20 @@ public struct BenchmarkCase: Sendable {
     traits: [any BenchmarkCaseTrait],
     dimension: Benchmark.Dimension?,
     parameterizedRows: [BenchmarkCaseRow]? = nil,
-    makeOperation: @escaping @Sendable (Benchmark.Scale?) async throws ->
+    makeOperation:
+      @escaping @Sendable (Benchmark.Scale?) async throws ->
       @Sendable () async throws -> Void
   ) {
     self.name = name
     self.configuration = configuration
-    self.sourceLocation = sourceLocation ?? BenchmarkSourceLocation(
-      fileID: fileID,
-      filePath: filePath,
-      line: line,
-      column: column
-    )
+    self.sourceLocation =
+      sourceLocation
+      ?? BenchmarkSourceLocation(
+        fileID: fileID,
+        filePath: filePath,
+        line: line,
+        column: column
+      )
     self.traits = traits
     self.dimension = dimension
     self.parameterizedRows = parameterizedRows
@@ -468,8 +473,8 @@ public struct BenchmarkCase: Sendable {
   }
 }
 
-private extension BenchmarkCase {
-  static func argumentRowID(index: Int, values: [Any]) -> String {
+extension BenchmarkCase {
+  fileprivate static func argumentRowID(index: Int, values: [Any]) -> String {
     let labels = values.map { stableIDComponent(String(describing: $0)) }
       .filter { !$0.isEmpty }
       .joined(separator: "-")
@@ -477,8 +482,9 @@ private extension BenchmarkCase {
     return "arguments-\(index)-\(suffix)"
   }
 
-  static func stableIDComponent(_ value: String) -> String {
-    let normalized = value
+  fileprivate static func stableIDComponent(_ value: String) -> String {
+    let normalized =
+      value
       .lowercased()
       .map { character in
         character.isLetter || character.isNumber ? character : "-"

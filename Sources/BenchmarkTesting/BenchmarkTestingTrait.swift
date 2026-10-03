@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Benchmark
 import Report
 
@@ -26,8 +29,8 @@ import Report
     }
   }
 
-  public extension TestTrait where Self == BenchmarkTestingTrait {
-    static func benchmark(
+  extension TestTrait where Self == BenchmarkTestingTrait {
+    public static func benchmark(
       configuration: BenchmarkConfiguration? = nil,
       baseline: BaselineDocument? = nil,
       baselineMetric: Report.Measurement.Metric = .mean,
@@ -44,8 +47,8 @@ import Report
     }
   }
 
-  public extension SuiteTrait where Self == BenchmarkTestingTrait {
-    static func benchmark(
+  extension SuiteTrait where Self == BenchmarkTestingTrait {
+    public static func benchmark(
       configuration: BenchmarkConfiguration? = nil,
       baseline: BaselineDocument? = nil,
       baselineMetric: Report.Measurement.Metric = .mean,

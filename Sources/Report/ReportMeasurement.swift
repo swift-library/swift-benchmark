@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Benchmark
 
 public enum Report {}
 
-public extension Report {
-  struct Measurement: Sendable, Equatable, Codable {
+extension Report {
+  public struct Measurement: Sendable, Equatable, Codable {
     public var rows: [Row]
 
     public init(rows: [Row]) {
@@ -24,8 +27,8 @@ public extension Report {
   }
 }
 
-public extension Report.Measurement {
-  struct Row: Sendable, Equatable, Codable {
+extension Report.Measurement {
+  public struct Row: Sendable, Equatable, Codable {
     public var id: String?
     public var size: Benchmark.Scale?
     public var arguments: [Benchmark.ArgumentValue]
@@ -63,10 +66,11 @@ public extension Report.Measurement {
       let container = try decoder.container(keyedBy: CodingKeys.self)
       let size = try container.decodeIfPresent(Benchmark.Scale.self, forKey: .size)
       let id = try container.decodeIfPresent(String.self, forKey: .id)
-      let arguments = try container.decodeIfPresent(
-        [Benchmark.ArgumentValue].self,
-        forKey: .arguments
-      ) ?? []
+      let arguments =
+        try container.decodeIfPresent(
+          [Benchmark.ArgumentValue].self,
+          forKey: .arguments
+        ) ?? []
       let samples = try container.decode([SampleReport].self, forKey: .samples)
       let metrics = try container.decodeIfPresent(Metrics.self, forKey: .metrics)
       let amortized = try container.decodeIfPresent(Metrics.self, forKey: .amortized)
@@ -81,7 +85,7 @@ public extension Report.Measurement {
     }
   }
 
-  struct Metrics: Sendable, Equatable, Codable {
+  public struct Metrics: Sendable, Equatable, Codable {
     public var count: Int
     public var min: Double
     public var max: Double
@@ -139,10 +143,11 @@ public extension Report.Measurement {
       let meanValue = values.reduce(0, +) / Double(values.count)
       self.mean = meanValue
       self.median = Self.percentile(0.5, values: values)
-      let variance = values.reduce(0) { partial, value in
-        let delta = value - meanValue
-        return partial + delta * delta
-      } / Double(values.count)
+      let variance =
+        values.reduce(0) { partial, value in
+          let delta = value - meanValue
+          return partial + delta * delta
+        } / Double(values.count)
       self.standardDeviation = variance.squareRoot()
       self.p90 = Self.percentile(0.90, values: values)
       self.p95 = Self.percentile(0.95, values: values)
@@ -185,7 +190,7 @@ public extension Report.Measurement {
     }
   }
 
-  enum Metric: String, Sendable, Codable, CaseIterable {
+  public enum Metric: String, Sendable, Codable, CaseIterable {
     case min
     case max
     case mean
@@ -218,8 +223,8 @@ public extension Report.Measurement {
   }
 }
 
-public extension Report {
-  struct DimensionCurve: Sendable, Equatable, Codable {
+extension Report {
+  public struct DimensionCurve: Sendable, Equatable, Codable {
     public var id: ReportID
     public var scope: ReportScope
     public var metric: Measurement.Metric
@@ -239,8 +244,8 @@ public extension Report {
   }
 }
 
-public extension Report.DimensionCurve {
-  struct Point: Sendable, Equatable, Codable {
+extension Report.DimensionCurve {
+  public struct Point: Sendable, Equatable, Codable {
     public var size: Benchmark.Scale
     public var valueNanoseconds: Double
     public var amortizedNanosecondsPerUnit: Double

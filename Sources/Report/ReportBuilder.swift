@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Benchmark
 
 public actor ReportRecorder: BenchmarkEventRecorder {
@@ -109,7 +112,8 @@ public struct ReportBuilder: Sendable {
                   threshold: threshold
                 )
               }
-            let budgetComparisons = budgets
+            let budgetComparisons =
+              budgets
               .filter {
                 $0.applies(suiteName: accumulator.suiteName, caseName: accumulator.caseName)
               }

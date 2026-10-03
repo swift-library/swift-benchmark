@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 
 public enum JSONReportRenderer {
@@ -27,7 +30,8 @@ public enum MarkdownReportRenderer {
     for suite in document.suites {
       lines.append("## \(suite.name)")
       lines.append("")
-      lines.append("| Case | Mean | Median | p95 | Baseline | Budgets | Verdict | Causes | Diagnostics |")
+      lines.append(
+        "| Case | Mean | Median | p95 | Baseline | Budgets | Verdict | Causes | Diagnostics |")
       lines.append("| --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: |")
       for report in suite.cases {
         let baseline = report.baseline.map { formatNanoseconds($0.baselineMeanNanoseconds) } ?? "-"
@@ -129,7 +133,9 @@ private struct SpeedscopeBuilder {
     for suite in document.suites {
       for report in suite.cases {
         for attribution in report.attributions {
-          let spans = attribution.spans.filter { $0.durationNanoseconds != nil && $0.endNanoseconds != nil }
+          let spans = attribution.spans.filter {
+            $0.durationNanoseconds != nil && $0.endNanoseconds != nil
+          }
           guard !spans.isEmpty else {
             continue
           }
@@ -141,7 +147,8 @@ private struct SpeedscopeBuilder {
               continue
             }
             let frame = frameIndex(for: span.name)
-            events.append(SpeedscopeEvent(type: "O", frame: frame, at: span.startNanoseconds - minStart))
+            events.append(
+              SpeedscopeEvent(type: "O", frame: frame, at: span.startNanoseconds - minStart))
             events.append(SpeedscopeEvent(type: "C", frame: frame, at: end - minStart))
           }
           profiles.append(
@@ -180,7 +187,9 @@ private struct SpeedscopeBuilder {
     return index
   }
 
-  private func profileName(suite: String, report: String, attribution: TimelineAttribution) -> String {
+  private func profileName(suite: String, report: String, attribution: TimelineAttribution)
+    -> String
+  {
     if let sampleID = attribution.scope.sampleID {
       return "\(suite).\(report) \(sampleID.rawValue)"
     }

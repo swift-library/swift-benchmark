@@ -1,5 +1,8 @@
-public extension Benchmark {
-  struct Scale: Sendable, Equatable, Hashable, Comparable, Codable {
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
+extension Benchmark {
+  public struct Scale: Sendable, Equatable, Hashable, Comparable, Codable {
     public var rawValue: Int
 
     public init(_ rawValue: Int) {
@@ -12,8 +15,8 @@ public extension Benchmark {
   }
 }
 
-public extension Benchmark {
-  struct Dimension: Sendable, Equatable {
+extension Benchmark {
+  public struct Dimension: Sendable, Equatable {
     public var sizes: [Benchmark.Scale]
 
     public init(sizes: [Benchmark.Scale]) {

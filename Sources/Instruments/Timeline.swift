@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 public struct Timeline: Sendable, Equatable {
   public struct SpanID: RawRepresentable, Sendable, Hashable, Comparable {
     public let rawValue: UInt64

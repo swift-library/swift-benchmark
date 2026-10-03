@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 @attached(member, names: named(__benchmarkSuites))
 @attached(extension, conformances: _BenchmarkDiscovery)
 @attached(peer, names: prefixed(__BenchmarkDiscovery_))

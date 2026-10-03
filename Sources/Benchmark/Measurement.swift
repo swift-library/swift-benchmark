@@ -1,7 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 public typealias Measurement = Benchmark.Measurement
 
-public extension Benchmark {
-  struct Measurement: Sendable, Equatable {
+extension Benchmark {
+  public struct Measurement: Sendable, Equatable {
     public var rows: [Row]
 
     public init(rows: [Row]) {
@@ -18,8 +21,8 @@ public extension Benchmark {
   }
 }
 
-public extension Benchmark.Measurement {
-  struct Row: Sendable, Equatable {
+extension Benchmark.Measurement {
+  public struct Row: Sendable, Equatable {
     public var id: String?
     public var size: Benchmark.Scale?
     public var arguments: [Benchmark.ArgumentValue]

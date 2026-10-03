@@ -1,8 +1,24 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 import Testing
 
 @Suite("Package Workflow")
 struct PackageWorkflowTests {
+  @Test(.timeLimit(.minutes(3)))
+  func cliProductsReportTheSameVersion() throws {
+    let version = try runProcess(executable: cliPath(), arguments: ["--version"])
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let aliasVersion = try runProcess(
+      executable: URL(fileURLWithPath: try cliPath()).deletingLastPathComponent()
+        .appendingPathComponent("BenchmarkCLI").path,
+      arguments: ["--version"]
+    ).trimmingCharacters(in: .whitespacesAndNewlines)
+    #expect(version.hasPrefix("swift-benchmark-cli "))
+    #expect(version == aliasVersion)
+  }
+
   @Test(.timeLimit(.minutes(2)))
   func fixturePackageHostWorksThroughCLI() throws {
     let fixturePath = fixturePackagePath()
@@ -81,7 +97,8 @@ struct PackageWorkflowTests {
       withIntermediateDirectories: true
     )
     let reportPath = URL(fileURLWithPath: scratchPath).appendingPathComponent("report.json").path
-    let baselinePath = URL(fileURLWithPath: scratchPath).appendingPathComponent("baseline.json").path
+    let baselinePath = URL(fileURLWithPath: scratchPath).appendingPathComponent("baseline.json")
+      .path
     let tracePath = URL(fileURLWithPath: scratchPath).appendingPathComponent("run.trace").path
     let testingReportPath = URL(fileURLWithPath: scratchPath)
       .appendingPathComponent("testing-report.json")
@@ -480,6 +497,17 @@ struct PackageWorkflowTests {
     #expect(testingTrace.contains("\"xctrace\""))
     #expect(FileManager.default.fileExists(atPath: tracePath))
     #expect(FileManager.default.fileExists(atPath: testingTracePath))
+    let pluginVersion = try runProcess(
+      executable: "/usr/bin/env",
+      arguments: [
+        "swift", "package", "--package-path", fixturePath, "--scratch-path", scratchPath,
+        "benchmark", "--version",
+      ]
+    ).trimmingCharacters(in: .whitespacesAndNewlines)
+    let cliVersion = try runProcess(executable: cliPath(), arguments: ["--version"])
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    #expect(pluginVersion == cliVersion)
+
   }
 
   @Test(.timeLimit(.minutes(4)))
@@ -490,6 +518,29 @@ struct PackageWorkflowTests {
     try FileManager.default.createDirectory(
       atPath: scratchPath,
       withIntermediateDirectories: true
+    )
+
+    _ = try runProcess(
+      executable: "/usr/bin/env",
+      arguments: [
+        "swift",
+        "package",
+        "-q",
+        "--package-path",
+        fixturePath,
+        "--scratch-path",
+        scratchPath,
+        "--configuration",
+        "debug",
+        "--allow-writing-to-directory",
+        scratchPath,
+        "benchmark",
+        "list",
+        "--tag",
+        "fast",
+        "--format",
+        "json",
+      ]
     )
 
     let list = try runProcess(
@@ -514,9 +565,36 @@ struct PackageWorkflowTests {
         "json",
       ]
     )
+    let run = try runProcess(
+      executable: "/usr/bin/env",
+      arguments: [
+        "swift",
+        "package",
+        "-q",
+        "--package-path",
+        fixturePath,
+        "--scratch-path",
+        scratchPath,
+        "--configuration",
+        "release",
+        "--allow-writing-to-directory",
+        scratchPath,
+        "benchmark",
+        "run",
+        "--tag",
+        "fast",
+        "--warmup",
+        "0",
+        "--iterations",
+        "1",
+        "--format",
+        "json",
+      ]
+    )
 
     #expect(list.contains("\"suite\" : \"LibraryFixture\""))
     #expect(list.contains("\"caseName\" : \"Noop\""))
+    #expect(run.contains("\"buildConfiguration\" : \"release\""))
   }
 
   @Test(.timeLimit(.minutes(3)))
@@ -646,7 +724,8 @@ struct PackageWorkflowTests {
     process.waitUntilExit()
 
     let output = String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    let errorOutput = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    let errorOutput = String(
+      decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     guard process.terminationStatus == 0 else {
       throw PackageWorkflowError(
         status: process.terminationStatus,
@@ -673,7 +752,8 @@ struct PackageWorkflowTests {
     process.waitUntilExit()
 
     let output = String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    let errorOutput = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    let errorOutput = String(
+      decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     guard process.terminationStatus != 0 else {
       throw PackageWorkflowError(
         status: process.terminationStatus,
@@ -685,21 +765,19 @@ struct PackageWorkflowTests {
   }
 
   private func cliPath() throws -> String {
-    let root = repositoryRoot()
-    let build = root.appendingPathComponent(".build")
-    let fileManager = FileManager.default
-    if let enumerator = fileManager.enumerator(at: build, includingPropertiesForKeys: nil) {
-      for case let url as URL in enumerator where url.lastPathComponent == "swift-benchmark-cli" {
-        if fileManager.isExecutableFile(atPath: url.path) {
-          return url.path
-        }
-      }
+    #if DEBUG
+      let configuration = "debug"
+    #else
+      let configuration = "release"
+    #endif
+    let path =
+      ProcessInfo.processInfo.environment["SWIFT_BENCHMARK_CLI_PATH"]
+      ?? repositoryRoot().appendingPathComponent(".build/\(configuration)/swift-benchmark-cli").path
+    guard FileManager.default.isExecutableFile(atPath: path) else {
+      throw PackageWorkflowError(
+        status: 127, output: "", errorOutput: "Missing active CLI executable: \(path)")
     }
-    throw PackageWorkflowError(
-      status: 127,
-      output: "",
-      errorOutput: "Missing CLI executable under \(build.path)"
-    )
+    return path
   }
 
   private func fixturePackagePath() -> String {

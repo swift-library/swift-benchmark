@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Benchmark
 import Foundation
 import Instruments
@@ -41,7 +44,8 @@ public final class BenchmarkTimelineObserver: BenchmarkExecutionObserver, @unche
     }
     var attributes = correlationAttributes(context: context, iteration: iteration)
     if let durationNanoseconds {
-      attributes.values[TimelineCorrelationKeys.durationNanoseconds] = .int(Int(durationNanoseconds))
+      attributes.values[TimelineCorrelationKeys.durationNanoseconds] = .int(
+        Int(durationNanoseconds))
     }
     endSpan(for: context, eventName: "BenchmarkIterationMeasured", eventAttributes: attributes)
   }
@@ -79,7 +83,8 @@ public final class BenchmarkTimelineObserver: BenchmarkExecutionObserver, @unche
       TimelineCorrelationKeys.suite: .string(context.suiteName),
       TimelineCorrelationKeys.case: .string(context.caseName),
       TimelineCorrelationKeys.iteration: .int(iteration),
-      TimelineCorrelationKeys.dimensionSize: context.size.map { .int($0.rawValue) } ?? .string("none"),
+      TimelineCorrelationKeys.dimensionSize: context.size.map { .int($0.rawValue) }
+        ?? .string("none"),
     ]
   }
 }

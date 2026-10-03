@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 
 public enum Instruments {
@@ -57,9 +60,9 @@ public enum Instruments {
 
   private static func defaultRecorder() -> any Recorder {
     #if canImport(OSLog)
-    SignpostRecorder()
+      SignpostRecorder()
     #else
-    EmptyRecorder()
+      EmptyRecorder()
     #endif
   }
 }

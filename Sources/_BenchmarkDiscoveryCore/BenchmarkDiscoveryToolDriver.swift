@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 
 public enum BenchmarkDiscoveryToolDriver {
@@ -338,11 +341,13 @@ public struct BenchmarkDiscoveryPlanner {
       ])
     }
 
-    let discoveryExpressions = nativeDiscoveries.map {
-      "\($0.moduleName).\($0.discoveryTypeName).self"
-    } + testingBridges.map {
-      "\($0.discoveryTypeName).self"
-    }
+    let discoveryExpressions =
+      nativeDiscoveries.map {
+        "\($0.moduleName).\($0.discoveryTypeName).self"
+      }
+      + testingBridges.map {
+        "\($0.discoveryTypeName).self"
+      }
     let hostSourcePath = try writeGeneratedBenchmarkHost(
       workDirectory: workDirectory,
       nativeDiscoveries: nativeDiscoveries,
@@ -611,7 +616,8 @@ private struct SourceScanner {
         for: function,
         suiteType: suiteType,
         argumentValues: argumentBinding?.invocationArguments
-          ?? (testInfo.dimensionExpression != nil && function.parameters.count == 1 ? ["__benchmarkScale"] : [])
+          ?? (testInfo.dimensionExpression != nil && function.parameters.count == 1
+            ? ["__benchmarkScale"] : [])
       )
     )
 
@@ -648,7 +654,8 @@ private struct SourceScanner {
       """
   }
 
-  private func callParameterArguments(for function: FunctionDeclaration, values: [String]) -> String {
+  private func callParameterArguments(for function: FunctionDeclaration, values: [String]) -> String
+  {
     zip(function.parameters, values)
       .map { parameter, value in "\(callLabel(parameter))\(value)" }
       .joined(separator: ", ")
@@ -681,7 +688,11 @@ private struct SourceScanner {
     var balance = 0
     var lineIndex = index
     let startLine = index + 1
-    let startColumn = max(1, (lines[index].firstIndex(of: "@").map { lines[index].distance(from: lines[index].startIndex, to: $0) } ?? 0) + 1)
+    let startColumn = max(
+      1,
+      (lines[index].firstIndex(of: "@").map {
+        lines[index].distance(from: lines[index].startIndex, to: $0)
+      } ?? 0) + 1)
     var name = ""
     var sawName = false
 
@@ -712,7 +723,8 @@ private struct SourceScanner {
 
   private func parseTypeDeclaration(_ line: String) -> TypeDeclaration? {
     let stripped = stripLineComment(line)
-    let pattern = #"(?:(?:public|internal|private|fileprivate|open|final)\s+)*(struct|class|actor|enum)\s+([A-Za-z_][A-Za-z0-9_]*)"#
+    let pattern =
+      #"(?:(?:public|internal|private|fileprivate|open|final)\s+)*(struct|class|actor|enum)\s+([A-Za-z_][A-Za-z0-9_]*)"#
     guard let match = firstMatch(pattern, in: stripped),
       let kindText = capture(1, in: stripped, match: match),
       let name = capture(2, in: stripped, match: match)
@@ -732,7 +744,8 @@ private struct SourceScanner {
     lineNumber: Int
   ) -> FunctionDeclaration? {
     let stripped = stripLineComment(line)
-    let pattern = #"(?:(?:public|internal|private|fileprivate|open|static|class|mutating|nonmutating)\s+)*func\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)([^\\{]*)"#
+    let pattern =
+      #"(?:(?:public|internal|private|fileprivate|open|static|class|mutating|nonmutating)\s+)*func\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)([^\\{]*)"#
     guard let match = firstMatch(pattern, in: stripped),
       let name = capture(1, in: stripped, match: match),
       let parameters = capture(2, in: stripped, match: match),
@@ -742,7 +755,10 @@ private struct SourceScanner {
     }
     let functionStart = stripped.range(of: "func")?.lowerBound ?? stripped.startIndex
     let prefix = String(stripped[..<functionStart])
-    let column = (stripped.range(of: "func").map { stripped.distance(from: stripped.startIndex, to: $0.lowerBound) } ?? 0) + 1
+    let column =
+      (stripped.range(of: "func").map {
+        stripped.distance(from: stripped.startIndex, to: $0.lowerBound)
+      } ?? 0) + 1
     return FunctionDeclaration(
       name: name,
       line: lineNumber,
@@ -768,7 +784,8 @@ private struct SourceScanner {
 
   private func benchmarkTraits(from text: String) -> [String] {
     guard containsBenchmarkTrait(text),
-      let configuration = argumentValue(named: "configuration", inCallNamed: "benchmark", text: text)
+      let configuration = argumentValue(
+        named: "configuration", inCallNamed: "benchmark", text: text)
     else {
       return []
     }
@@ -846,38 +863,38 @@ public struct BridgeSourceGenerator {
   private func renderCase(_ benchmarkCase: DiscoveredCase) -> String {
     if !benchmarkCase.argumentExpressions.isEmpty {
       return """
-            Benchmark(
-              \(String(reflecting: benchmarkCase.name)),
-              arguments: \(benchmarkCase.argumentExpressions.joined(separator: ", ")),
-              traits: \(renderCaseTraits(benchmarkCase.traits)),
-              sourceLocation: \(benchmarkCase.sourceLocation.rendered)
-            ) { \(benchmarkCase.closureParameters.joined(separator: ", ")) in
-    \(indent(benchmarkCase.invocation, spaces: 10))
-            }
-    """
+                Benchmark(
+                  \(String(reflecting: benchmarkCase.name)),
+                  arguments: \(benchmarkCase.argumentExpressions.joined(separator: ", ")),
+                  traits: \(renderCaseTraits(benchmarkCase.traits)),
+                  sourceLocation: \(benchmarkCase.sourceLocation.rendered)
+                ) { \(benchmarkCase.closureParameters.joined(separator: ", ")) in
+        \(indent(benchmarkCase.invocation, spaces: 10))
+                }
+        """
     }
     if let dimension = benchmarkCase.dimensionExpression {
       return """
-            Benchmark(
-              \(String(reflecting: benchmarkCase.name)),
-              dimension: \(dimension),
-              traits: \(renderCaseTraits(benchmarkCase.traits)),
-              sourceLocation: \(benchmarkCase.sourceLocation.rendered),
-              input: { $0 }
-            ) { __benchmarkScale in
-    \(indent(benchmarkCase.invocation, spaces: 10))
-            }
-    """
+                Benchmark(
+                  \(String(reflecting: benchmarkCase.name)),
+                  dimension: \(dimension),
+                  traits: \(renderCaseTraits(benchmarkCase.traits)),
+                  sourceLocation: \(benchmarkCase.sourceLocation.rendered),
+                  input: { $0 }
+                ) { __benchmarkScale in
+        \(indent(benchmarkCase.invocation, spaces: 10))
+                }
+        """
     }
     return """
-            Benchmark(
-              \(String(reflecting: benchmarkCase.name)),
-              traits: \(renderCaseTraits(benchmarkCase.traits)),
-              sourceLocation: \(benchmarkCase.sourceLocation.rendered)
-            ) {
-    \(indent(benchmarkCase.invocation, spaces: 10))
-            }
-    """
+              Benchmark(
+                \(String(reflecting: benchmarkCase.name)),
+                traits: \(renderCaseTraits(benchmarkCase.traits)),
+                sourceLocation: \(benchmarkCase.sourceLocation.rendered)
+              ) {
+      \(indent(benchmarkCase.invocation, spaces: 10))
+              }
+      """
   }
 
   private func renderSuiteTraits(_ traits: [String]) -> String {
@@ -1226,9 +1243,11 @@ private func argumentValue(
 
 private func benchmarkArgumentExpressions(from attribute: PendingAttribute) -> [String] {
   let arguments = callArguments(named: attribute.name, in: attribute.text)
-  guard let startIndex = arguments.firstIndex(where: {
-    $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("arguments:")
-  }) else {
+  guard
+    let startIndex = arguments.firstIndex(where: {
+      $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("arguments:")
+    })
+  else {
     return []
   }
   let first = arguments[startIndex]
@@ -1295,7 +1314,8 @@ private func functionParameters(from text: String) -> [FunctionParameter] {
     guard !trimmed.isEmpty else {
       return nil
     }
-    let signature = trimmed.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: true)
+    let signature =
+      trimmed.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: true)
       .first
       .map(String.init) ?? trimmed
     let names = signature.split(whereSeparator: \.isWhitespace).map(String.init)
@@ -1377,7 +1397,8 @@ private func stripStringLiteralsAndComments(_ source: String) -> String {
       continue
     }
     if characters[index] == "\"" {
-      let isTriple = index + 2 < characters.count
+      let isTriple =
+        index + 2 < characters.count
         && characters[index + 1] == "\""
         && characters[index + 2] == "\""
       if isTriple {
@@ -1445,7 +1466,8 @@ public func writeGeneratedBenchmarkHost(
   let imports = Set(nativeDiscoveries.map(\.moduleName)).sorted()
     .map { "import \($0)" }
     .joined(separator: "\n")
-  let discoveryList = discoveryExpressions
+  let discoveryList =
+    discoveryExpressions
     .map { "    \($0)" }
     .joined(separator: ",\n")
   let source = """

@@ -1,5 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 import Testing
+
 @testable import _BenchmarkDiscoveryCore
 @testable import _BenchmarkSyntaxDiscoveryCore
 
@@ -10,15 +14,15 @@ struct BenchmarkSyntaxDiscoveryCoreTests {
     let directory = try temporaryDirectory()
     let source = directory.appendingPathComponent("LibraryBenchmarks.swift")
     try """
-      import Benchmark
+    import Benchmark
 
-      @BenchmarkSuite("Parser")
-      struct ParserBenchmarks {
-        @Benchmark("Noop")
-        func noop() {}
-      }
-      """
-      .write(to: source, atomically: true, encoding: .utf8)
+    @BenchmarkSuite("Parser")
+    struct ParserBenchmarks {
+      @Benchmark("Noop")
+      func noop() {}
+    }
+    """
+    .write(to: source, atomically: true, encoding: .utf8)
     let manifest = TargetManifest(
       targets: [
         TargetDescription(
@@ -50,56 +54,56 @@ struct BenchmarkSyntaxDiscoveryCoreTests {
     let directory = try temporaryDirectory()
     let source = directory.appendingPathComponent("TestingBenchmarks.swift")
     try """
-      import Benchmark
-      import BenchmarkTesting
-      import Testing
+    import Benchmark
+    import BenchmarkTesting
+    import Testing
 
-      extension Tag {
-        @Tag static var parser: Self
+    extension Tag {
+      @Tag static var parser: Self
+    }
+
+    @Suite(
+      "TestingFixture",
+      .benchmark(configuration: .init(warmup: .none, iterations: .iterations(1))),
+      .tags(.parser)
+    )
+    struct FixtureBenchmarkTestingSuite {
+      @Test("Suite Noop")
+      func suiteNoop() {
+        blackHole(3)
       }
 
-      @Suite(
-        "TestingFixture",
-        .benchmark(configuration: .init(warmup: .none, iterations: .iterations(1))),
-        .tags(.parser)
+      @Benchmark("Suite Native Arguments", arguments: [1, 2])
+      func suiteNativeArguments(_ value: Int) {
+        blackHole(value)
+      }
+
+      @Test(
+        "Case Override",
+        .benchmark(configuration: .init(warmup: .none, iterations: .iterations(2)))
       )
-      struct FixtureBenchmarkTestingSuite {
-        @Test("Suite Noop")
-        func suiteNoop() {
-          blackHole(3)
-        }
+      func caseOverride() {
+        blackHole(4)
+      }
+    }
 
-        @Benchmark("Suite Native Arguments", arguments: [1, 2])
-        func suiteNativeArguments(_ value: Int) {
-          blackHole(value)
-        }
-
-        @Test(
-          "Case Override",
-          .benchmark(configuration: .init(warmup: .none, iterations: .iterations(2)))
-        )
-        func caseOverride() {
-          blackHole(4)
-        }
+    struct StandaloneTestingBenchmarks {
+      @Test(
+        "Standalone",
+        .benchmark(configuration: .init(warmup: .none, iterations: .iterations(1))),
+        .tags("standalone")
+      )
+      func standalone() {
+        blackHole(5)
       }
 
-      struct StandaloneTestingBenchmarks {
-        @Test(
-          "Standalone",
-          .benchmark(configuration: .init(warmup: .none, iterations: .iterations(1))),
-          .tags("standalone")
-        )
-        func standalone() {
-          blackHole(5)
-        }
-
-        @Test("Plain Test")
-        func plain() {
-          blackHole(6)
-        }
+      @Test("Plain Test")
+      func plain() {
+        blackHole(6)
       }
-      """
-      .write(to: source, atomically: true, encoding: .utf8)
+    }
+    """
+    .write(to: source, atomically: true, encoding: .utf8)
     let manifest = TargetManifest(
       targets: [
         TargetDescription(
@@ -145,20 +149,20 @@ struct BenchmarkSyntaxDiscoveryCoreTests {
     let directory = try temporaryDirectory()
     let source = directory.appendingPathComponent("LibraryBenchmarks.swift")
     try #"""
-      import Benchmark
+    import Benchmark
 
-      // @BenchmarkSuite("Fake")
-      let text = "@BenchmarkSuite(\"StringLiteral\") struct Fake {}"
+    // @BenchmarkSuite("Fake")
+    let text = "@BenchmarkSuite(\"StringLiteral\") struct Fake {}"
 
-      @BenchmarkSuite(
-        "Real"
-      )
-      struct RealBenchmarks {
-        @Benchmark("Noop")
-        func noop() {}
-      }
-      """#
-      .write(to: source, atomically: true, encoding: .utf8)
+    @BenchmarkSuite(
+      "Real"
+    )
+    struct RealBenchmarks {
+      @Benchmark("Noop")
+      func noop() {}
+    }
+    """#
+    .write(to: source, atomically: true, encoding: .utf8)
 
     let plan = try SyntaxDiscoveryPlanner(
       manifest: TargetManifest(
@@ -182,17 +186,17 @@ struct BenchmarkSyntaxDiscoveryCoreTests {
     let directory = try temporaryDirectory()
     let source = directory.appendingPathComponent("NestedBenchmarks.swift")
     try """
-      import Benchmark
+    import Benchmark
 
-      enum Outer {
-        @BenchmarkSuite("Nested")
-        struct InnerBenchmarks {
-          @Benchmark("Noop")
-          func noop() {}
-        }
+    enum Outer {
+      @BenchmarkSuite("Nested")
+      struct InnerBenchmarks {
+        @Benchmark("Noop")
+        func noop() {}
       }
-      """
-      .write(to: source, atomically: true, encoding: .utf8)
+    }
+    """
+    .write(to: source, atomically: true, encoding: .utf8)
 
     let plan = try SyntaxDiscoveryPlanner(
       manifest: TargetManifest(
@@ -209,9 +213,10 @@ struct BenchmarkSyntaxDiscoveryCoreTests {
     ).makePlan()
 
     #expect(plan.nativeDiscoveries[0].typeName == "Outer.InnerBenchmarks")
-    #expect(plan.discoveryExpressions == [
-      "FixtureLibrary.Outer.__BenchmarkDiscovery_InnerBenchmarks.self"
-    ])
+    #expect(
+      plan.discoveryExpressions == [
+        "FixtureLibrary.Outer.__BenchmarkDiscovery_InnerBenchmarks.self"
+      ])
   }
 
   @Test
@@ -219,19 +224,19 @@ struct BenchmarkSyntaxDiscoveryCoreTests {
     let directory = try temporaryDirectory()
     let source = directory.appendingPathComponent("InvalidTestingBenchmarks.swift")
     try """
-      import BenchmarkTesting
-      import Testing
+    import BenchmarkTesting
+    import Testing
 
-      @Suite(.benchmark(configuration: .init(warmup: .none, iterations: .iterations(1))))
-      struct InvalidTestingBenchmarks {
-        @Test("Private")
-        private func privateBenchmark() {}
+    @Suite(.benchmark(configuration: .init(warmup: .none, iterations: .iterations(1))))
+    struct InvalidTestingBenchmarks {
+      @Test("Private")
+      private func privateBenchmark() {}
 
-        @Test("Arguments", arguments: [1, 2])
-        func argumentBenchmark(_ value: Int) {}
-      }
-      """
-      .write(to: source, atomically: true, encoding: .utf8)
+      @Test("Arguments", arguments: [1, 2])
+      func argumentBenchmark(_ value: Int) {}
+    }
+    """
+    .write(to: source, atomically: true, encoding: .utf8)
 
     do {
       _ = try SyntaxDiscoveryPlanner(
@@ -257,16 +262,16 @@ struct BenchmarkSyntaxDiscoveryCoreTests {
     let validDirectory = try temporaryDirectory()
     let validSource = validDirectory.appendingPathComponent("ArgumentBenchmarks.swift")
     try """
-      import BenchmarkTesting
-      import Testing
+    import BenchmarkTesting
+    import Testing
 
-      @Suite(.benchmark(configuration: .init(warmup: .none, iterations: .iterations(1))))
-      struct ArgumentBenchmarks {
-        @Test("Arguments", arguments: [1, 2])
-        func argumentBenchmark(_ value: Int) {}
-      }
-      """
-      .write(to: validSource, atomically: true, encoding: .utf8)
+    @Suite(.benchmark(configuration: .init(warmup: .none, iterations: .iterations(1))))
+    struct ArgumentBenchmarks {
+      @Test("Arguments", arguments: [1, 2])
+      func argumentBenchmark(_ value: Int) {}
+    }
+    """
+    .write(to: validSource, atomically: true, encoding: .utf8)
 
     let plan = try SyntaxDiscoveryPlanner(
       manifest: TargetManifest(
@@ -281,7 +286,8 @@ struct BenchmarkSyntaxDiscoveryCoreTests {
       ),
       workDirectory: validDirectory
     ).makePlan()
-    let bridgeSource = try String(contentsOfFile: plan.testingBridges[0].sourcePath, encoding: .utf8)
+    let bridgeSource = try String(
+      contentsOfFile: plan.testingBridges[0].sourcePath, encoding: .utf8)
     #expect(bridgeSource.contains("arguments: [1, 2]"))
     #expect(bridgeSource.contains("__benchmarkArgument0"))
   }

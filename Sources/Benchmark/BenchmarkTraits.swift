@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 public enum BenchmarkScoping: Sendable, Equatable {
   case recursive
   case local
@@ -9,26 +12,26 @@ public protocol BenchmarkTrait: Sendable {
   var benchmarkTags: [String] { get }
 }
 
-public extension BenchmarkTrait {
-  var benchmarkConfiguration: BenchmarkConfiguration? { nil }
-  var benchmarkSkipReason: String? { nil }
-  var benchmarkTags: [String] { [] }
+extension BenchmarkTrait {
+  public var benchmarkConfiguration: BenchmarkConfiguration? { nil }
+  public var benchmarkSkipReason: String? { nil }
+  public var benchmarkTags: [String] { [] }
 }
 
 public protocol BenchmarkSuiteTrait: BenchmarkTrait {
   var benchmarkScoping: BenchmarkScoping { get }
 }
 
-public extension BenchmarkSuiteTrait {
-  var benchmarkScoping: BenchmarkScoping { .recursive }
+extension BenchmarkSuiteTrait {
+  public var benchmarkScoping: BenchmarkScoping { .recursive }
 }
 
 public protocol BenchmarkCaseTrait: BenchmarkTrait {
   var benchmarkDimension: Benchmark.Dimension? { get }
 }
 
-public extension BenchmarkCaseTrait {
-  var benchmarkDimension: Benchmark.Dimension? { nil }
+extension BenchmarkCaseTrait {
+  public var benchmarkDimension: Benchmark.Dimension? { nil }
 }
 
 public enum BenchmarkTraitValue: Sendable, Equatable {
@@ -50,8 +53,8 @@ public struct BenchmarkConfigurationTrait: BenchmarkSuiteTrait, BenchmarkCaseTra
   }
 }
 
-public extension Benchmark.Dimension {
-  struct Trait: BenchmarkCaseTrait, Equatable {
+extension Benchmark.Dimension {
+  public struct Trait: BenchmarkCaseTrait, Equatable {
     public var dimension: Benchmark.Dimension
 
     public init(_ dimension: Benchmark.Dimension) {
@@ -100,44 +103,51 @@ public struct BenchmarkTagTrait: BenchmarkSuiteTrait, BenchmarkCaseTrait, Equata
   }
 }
 
-public extension BenchmarkCaseTrait where Self == Benchmark.Dimension.Trait {
-  static func dimension(sizes: [Int]) -> Benchmark.Dimension.Trait {
+extension BenchmarkCaseTrait where Self == Benchmark.Dimension.Trait {
+  public static func dimension(sizes: [Int]) -> Benchmark.Dimension.Trait {
     Benchmark.Dimension.Trait(Benchmark.Dimension(sizes: sizes))
   }
 }
 
-public extension BenchmarkSuiteTrait where Self == BenchmarkConfigurationTrait {
-  static func configuration(_ configuration: BenchmarkConfiguration) -> BenchmarkConfigurationTrait {
+extension BenchmarkSuiteTrait where Self == BenchmarkConfigurationTrait {
+  public static func configuration(_ configuration: BenchmarkConfiguration)
+    -> BenchmarkConfigurationTrait
+  {
     BenchmarkConfigurationTrait(configuration)
   }
 }
 
-public extension BenchmarkCaseTrait where Self == BenchmarkConfigurationTrait {
-  static func configuration(_ configuration: BenchmarkConfiguration) -> BenchmarkConfigurationTrait {
+extension BenchmarkCaseTrait where Self == BenchmarkConfigurationTrait {
+  public static func configuration(_ configuration: BenchmarkConfiguration)
+    -> BenchmarkConfigurationTrait
+  {
     BenchmarkConfigurationTrait(configuration)
   }
 }
 
-public extension BenchmarkSuiteTrait where Self == BenchmarkSkipTrait {
-  static func skip(_ reason: String, scoping: BenchmarkScoping = .recursive) -> BenchmarkSkipTrait {
+extension BenchmarkSuiteTrait where Self == BenchmarkSkipTrait {
+  public static func skip(_ reason: String, scoping: BenchmarkScoping = .recursive)
+    -> BenchmarkSkipTrait
+  {
     BenchmarkSkipTrait(reason, scoping: scoping)
   }
 }
 
-public extension BenchmarkCaseTrait where Self == BenchmarkSkipTrait {
-  static func skip(_ reason: String) -> BenchmarkSkipTrait {
+extension BenchmarkCaseTrait where Self == BenchmarkSkipTrait {
+  public static func skip(_ reason: String) -> BenchmarkSkipTrait {
     BenchmarkSkipTrait(reason, scoping: .local)
   }
 }
 
-public extension BenchmarkSuiteTrait where Self == BenchmarkTagTrait {
-  static func tag(_ tag: String, scoping: BenchmarkScoping = .recursive) -> BenchmarkTagTrait {
+extension BenchmarkSuiteTrait where Self == BenchmarkTagTrait {
+  public static func tag(_ tag: String, scoping: BenchmarkScoping = .recursive) -> BenchmarkTagTrait
+  {
     BenchmarkTagTrait(tag, scoping: scoping)
   }
 }
 
-public extension BenchmarkCaseTrait where Self == BenchmarkTagTrait {
-  static func tag(_ tag: String) -> BenchmarkTagTrait {
+extension BenchmarkCaseTrait where Self == BenchmarkTagTrait {
+  public static func tag(_ tag: String) -> BenchmarkTagTrait {
     BenchmarkTagTrait(tag, scoping: .local)
   }
 }

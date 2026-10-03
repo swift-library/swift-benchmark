@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 public struct BenchmarkRunner: Sendable {
   public let clock: any BenchmarkClock
 
@@ -158,7 +161,8 @@ public struct BenchmarkRunner: Sendable {
       )
       await record(
         kind: .warmupStarted,
-        context: Benchmark.Event.Context(step: step, iteration: iteration, phase: .warmup(iteration: iteration)),
+        context: Benchmark.Event.Context(
+          step: step, iteration: iteration, phase: .warmup(iteration: iteration)),
         eventRecorders: eventRecorders
       )
       await notifyWillRun(context: context, observers: observers)
@@ -167,14 +171,17 @@ public struct BenchmarkRunner: Sendable {
         await notifyDidRun(context: context, durationNanoseconds: nil, observers: observers)
         await record(
           kind: .warmupEnded,
-          context: Benchmark.Event.Context(step: step, iteration: iteration, phase: .warmup(iteration: iteration)),
+          context: Benchmark.Event.Context(
+            step: step, iteration: iteration, phase: .warmup(iteration: iteration)),
           eventRecorders: eventRecorders
         )
       } catch {
         await notifyDidFail(context: context, error: error, observers: observers)
         await record(
           kind: .issueRecorded,
-          context: Benchmark.Event.Context(step: step, iteration: iteration, phase: .warmup(iteration: iteration), message: String(describing: error)),
+          context: Benchmark.Event.Context(
+            step: step, iteration: iteration, phase: .warmup(iteration: iteration),
+            message: String(describing: error)),
           eventRecorders: eventRecorders
         )
         throw BenchmarkRunnerError.caseFailed(
@@ -199,7 +206,8 @@ public struct BenchmarkRunner: Sendable {
       )
       await record(
         kind: .iterationStarted,
-        context: Benchmark.Event.Context(step: step, iteration: iteration, phase: .measurement(iteration: iteration)),
+        context: Benchmark.Event.Context(
+          step: step, iteration: iteration, phase: .measurement(iteration: iteration)),
         eventRecorders: eventRecorders
       )
       await notifyWillRun(context: context, observers: observers)
@@ -210,7 +218,9 @@ public struct BenchmarkRunner: Sendable {
         await notifyDidFail(context: context, error: error, observers: observers)
         await record(
           kind: .issueRecorded,
-          context: Benchmark.Event.Context(step: step, iteration: iteration, phase: .measurement(iteration: iteration), message: String(describing: error)),
+          context: Benchmark.Event.Context(
+            step: step, iteration: iteration, phase: .measurement(iteration: iteration),
+            message: String(describing: error)),
           eventRecorders: eventRecorders
         )
         throw BenchmarkRunnerError.caseFailed(

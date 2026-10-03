@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Benchmark
 import Foundation
 
@@ -29,7 +32,8 @@ public enum BenchmarkHost {
     arguments: [String] = Array(CommandLine.arguments.dropFirst()),
     metadata: RunMetadata = .local(id: "run:benchmark-host")
   ) async throws {
-    let output = try await render(discoveries: discoveries, arguments: arguments, metadata: metadata)
+    let output = try await render(
+      discoveries: discoveries, arguments: arguments, metadata: metadata)
     if !output.isEmpty {
       print(output)
     }
@@ -79,7 +83,8 @@ public enum BenchmarkHost {
       }
       return entries.map { entry in
         let tags = entry.tags.isEmpty ? "" : " tags=\(entry.tags.joined(separator: ","))"
-        let arguments = entry.arguments.isEmpty
+        let arguments =
+          entry.arguments.isEmpty
           ? ""
           : " arguments=\(entry.arguments.map(\.label).joined(separator: ","))"
         let suffix = entry.dimensionSizes.isEmpty ? "" : " size=\(entry.dimensionSizes[0])"
@@ -107,19 +112,21 @@ public enum BenchmarkHost {
       if command == "check" {
         let document = try JSONDecoder().decode(
           ReportDocument.self,
-          from: Data(try await BenchmarkCommand().run(
-            plan: plan,
-            metadata: metadata,
-            baseline: baseline,
-            baselineMetric: try options.metric(default: .mean),
-            threshold: try options.threshold(default: .relativePercentage(10)),
-            budgets: try options.budgets(),
-            metricProviders: options.metricProviders(),
-            traceExporters: options.traceExporters(runID: metadata.id),
-            format: .json
-          ).utf8)
+          from: Data(
+            try await BenchmarkCommand().run(
+              plan: plan,
+              metadata: metadata,
+              baseline: baseline,
+              baselineMetric: try options.metric(default: .mean),
+              threshold: try options.threshold(default: .relativePercentage(10)),
+              budgets: try options.budgets(),
+              metricProviders: options.metricProviders(),
+              traceExporters: options.traceExporters(runID: metadata.id),
+              format: .json
+            ).utf8)
         )
-        guard document.summary.failedRegressionCount == 0 && document.summary.failedBudgetCount == 0 else {
+        guard document.summary.failedRegressionCount == 0 && document.summary.failedBudgetCount == 0
+        else {
           throw BenchmarkHostError.regressionFailure(output: emitted)
         }
       }
@@ -146,7 +153,9 @@ public enum BenchmarkHost {
     return try JSONDecoder().decode(BaselineDocument.self, from: data)
   }
 
-  private static func writeOrReturn(_ output: String, options: BenchmarkHostOptions) throws -> String {
+  private static func writeOrReturn(_ output: String, options: BenchmarkHostOptions) throws
+    -> String
+  {
     if let outputPath = options.value(for: "--output") {
       try output.write(to: URL(fileURLWithPath: outputPath), atomically: true, encoding: .utf8)
       return options.hasFlag("--quiet") ? "" : output
@@ -254,7 +263,8 @@ private struct BenchmarkHostOptions {
     return format
   }
 
-  func metric(default defaultMetric: Report.Measurement.Metric) throws -> Report.Measurement.Metric {
+  func metric(default defaultMetric: Report.Measurement.Metric) throws -> Report.Measurement.Metric
+  {
     guard let value = value(for: "--baseline-metric") ?? value(for: "--metric") else {
       return defaultMetric
     }
@@ -280,7 +290,9 @@ private struct BenchmarkHostOptions {
     return defaultPolicy
   }
 
-  func configuration(overriding configuration: BenchmarkConfiguration) throws -> BenchmarkConfiguration {
+  func configuration(overriding configuration: BenchmarkConfiguration) throws
+    -> BenchmarkConfiguration
+  {
     BenchmarkConfiguration(
       warmup: try warmup(default: configuration.warmup),
       iterations: try iterations(default: configuration.iterations)
@@ -359,7 +371,9 @@ private struct BenchmarkHostOptions {
 
   func traceExporters(runID: ReportID) -> [any TraceExporter] {
     values(for: "--trace").map { traceExporter(path: $0, runID: runID, required: false) }
-      + values(for: "--required-trace").map { traceExporter(path: $0, runID: runID, required: true) }
+      + values(for: "--required-trace").map {
+        traceExporter(path: $0, runID: runID, required: true)
+      }
   }
 
   private func parseBudget(_ value: String) throws -> BudgetPolicy {
@@ -400,7 +414,8 @@ private struct BenchmarkHostOptions {
     return double
   }
 
-  private func traceExporter(path: String, runID: ReportID, required: Bool) -> TraceArtifactExporter {
+  private func traceExporter(path: String, runID: ReportID, required: Bool) -> TraceArtifactExporter
+  {
     TraceArtifactExporter(
       artifact: TraceArtifact(
         tracePath: path,

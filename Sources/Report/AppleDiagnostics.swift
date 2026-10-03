@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 
 public enum AppleDiagnosticMetricName {
@@ -218,7 +221,9 @@ public struct TraceArtifactExporter: TraceExporter {
   public init(
     artifact: TraceArtifact,
     requirement: DiagnosticRequirement = .optional,
-    fileExists: @escaping @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    fileExists: @escaping @Sendable (String) -> Bool = {
+      FileManager.default.fileExists(atPath: $0)
+    }
   ) {
     self.artifact = artifact
     self.requirement = requirement
@@ -279,7 +284,8 @@ public struct TraceArtifactExporter: TraceExporter {
   }
 
   private func stable(_ value: String) -> String {
-    let stableValue = value
+    let stableValue =
+      value
       .lowercased()
       .map { character in
         character.isLetter || character.isNumber ? character : "-"
@@ -317,7 +323,8 @@ public enum XctraceRecorderError: Error, CustomStringConvertible {
   public var description: String {
     switch self {
     case .commandFailed(let arguments, let result):
-      return "xctrace command failed with status \(result.terminationStatus): \(arguments.joined(separator: " ")) \(result.standardError)"
+      return
+        "xctrace command failed with status \(result.terminationStatus): \(arguments.joined(separator: " ")) \(result.standardError)"
     }
   }
 }
@@ -331,9 +338,10 @@ public struct XctraceRecorder: Sendable {
     runner: (@Sendable ([String]) async -> XctraceCommandResult)? = nil
   ) {
     self.xcrunPath = xcrunPath
-    self.runner = runner ?? { arguments in
-      await XctraceRecorder.runProcess(xcrunPath: xcrunPath, arguments: arguments)
-    }
+    self.runner =
+      runner ?? { arguments in
+        await XctraceRecorder.runProcess(xcrunPath: xcrunPath, arguments: arguments)
+      }
   }
 
   public func record(
@@ -343,17 +351,18 @@ public struct XctraceRecorder: Sendable {
     template: String = "Time Profiler",
     metadata: [String: String] = [:]
   ) async throws -> TraceArtifact {
-    let arguments = [
-      "xctrace",
-      "record",
-      "--template",
-      template,
-      "--output",
-      outputTracePath,
-      "--launch",
-      executablePath,
-      "--",
-    ] + executableArguments
+    let arguments =
+      [
+        "xctrace",
+        "record",
+        "--template",
+        template,
+        "--output",
+        outputTracePath,
+        "--launch",
+        executablePath,
+        "--",
+      ] + executableArguments
     let result = await runner(arguments)
     guard result.terminationStatus == 0 else {
       throw XctraceRecorderError.commandFailed(arguments: [xcrunPath] + arguments, result: result)
@@ -372,32 +381,39 @@ public struct XctraceRecorder: Sendable {
     xcrunPath: String,
     arguments: [String]
   ) async -> XctraceCommandResult {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: xcrunPath)
-    process.arguments = arguments
-    let stdout = Pipe()
-    let stderr = Pipe()
-    process.standardOutput = stdout
-    process.standardError = stderr
-    do {
-      try process.run()
-      process.waitUntilExit()
-      return XctraceCommandResult(
-        terminationStatus: process.terminationStatus,
-        standardOutput: String(
-          decoding: stdout.fileHandleForReading.readDataToEndOfFile(),
-          as: UTF8.self
-        ),
-        standardError: String(
-          decoding: stderr.fileHandleForReading.readDataToEndOfFile(),
-          as: UTF8.self
+    #if os(macOS) || os(Linux)
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: xcrunPath)
+      process.arguments = arguments
+      let stdout = Pipe()
+      let stderr = Pipe()
+      process.standardOutput = stdout
+      process.standardError = stderr
+      do {
+        try process.run()
+        process.waitUntilExit()
+        return XctraceCommandResult(
+          terminationStatus: process.terminationStatus,
+          standardOutput: String(
+            decoding: stdout.fileHandleForReading.readDataToEndOfFile(),
+            as: UTF8.self
+          ),
+          standardError: String(
+            decoding: stderr.fileHandleForReading.readDataToEndOfFile(),
+            as: UTF8.self
+          )
         )
-      )
-    } catch {
+      } catch {
+        return XctraceCommandResult(
+          terminationStatus: 127,
+          standardError: String(describing: error)
+        )
+      }
+    #else
       return XctraceCommandResult(
         terminationStatus: 127,
-        standardError: String(describing: error)
+        standardError: "xctrace process execution requires a supported host platform."
       )
-    }
+    #endif
   }
 }

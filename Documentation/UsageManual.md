@@ -322,6 +322,7 @@ presentation authoring.
 The SwiftPM plugin is the normal package workflow:
 
 ```bash
+swift package benchmark --version
 swift package benchmark list [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json]
 swift package benchmark run [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json|markdown|speedscope] [--output <path>]
 swift package benchmark check --baseline <baseline.json> [--baseline-metric mean|median|p90|p95|p99] [--threshold-percent <n>|--threshold-ns <n>]
@@ -351,6 +352,9 @@ swift run swift-benchmark-cli run \
   --case "Parse document" \
   --format json
 ```
+
+`swift-benchmark-cli --version`, `swift run BenchmarkCLI --version`, and the
+plugin version command report the same repository release version.
 
 The package plugin delegates execution to `BenchmarkCLI` after discovery and
 host generation. `BenchmarkPlugin` is orchestration; `BenchmarkDiscoveryTool`
