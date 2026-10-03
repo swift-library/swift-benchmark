@@ -7,6 +7,20 @@ import Testing
 // Fixture deadlines include cold dependency builds on hosted runners.
 @Suite("Package Workflow")
 struct PackageWorkflowTests {
+  @Test(.timeLimit(.minutes(1)))
+  func subprocessCaptureHandlesLargeOutputAndFailures() throws {
+    let script =
+      "BEGIN { for (i = 0; i < 131072; i++) { printf \"o\"; printf \"e\" > \"/dev/stderr\" } }"
+    let output = try runProcess(executable: "/usr/bin/awk", arguments: [script])
+    #expect(output == String(repeating: "o", count: 131072))
+
+    let failure = try runProcessFailure(
+      executable: "/usr/bin/awk", arguments: [script + " END { exit 7 }"])
+    #expect(
+      failure == String(repeating: "o", count: 131072) + "\n"
+        + String(repeating: "e", count: 131072))
+  }
+
   @Test(.timeLimit(.minutes(3)))
   func cliProductsReportTheSameVersion() throws {
     let version = try runProcess(executable: cliPath(), arguments: ["--version"])
@@ -713,59 +727,58 @@ struct PackageWorkflowTests {
   }
 
   private func runProcess(executable: String, arguments: [String]) throws -> String {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: executable)
-    process.arguments = arguments
-    process.currentDirectoryURL = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-    let stdout = Pipe()
-    let stderr = Pipe()
-    process.standardOutput = stdout
-    process.standardError = stderr
-    try process.run()
-    process.waitUntilExit()
-
-    let output = String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    let errorOutput = String(
-      decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    guard process.terminationStatus == 0 else {
+    let result = try processResult(executable: executable, arguments: arguments)
+    guard result.status == 0 else {
       throw PackageWorkflowError(
-        status: process.terminationStatus,
-        output: output,
-        errorOutput: errorOutput
+        status: result.status,
+        output: result.output,
+        errorOutput: result.errorOutput
       )
     }
-    return output
+    return result.output
   }
 
   private func runProcessFailure(executable: String, arguments: [String]) throws -> String {
+    let result = try processResult(executable: executable, arguments: arguments)
+    guard result.status != 0 else {
+      throw PackageWorkflowError(
+        status: result.status,
+        output: result.output,
+        errorOutput: "Expected process to fail but it succeeded."
+      )
+    }
+    return "\(result.output)\n\(result.errorOutput)"
+  }
+
+  private func processResult(executable: String, arguments: [String]) throws -> (
+    status: Int32, output: String, errorOutput: String
+  ) {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("swift-benchmark-process-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let outputURL = directory.appendingPathComponent("stdout")
+    let errorURL = directory.appendingPathComponent("stderr")
+    try Data().write(to: outputURL)
+    try Data().write(to: errorURL)
+    // File capture lets verbose cold builds finish without filling unread pipes.
+    let stdout = try FileHandle(forWritingTo: outputURL)
+    defer { try? stdout.close() }
+    let stderr = try FileHandle(forWritingTo: errorURL)
+    defer { try? stderr.close() }
     let process = Process()
     process.executableURL = URL(fileURLWithPath: executable)
     process.arguments = arguments
-    process.currentDirectoryURL = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-    let stdout = Pipe()
-    let stderr = Pipe()
+    process.currentDirectoryURL = repositoryRoot()
     process.standardOutput = stdout
     process.standardError = stderr
     try process.run()
     process.waitUntilExit()
-
-    let output = String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    let errorOutput = String(
-      decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    guard process.terminationStatus != 0 else {
-      throw PackageWorkflowError(
-        status: process.terminationStatus,
-        output: output,
-        errorOutput: "Expected process to fail but it succeeded."
-      )
-    }
-    return "\(output)\n\(errorOutput)"
+    return (
+      process.terminationStatus,
+      String(decoding: try Data(contentsOf: outputURL), as: UTF8.self),
+      String(decoding: try Data(contentsOf: errorURL), as: UTF8.self)
+    )
   }
 
   private func cliPath() throws -> String {
