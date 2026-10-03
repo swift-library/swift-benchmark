@@ -43,6 +43,8 @@ Generated host compilation supplies Swift module search paths and C modulemap
 include paths discovered from SwiftPM checkout roots. The active build/scratch
 root takes precedence, and package `.build` checkout roots are fallback
 behavior for default or older local layouts.
+Testing bridge hosts also use the selected SDK's test framework and support
+library paths, including XCTest dependencies retained by compiled test modules.
 Generated host linkage includes only discovered benchmark targets and their
 recursive dependencies. Consolidated object files in an Xcode products
 directory are filtered by that graph; unrelated libraries from another package
