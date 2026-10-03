@@ -52,9 +52,10 @@ struct BenchmarkRunnerTests {
 
     let results = try await BenchmarkRunner(clock: StepClock(step: 5)).run(suite)
     let rows = try #require(results.first?.measurement.rows)
+    let expectedMeasuredTotal: Int = (10 * 3) + (100 * 3)
 
     #expect(generated.value == 2)
-    #expect(measured.value == (10 * 3) + (100 * 3))
+    #expect(measured.value == expectedMeasuredTotal)
     #expect(rows.map(\.size?.rawValue) == [10, 100])
     #expect(rows.map { $0.samples.map(\.durationNanoseconds) } == [[5, 5], [5, 5]])
     #expect(results[0].measurement.samples.map(\.durationNanoseconds) == [5, 5, 5, 5])
@@ -74,8 +75,9 @@ struct BenchmarkRunnerTests {
 
     let results = try await BenchmarkRunner(clock: StepClock(step: 5)).run(suite)
     let rows = try #require(results.first?.measurement.rows)
+    let expectedMeasuredTotal: Int = (1 + 2 + 4) * 3
 
-    #expect(measured.value == (1 + 2 + 4) * 3)
+    #expect(measured.value == expectedMeasuredTotal)
     #expect(rows.map(\.size?.rawValue) == [1, 2, 4])
     #expect(rows.map { $0.arguments.map(\.label) } == [["1"], ["2"], ["4"]])
   }
