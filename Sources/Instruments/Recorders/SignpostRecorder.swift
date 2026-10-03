@@ -12,7 +12,7 @@
     }
 
     public func beginSpan(_ name: StaticString, attributes: SpanAttributes) -> SpanToken {
-      let state = signposter.beginInterval(name)
+      let state = signposter.beginInterval(name, id: signposter.makeSignpostID())
       return SpanToken(
         storage: SignpostSpanTokenStorage(signposter: signposter, name: name, state: state))
     }

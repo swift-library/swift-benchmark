@@ -65,6 +65,11 @@ Macros must not expand directly to `OSSignposter`, `os_signpost`, signpost IDs,
 or subsystem/category handling. Apple-specific behavior belongs in
 `SignpostRecorder`.
 
+The Apple backend allocates a distinct interval identifier for each span so
+same-name nested and concurrent spans can overlap. The returned interval state
+stays inside the opaque span token and pairs its begin/end calls, following
+[Apple's interval identity contract](https://developer.apple.com/documentation/os/ossignpostid).
+
 ## Unified Upgrade Posture
 
 The current code can be used as a direct refactor base and implementation

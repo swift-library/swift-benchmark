@@ -4,6 +4,7 @@
 
 - Instruments spans, events, function/initializer macros and recorder context
   support runtime instrumentation with Apple Signpost and portable fallbacks.
+  Overlapping intervals use independent Apple backend identifiers.
 - Benchmark provides Swift Testing and native declarations, argument rows,
   discovery, warmup, fixed/adaptive measurement and structured event streams.
 - Report provides JSON evidence, baselines, budgets, Dimension curves, timeline
