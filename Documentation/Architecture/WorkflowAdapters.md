@@ -43,6 +43,9 @@ Generated host compilation supplies Swift module search paths and C modulemap
 include paths discovered from SwiftPM checkout roots. The active build/scratch
 root takes precedence, and package `.build` checkout roots are fallback
 behavior for default or older local layouts.
+Source-root lookup is limited to Clang targets and ignores hidden build trees.
+The host compiler's module cache belongs to the plugin work directory, which is
+writable within the command-plugin sandbox.
 Testing bridge hosts also use the selected SDK's test framework and support
 library paths, including XCTest dependencies retained by compiled test modules.
 Generated host linkage includes only discovered benchmark targets and their

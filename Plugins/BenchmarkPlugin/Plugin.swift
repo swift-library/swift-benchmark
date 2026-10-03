@@ -68,6 +68,8 @@ struct BenchmarkPlugin: CommandPlugin {
 
     let buildDirectory = cliTool.url.deletingLastPathComponent()
     let host = context.pluginWorkDirectoryURL.appendingPathComponent("generated-benchmark-host")
+    let moduleCache = context.pluginWorkDirectoryURL.appendingPathComponent("ModuleCache")
+    try FileManager.default.createDirectory(at: moduleCache, withIntermediateDirectories: true)
     let objectFiles = try objectFiles(
       forTargetNames: plan.discoveredTargetNames,
       in: context.package,
@@ -94,6 +96,8 @@ struct BenchmarkPlugin: CommandPlugin {
         "swiftc",
         "-parse-as-library",
         "-enable-testing",
+        "-module-cache-path",
+        moduleCache.path,
         "-I",
         buildDirectory.path,
         "-I",
@@ -164,7 +168,8 @@ struct BenchmarkPlugin: CommandPlugin {
         FileManager.default.fileExists(atPath: root.path),
         let enumerator = FileManager.default.enumerator(
           at: root,
-          includingPropertiesForKeys: nil
+          includingPropertiesForKeys: nil,
+          options: [.skipsHiddenFiles]
         )
       else {
         continue
@@ -201,7 +206,7 @@ struct BenchmarkPlugin: CommandPlugin {
     var seen: Set<String> = []
 
     func appendSourceModule(_ module: any SourceModuleTarget) {
-      guard let root = sourceRoot(for: module) else {
+      guard module is ClangSourceModuleTarget, let root = sourceRoot(for: module) else {
         return
       }
       appendUnique(root, to: &roots, seen: &seen)
