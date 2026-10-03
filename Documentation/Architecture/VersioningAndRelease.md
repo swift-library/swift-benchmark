@@ -2,7 +2,7 @@
 
 This document owns swift-benchmark's version declaration, compatibility policy,
 system support window and release acceptance. It adopts the
-[swift-library defaults](https://github.com/swift-library/.github/blob/main/Documentation/Architecture/VersioningAndRelease.md).
+[swift-library defaults](https://github.com/swift-library/.github/blob/master/Documentation/Architecture/VersioningAndRelease.md).
 Operational commands live in the [Release Guide](../Reference/ReleaseGuide.md).
 
 ## Version Authority and Compatibility
@@ -37,6 +37,10 @@ Compiler requirements are maintained independently. CI tests the declared
 minimum compiler on macOS 15 and a current hosted compiler on macOS 26. Native
 macOS 27 and iOS simulator verification are additional release gates. Record
 the precise OS, compiler and SDK in the release evidence.
+
+Strict formatting uses one declared formatter toolchain. Compiler compatibility
+jobs run the compiler-check scope; the separate format-check job enforces the
+complete formatting configuration. The default local check runs both scopes.
 
 Core library APIs compile for the declared Apple platforms. Xctrace orchestration
 uses a desktop host; other platforms receive a command-unavailable result from

@@ -34,6 +34,7 @@ let package = Package(
         "FixtureBenchmarkLibrary",
         .product(name: "Benchmark", package: "swift-benchmark"),
         .product(name: "BenchmarkTesting", package: "swift-benchmark"),
+        .product(name: "BenchmarkXCTest", package: "swift-benchmark"),
       ]
     ),
   ]

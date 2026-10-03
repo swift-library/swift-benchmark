@@ -79,7 +79,7 @@ struct BenchmarkPlugin: CommandPlugin {
       + plan.testingBridges.map { URL(fileURLWithPath: $0.sourcePath) }
     let testingArguments =
       plan.requiresSwiftTesting
-      ? try swiftTestingLibraryArguments()
+      ? try swiftTestingLibraryArguments() + testSupportLibraryArguments()
       : []
     let moduleMapArguments = moduleMapImportArguments(
       package: context.package,
@@ -492,6 +492,29 @@ struct BenchmarkPlugin: CommandPlugin {
       "-Xlinker",
       frameworksPath,
     ]
+  }
+
+  private func testSupportLibraryArguments() throws -> [String] {
+    #if os(macOS)
+      let platformPath = try runProcess(
+        executable: URL(fileURLWithPath: "/usr/bin/xcrun"),
+        arguments: ["--sdk", "macosx", "--show-sdk-platform-path"],
+        captureOutput: true,
+        captureOutputOnFailure: true
+      ).trimmingCharacters(in: .whitespacesAndNewlines)
+      let developer = URL(fileURLWithPath: platformPath).appendingPathComponent("Developer")
+      let frameworks = developer.appendingPathComponent("Library/Frameworks").path
+      let libraries = developer.appendingPathComponent("usr/lib").path
+      // Bridged test modules can retain XCTest adapter references and SwiftPM
+      // test-entry metadata even though the generated host has its own main.
+      return [
+        "-F", frameworks, "-framework", "XCTest", "-L", libraries,
+        "-Xlinker", "-rpath", "-Xlinker", frameworks,
+        "-Xlinker", "-rpath", "-Xlinker", libraries,
+      ]
+    #else
+      return []
+    #endif
   }
 
   private func objectFiles(
