@@ -59,7 +59,7 @@ def main():
     if args.version and selected["state"].get("version") != args.version:
         raise RuntimeError("The next-minor requirement selected a different release")
     run("native-tests", ["swift", "test", "--force-resolved-versions"])
-    plugin = ["swift", "package", "--allow-writing-to-package-directory", "benchmark"]
+    plugin = ["swift", "package", "--allow-writing-to-directory", str(output), "benchmark"]
     reported_version = run("plugin-version", plugin + ["--version"]).strip()
     if reported_version != "swift-benchmark-cli " + version:
         raise RuntimeError("The remote plugin reports a different version")
@@ -70,11 +70,14 @@ def main():
     baseline_path = output / "baseline.json"
     run("plugin-run", plugin + ["run", "--timeline", "--format", "json", "--output", str(report_path), "--quiet"])
     report = json.loads(report_path.read_text())
-    if report["summary"]["caseCount"] < 2 or any(not case["samples"] for suite in report["suites"] for case in suite["cases"]):
+    if report["summary"]["caseCount"] < 2 or any(not row["samples"] for suite in report["suites"] for case in suite["cases"] for row in case["measurement"]["rows"]):
         raise RuntimeError("The report has no usable measurement samples")
     run("baseline-write", plugin + ["baseline", "write", "--input", str(report_path), "--output", str(baseline_path), "--quiet"])
     run("baseline-check", plugin + ["check", "--baseline", str(baseline_path), "--threshold-percent", "1000000", "--format", "json", "--quiet"])
-    run("budget-failure", plugin + ["check", "--baseline", str(baseline_path), "--budget", "mean:0", "--quiet"], expected=None)
+    failed_report = output / "budget-failure.json"
+    run("budget-failure", plugin + ["check", "--baseline", str(baseline_path), "--budget", "mean:0", "--format", "json", "--output", str(failed_report), "--quiet"], expected=None)
+    if json.loads(failed_report.read_text())["summary"]["failedBudgetCount"] == 0:
+        raise RuntimeError("The failure did not identify the deliberately exceeded budget")
     simulators = []
     if args.ios:
         runtimes = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "--json"]))["runtimes"]

@@ -8,7 +8,7 @@ let package = Package(
   name: "BenchmarkTestingArgumentsPackage",
   platforms: [.macOS(.v15)],
   dependencies: [
-    .package(path: "../../..")
+    .package(name: "swift-benchmark", path: "../../..")
   ],
   targets: [
     .testTarget(

@@ -12,7 +12,7 @@ let package = Package(
     .executable(name: "FixtureBenchmarks", targets: ["FixtureBenchmarks"]),
   ],
   dependencies: [
-    .package(path: "../../..")
+    .package(name: "swift-benchmark", path: "../../..")
   ],
   targets: [
     .executableTarget(

@@ -510,7 +510,8 @@ struct PackageWorkflowTests {
 
   }
 
-  @Test(.timeLimit(.minutes(4)))
+  // A cold Release fixture also compiles SwiftSyntax on hosted runners.
+  @Test(.timeLimit(.minutes(10)))
   func fixturePackageCommandGeneratesReleaseHostWithoutPrebuild() throws {
     let fixturePath = fixturePackagePath()
     let scratchPath = scratchPath("fixture-benchmark-package-plugin-release")
@@ -909,8 +910,8 @@ struct PackageWorkflowTests {
         name: "CModuleBenchmarkPackage",
         platforms: [.macOS(.v15)],
         dependencies: [
-          .package(path: \(swiftStringLiteral(swiftBenchmarkRoot.path))),
-          .package(url: \(swiftStringLiteral(dependencyURL.absoluteString)), branch: "main")
+          .package(name: "swift-benchmark", path: \(swiftStringLiteral(swiftBenchmarkRoot.path))),
+          .package(url: \(swiftStringLiteral(dependencyURL.absoluteString)), branch: "master")
         ],
         targets: [
           .target(
