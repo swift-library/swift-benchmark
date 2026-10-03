@@ -4,7 +4,8 @@
 import Report
 
 #if canImport(Darwin)
-  import Darwin
+  // Darwin initializes the process task port; this provider only reads it.
+  @preconcurrency import Darwin
 #endif
 
 public enum MemoryMetricName {
