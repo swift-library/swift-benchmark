@@ -89,6 +89,12 @@ struct BenchmarkPlugin: CommandPlugin {
       packageDirectory: context.package.directoryURL,
       buildDirectory: buildDirectory
     )
+    let modulesDirectory = buildDirectory.appendingPathComponent("Modules")
+    // SwiftPM's separate Modules directory avoids importing compatibility
+    // modulemaps from both library and macro-tool build directories.
+    let swiftModuleDirectory =
+      FileManager.default.fileExists(atPath: modulesDirectory.path)
+      ? modulesDirectory : buildDirectory
 
     try runProcess(
       executable: URL(fileURLWithPath: "/usr/bin/env"),
@@ -99,9 +105,7 @@ struct BenchmarkPlugin: CommandPlugin {
         "-module-cache-path",
         moduleCache.path,
         "-I",
-        buildDirectory.path,
-        "-I",
-        buildDirectory.appendingPathComponent("Modules").path,
+        swiftModuleDirectory.path,
         "-o",
         host.path,
       ] + moduleMapArguments + testingArguments + generatedSources.map(\.path)
