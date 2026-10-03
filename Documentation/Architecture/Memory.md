@@ -14,6 +14,8 @@ allocation fields, leak-tolerance verdicts, allocation regression analysis with
 preheat/repeated-run aggregation, and file-descriptor/resource leak checks.
 Platform-specific automatic allocator hooks and long-running resident-memory
 sampling remain extension points behind the same provider/profiler states.
+The Darwin resident-memory provider takes one Mach snapshot and reports both
+current resident bytes and the process-lifetime maximum resident size.
 
 ## Metric Dimensions
 

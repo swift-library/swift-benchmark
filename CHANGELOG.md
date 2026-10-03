@@ -9,6 +9,7 @@
   discovery, warmup, fixed/adaptive measurement and structured event streams.
 - Report provides JSON evidence, baselines, budgets, Dimension curves, timeline
   attribution, memory/allocation adapters and macOS xctrace orchestration.
+  Darwin resident-memory evidence includes the measured process peak.
 - The SwiftPM command plugin supports package discovery and generated hosts in
   Debug and Release configurations, with C modulemap dependency support.
 - Both CLI products and the plugin expose the same `--version` value.

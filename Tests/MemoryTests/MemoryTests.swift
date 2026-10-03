@@ -34,7 +34,7 @@ struct MemoryTests {
   }
 
   @Test
-  func residentMemoryProviderReportsMeasuredOrUnavailableState() async {
+  func residentMemoryProviderReportsMeasuredOrUnavailableState() async throws {
     let scope = ReportScope(
       runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
     let metrics = await ResidentMemoryMetricProvider().metrics(for: scope)
@@ -47,6 +47,11 @@ struct MemoryTests {
         ])
       #expect(metrics.allSatisfy { $0.state.kind == .measured })
       #expect(metrics.allSatisfy { ($0.state.value ?? 0) > 0 })
+      let resident = try #require(
+        metrics.first { $0.name == MemoryMetricName.residentBytes }?.state.value)
+      let peak = try #require(
+        metrics.first { $0.name == MemoryMetricName.peakResidentBytes }?.state.value)
+      #expect(peak >= resident)
     #else
       #expect(metrics.allSatisfy { $0.state.kind == .unavailable })
     #endif

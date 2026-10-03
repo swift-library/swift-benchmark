@@ -97,6 +97,7 @@ public struct ResidentMemoryMetricProvider: MemoryMetricProvider {
         ]
       }
       let residentBytes = Double(info.resident_size)
+      let peakResidentBytes = Double(info.resident_size_max)
       return [
         DiagnosticMetric(
           id: "metric:memory-resident-bytes",
@@ -108,7 +109,7 @@ public struct ResidentMemoryMetricProvider: MemoryMetricProvider {
           id: "metric:memory-peak-resident-bytes",
           scope: scope,
           name: MemoryMetricName.peakResidentBytes,
-          state: .measured(residentBytes, unit: "bytes")
+          state: .measured(peakResidentBytes, unit: "bytes")
         ),
       ]
     #else

@@ -439,6 +439,9 @@ deterministic per-iteration metric source.
 
 ## Memory And Allocation Evidence
 
+On Darwin, `ResidentMemoryMetricProvider` reports current resident bytes and
+the process-lifetime maximum resident size from one Mach snapshot.
+
 Memory/allocation evidence is Report-scoped. Current built-in concepts include:
 
 - Darwin resident memory sampling where available,
