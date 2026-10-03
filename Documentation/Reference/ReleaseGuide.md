@@ -34,6 +34,8 @@ library/macro behavior and the no-host plugin, checks report/baseline behavior
 and runs tests on each declared iOS generation. It selects installed runtimes,
 creates temporary devices and removes those devices after testing. Its fixture
 declares the iOS deployment floor in Package.swift.
+The harness verifies the selected remote source before enabling its macros for
+the unattended Xcode build. Macro trust is scoped to that build command.
 
 After tagging, use `--version VERSION` in place of `--revision COMMIT` and a new
 output directory to validate the next-minor dependency requirement. Keep the
