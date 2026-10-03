@@ -4,6 +4,7 @@
 import Foundation
 import Testing
 
+// Fixture deadlines include cold dependency builds on hosted runners.
 @Suite("Package Workflow")
 struct PackageWorkflowTests {
   @Test(.timeLimit(.minutes(3)))
@@ -19,7 +20,7 @@ struct PackageWorkflowTests {
     #expect(version == aliasVersion)
   }
 
-  @Test(.timeLimit(.minutes(2)))
+  @Test(.timeLimit(.minutes(10)))
   func fixturePackageHostWorksThroughCLI() throws {
     let fixturePath = fixturePackagePath()
     let scratchPath = scratchPath("fixture-benchmark-package")
@@ -87,7 +88,7 @@ struct PackageWorkflowTests {
     #expect(run.contains("\"measurement\""))
   }
 
-  @Test(.timeLimit(.minutes(3)))
+  @Test(.timeLimit(.minutes(10)))
   func fixturePackageCommandGeneratesHostWithoutUserBoilerplate() throws {
     let fixturePath = fixturePackagePath()
     let scratchPath = scratchPath("fixture-benchmark-package-plugin")
@@ -598,7 +599,7 @@ struct PackageWorkflowTests {
     #expect(run.contains("\"buildConfiguration\" : \"release\""))
   }
 
-  @Test(.timeLimit(.minutes(3)))
+  @Test(.timeLimit(.minutes(10)))
   func fixturePackageCommandFindsCModuleMapsInExternalScratchPath() throws {
     let sourceRoot = URL(fileURLWithPath: scratchPath("fixture-c-module-package-source"))
     let scratch = URL(fileURLWithPath: scratchPath("fixture-c-module-package-external-scratch"))
@@ -648,7 +649,7 @@ struct PackageWorkflowTests {
     #expect(list.contains("\"caseName\" : \"CModuleNoop\""))
   }
 
-  @Test(.timeLimit(.minutes(2)))
+  @Test(.timeLimit(.minutes(10)))
   func fixturePackageCommandReportsTestingBridgeDiagnostics() throws {
     let privatePackage = fixturePath("BenchmarkTestingPrivatePackage")
     let privateScratch = scratchPath("fixture-benchmark-testing-private")
