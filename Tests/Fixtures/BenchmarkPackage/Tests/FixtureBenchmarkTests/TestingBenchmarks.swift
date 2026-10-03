@@ -3,6 +3,7 @@
 
 import Benchmark
 import BenchmarkTesting
+import BenchmarkXCTest
 import Foundation
 import Testing
 
@@ -19,6 +20,7 @@ extension Tag {
 struct FixtureBenchmarkTestingSuite {
   @Test("Suite Noop")
   func suiteNoop() {
+    blackHole(BenchmarkXCTestAdapter())
     blackHole(3)
   }
 

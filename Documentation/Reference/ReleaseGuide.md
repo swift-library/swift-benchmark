@@ -27,3 +27,14 @@ that unpublished draft. Published source corrections use a new version.
 Temporary consumer packages, logs and provenance belong under ignored `.build`
 paths. Run-specific versions, device identifiers and workstation paths belong
 in evidence, not package policy or reusable scripts.
+
+`Scripts/validate-consumer --revision COMMIT --output NEW_DIRECTORY --ios`
+creates an independent consumer from the remote candidate, exercises native
+library/macro behavior and the no-host plugin, checks report/baseline behavior
+and runs tests on each declared iOS generation. It selects installed runtimes,
+creates temporary devices and removes those devices after testing. Its fixture
+declares the iOS deployment floor in Package.swift.
+
+After tagging, use `--version VERSION` in place of `--revision COMMIT` and a new
+output directory to validate the next-minor dependency requirement. Keep the
+resulting lockfile, logs, simulator results and provenance with release evidence.

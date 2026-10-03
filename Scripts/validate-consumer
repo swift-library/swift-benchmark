@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+# Copyright (c) 2026 Xudong Xu
+
+"""Validate a fresh remote dependency and retain native/simulator evidence."""
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import platform
+import re
+import shutil
+import subprocess
+import sys
+import uuid
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    reference = parser.add_mutually_exclusive_group(required=True)
+    reference.add_argument("--revision")
+    reference.add_argument("--version")
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--ios", action="store_true", help="Test every declared iOS generation")
+    args = parser.parse_args()
+    root = Path(__file__).resolve().parent.parent
+    config = json.loads((root / ".github/release.json").read_text())
+    if args.revision and not re.fullmatch(r"[0-9a-f]{40}", args.revision):
+        parser.error("Use the complete candidate commit SHA")
+    version = subprocess.check_output([str(root / "Scripts/validate-version")], text=True).strip()
+    if args.version and args.version != version:
+        parser.error("SemVer acceptance must use the declared package version")
+    output = args.output.resolve()
+    if output.exists():
+        parser.error("Use a new output directory for each acceptance run")
+    output.mkdir(parents=True)
+    package = output / "package"
+    shutil.copytree(root / "Tests/Fixtures/ReleaseConsumer", package)
+    manifest = package / "Package.swift"
+    requirement = "revision: " + json.dumps(args.revision) if args.revision else '.upToNextMinor(from: ' + json.dumps(args.version) + ')'
+    manifest.write_text(manifest.read_text().replace('revision: "release-candidate"', requirement))
+    checks = []
+
+    def run(name, command, expected=0):
+        print(name, flush=True)
+        with (output / (name + ".stdout.log")).open("w") as stdout, (output / (name + ".stderr.log")).open("w") as stderr:
+            result = subprocess.run(command, cwd=package, stdout=stdout, stderr=stderr)
+        if (expected is None and result.returncode == 0) or (expected is not None and result.returncode != expected):
+            raise RuntimeError(name + " failed acceptance; inspect " + str(output))
+        checks.append({"name": name, "exit_status": result.returncode})
+        return (output / (name + ".stdout.log")).read_text()
+
+    run("resolve", ["swift", "package", "resolve"])
+    lock = json.loads((package / "Package.resolved").read_text())
+    selected = next(pin for pin in lock["pins"] if pin["identity"] == "swift-benchmark")
+    if args.revision and selected["state"]["revision"] != args.revision:
+        raise RuntimeError("Resolved source differs from the accepted candidate")
+    if args.version and selected["state"].get("version") != args.version:
+        raise RuntimeError("The next-minor requirement selected a different release")
+    run("native-tests", ["swift", "test", "--force-resolved-versions"])
+    plugin = ["swift", "package", "--allow-writing-to-package-directory", "benchmark"]
+    reported_version = run("plugin-version", plugin + ["--version"]).strip()
+    if reported_version != "swift-benchmark-cli " + version:
+        raise RuntimeError("The remote plugin reports a different version")
+    entries = json.loads(run("plugin-discovery", plugin + ["list", "--format", "json"]))
+    if {entry["suite"] for entry in entries} != {"ReleaseLibrary", "ReleaseTesting"}:
+        raise RuntimeError("Discovery did not find both library and Testing declarations")
+    report_path = output / "report.json"
+    baseline_path = output / "baseline.json"
+    run("plugin-run", plugin + ["run", "--timeline", "--format", "json", "--output", str(report_path), "--quiet"])
+    report = json.loads(report_path.read_text())
+    if report["summary"]["caseCount"] < 2 or any(not case["samples"] for suite in report["suites"] for case in suite["cases"]):
+        raise RuntimeError("The report has no usable measurement samples")
+    run("baseline-write", plugin + ["baseline", "write", "--input", str(report_path), "--output", str(baseline_path), "--quiet"])
+    run("baseline-check", plugin + ["check", "--baseline", str(baseline_path), "--threshold-percent", "1000000", "--format", "json", "--quiet"])
+    run("budget-failure", plugin + ["check", "--baseline", str(baseline_path), "--budget", "mean:0", "--quiet"], expected=None)
+    simulators = []
+    if args.ios:
+        runtimes = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "--json"]))["runtimes"]
+        for generation in config["platforms"]["iOS"]:
+            available = [r for r in runtimes if r.get("platform") == "iOS" and r.get("isAvailable") and int(r["version"].split(".")[0]) == generation]
+            if not available:
+                raise RuntimeError("No installed iOS runtime for generation " + str(generation))
+            runtime = max(available, key=lambda r: tuple(map(int, r["version"].split("."))))
+            device_type = next(d["identifier"] for d in runtime["supportedDeviceTypes"] if d["productFamily"] == "iPhone")
+            device = subprocess.check_output(["xcrun", "simctl", "create", "SwiftBenchmarkRelease-" + uuid.uuid4().hex[:8], device_type, runtime["identifier"]], text=True).strip()
+            try:
+                name = "ios-" + runtime["version"]
+                run(name, ["xcodebuild", "test", "-scheme", "ReleaseConsumer", "-destination", "platform=iOS Simulator,id=" + device,
+                           "-derivedDataPath", str(output / "DerivedData"), "-resultBundlePath", str(output / (name + ".xcresult")),
+                           "-disableAutomaticPackageResolution", "CODE_SIGNING_ALLOWED=NO", "IPHONEOS_DEPLOYMENT_TARGET=18.0"])
+                simulators.append({k: runtime[k] for k in ("identifier", "version", "buildversion")})
+            finally:
+                subprocess.run(["xcrun", "simctl", "shutdown", device], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["xcrun", "simctl", "delete", device], check=True)
+    evidence = {"repository": config["repository"], "dependency": selected["state"], "dependency_pins": lock["pins"],
+                "dependency_lock_sha256": hashlib.sha256((package / "Package.resolved").read_bytes()).hexdigest(),
+                "consumer_manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+                "checker_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), "os": platform.platform(),
+                "swift": subprocess.check_output(["swift", "--version"], text=True).strip(),
+                "xcode": subprocess.check_output(["xcodebuild", "-version"], text=True).strip(),
+                "ios_sdk": subprocess.check_output(["xcrun", "--sdk", "iphonesimulator", "--show-sdk-version"], text=True).strip(),
+                "ios_deployment_target": "18.0", "simulators": simulators, "checks": checks}
+    (output / "provenance.json").write_text(json.dumps(evidence, indent=2) + "\n")
+    print("Consumer acceptance passed: " + str(output))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, RuntimeError, StopIteration, subprocess.CalledProcessError) as error:
+        print("validate-consumer: " + str(error), file=sys.stderr)
+        sys.exit(1)
