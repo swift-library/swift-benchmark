@@ -245,8 +245,8 @@ useful.
 
 ## Licensing Guardrails
 
-- Do not change `LICENSE`, `README` license section, or
-  `COMMERCIAL_LICENSE.md` unless explicitly requested.
+- Do not change `LICENSE`, `NOTICE`, or the `README` license section unless
+  explicitly requested.
 - Keep license wording consistent across all docs.
 - For open-source release review:
   - keep public README free of workspace-internal refs metadata;
