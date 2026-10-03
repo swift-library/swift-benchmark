@@ -29,7 +29,9 @@
     }
   }
 
-  private struct SignpostSpanTokenStorage: SpanTokenStorage {
+  // The immutable wrapper carries an OS-owned interval handle across tasks.
+  // Older supported SDKs omit the handle's Sendable conformance.
+  private struct SignpostSpanTokenStorage: SpanTokenStorage, @unchecked Sendable {
     let signposter: OSSignposter
     let name: StaticString
     let state: OSSignpostIntervalState

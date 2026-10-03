@@ -871,7 +871,7 @@ struct PackageWorkflowTests {
     )
     _ = try runProcess(
       executable: "/usr/bin/env",
-      arguments: ["git", "-C", directory.path, "checkout", "-q", "-B", "main"]
+      arguments: ["git", "-C", directory.path, "checkout", "-q", "-B", "master"]
     )
     _ = try runProcess(
       executable: "/usr/bin/env",
