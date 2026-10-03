@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 public struct SpanAttributes: Sendable, Equatable, ExpressibleByDictionaryLiteral {
   public typealias Key = String
   public typealias Value = SpanAttributeValue

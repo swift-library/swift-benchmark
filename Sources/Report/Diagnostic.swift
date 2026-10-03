@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 public enum DiagnosticStateKind: String, Sendable, Codable {
   case measured
   case notConfigured
@@ -11,7 +14,9 @@ public struct DiagnosticState: Sendable, Equatable, Codable {
   public var unit: String?
   public var reason: String?
 
-  public init(kind: DiagnosticStateKind, value: Double? = nil, unit: String? = nil, reason: String? = nil) {
+  public init(
+    kind: DiagnosticStateKind, value: Double? = nil, unit: String? = nil, reason: String? = nil
+  ) {
     self.kind = kind
     self.value = value
     self.unit = unit

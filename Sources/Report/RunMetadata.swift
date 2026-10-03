@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 
 public struct SourceLocationReport: Sendable, Equatable, Codable {
@@ -55,7 +58,7 @@ public struct RunMetadata: Sendable, Equatable, Codable {
     packageIdentity: String = "swift-benchmark",
     gitCommit: String? = nil,
     generatedAt: String = ISO8601DateFormatter().string(from: Date()),
-    buildConfiguration: String = "debug"
+    buildConfiguration: String? = nil
   ) -> RunMetadata {
     RunMetadata(
       id: id,
@@ -66,7 +69,9 @@ public struct RunMetadata: Sendable, Equatable, Codable {
       architecture: SystemArchitecture.current,
       osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
       generatedAt: generatedAt,
-      buildConfiguration: buildConfiguration,
+      buildConfiguration: buildConfiguration
+        ?? ProcessInfo.processInfo.environment["SWIFT_BENCHMARK_BUILD_CONFIGURATION"]
+        ?? "debug",
       device: nil
     )
   }

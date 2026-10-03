@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 public enum ReportVerdict: String, Sendable, Codable {
   case passed
   case failed

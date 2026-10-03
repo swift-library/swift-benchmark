@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 @freestanding(expression)
 public macro span<T>(
   _ name: StaticString,
@@ -38,7 +41,8 @@ public macro Span(
 ) = #externalMacro(module: "InstrumentsMacro", type: "SpanAttributeMacro")
 
 @attached(body)
-public macro Instrumented() = #externalMacro(module: "InstrumentsMacro", type: "InstrumentedBodyMacro")
+public macro Instrumented() =
+  #externalMacro(module: "InstrumentsMacro", type: "InstrumentedBodyMacro")
 
 @attached(memberAttribute)
 public macro InstrumentedMembers() =

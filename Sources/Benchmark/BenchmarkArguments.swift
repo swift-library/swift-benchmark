@@ -1,5 +1,8 @@
-public extension Benchmark {
-  struct ArgumentValue: Sendable, Equatable, Hashable, Codable {
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
+extension Benchmark {
+  public struct ArgumentValue: Sendable, Equatable, Hashable, Codable {
     public var label: String
     public var parameterName: String?
     public var scale: Benchmark.Scale?
@@ -26,7 +29,7 @@ public extension Benchmark {
     }
   }
 
-  struct ArgumentRow: Sendable, Equatable, Hashable, Codable {
+  public struct ArgumentRow: Sendable, Equatable, Hashable, Codable {
     public var id: String?
     public var arguments: [Benchmark.ArgumentValue]
     public var scale: Benchmark.Scale?
@@ -57,8 +60,8 @@ public extension Benchmark {
   }
 }
 
-public extension Benchmark.Scale {
-  init?<Value>(inferring value: Value) {
+extension Benchmark.Scale {
+  public init?<Value>(inferring value: Value) {
     if let integer = value as? any BinaryInteger,
       let exact = Int(exactly: integer)
     {

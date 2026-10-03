@@ -1,7 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Report
 
 #if canImport(Darwin)
-import Darwin
+  import Darwin
 #endif
 
 public enum MemoryMetricName {
@@ -73,45 +76,45 @@ public struct ResidentMemoryMetricProvider: MemoryMetricProvider {
 
   public func metrics(for scope: ReportScope) async -> [DiagnosticMetric] {
     #if canImport(Darwin)
-    var info = mach_task_basic_info()
-    var count = mach_msg_type_number_t(
-      MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size
-    )
-    let result = withUnsafeMutablePointer(to: &info) { pointer in
-      pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { rebound in
-        task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), rebound, &count)
+      var info = mach_task_basic_info()
+      var count = mach_msg_type_number_t(
+        MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size
+      )
+      let result = withUnsafeMutablePointer(to: &info) { pointer in
+        pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { rebound in
+          task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), rebound, &count)
+        }
       }
-    }
-    guard result == KERN_SUCCESS else {
+      guard result == KERN_SUCCESS else {
+        return [
+          DiagnosticMetric(
+            id: "metric:memory-resident-bytes",
+            scope: scope,
+            name: MemoryMetricName.residentBytes,
+            state: .failed("task_info failed with status \(result).")
+          )
+        ]
+      }
+      let residentBytes = Double(info.resident_size)
       return [
         DiagnosticMetric(
           id: "metric:memory-resident-bytes",
           scope: scope,
           name: MemoryMetricName.residentBytes,
-          state: .failed("task_info failed with status \(result).")
-        )
+          state: .measured(residentBytes, unit: "bytes")
+        ),
+        DiagnosticMetric(
+          id: "metric:memory-peak-resident-bytes",
+          scope: scope,
+          name: MemoryMetricName.peakResidentBytes,
+          state: .measured(residentBytes, unit: "bytes")
+        ),
       ]
-    }
-    let residentBytes = Double(info.resident_size)
-    return [
-      DiagnosticMetric(
-        id: "metric:memory-resident-bytes",
-        scope: scope,
-        name: MemoryMetricName.residentBytes,
-        state: .measured(residentBytes, unit: "bytes")
-      ),
-      DiagnosticMetric(
-        id: "metric:memory-peak-resident-bytes",
-        scope: scope,
-        name: MemoryMetricName.peakResidentBytes,
-        state: .measured(residentBytes, unit: "bytes")
-      ),
-    ]
     #else
-    return await UnavailableMemoryMetricProvider(
-      reason: "Resident memory metrics are unavailable on this platform.",
-      requirement: requirement
-    ).metrics(for: scope)
+      return await UnavailableMemoryMetricProvider(
+        reason: "Resident memory metrics are unavailable on this platform.",
+        requirement: requirement
+      ).metrics(for: scope)
     #endif
   }
 }
@@ -413,13 +416,15 @@ public struct AllocationRegressionAnalyzer: Sendable {
     self.policy = policy
   }
 
-  public func summarize(_ samples: [AllocationMetricSnapshot]) throws -> AllocationRegressionSummary {
+  public func summarize(_ samples: [AllocationMetricSnapshot]) throws -> AllocationRegressionSummary
+  {
     try policy.validate()
     let expected = policy.preheatIterations + policy.measuredIterations
     guard samples.count >= expected else {
       throw AllocationRegressionError.insufficientSamples(expected: expected, actual: samples.count)
     }
-    let measured = Array(samples.dropFirst(policy.preheatIterations).prefix(policy.measuredIterations))
+    let measured = Array(
+      samples.dropFirst(policy.preheatIterations).prefix(policy.measuredIterations))
     return AllocationRegressionSummary(
       policy: policy,
       measuredSamples: measured,

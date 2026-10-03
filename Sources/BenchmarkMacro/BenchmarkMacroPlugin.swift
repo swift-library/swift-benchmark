@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 import SwiftCompilerPlugin
 import SwiftSyntax
@@ -46,7 +49,8 @@ public struct BenchmarkSuiteMacro: MemberMacro, ExtensionMacro, PeerMacro {
         )
       }
       if parameters.isEmpty {
-        let invocation = "\(throwingPrefix(function))\(asyncPrefix(function))\(target)\(function.name.text)()"
+        let invocation =
+          "\(throwingPrefix(function))\(asyncPrefix(function))\(target)\(function.name.text)()"
         return """
               Benchmark(\(caseName), traits: \(caseTraits)) {
                 \(invocation)
@@ -62,14 +66,17 @@ public struct BenchmarkSuiteMacro: MemberMacro, ExtensionMacro, PeerMacro {
       let parameter = parameters[0]
       let valueName = localParameterName(parameter)
       let label = callLabel(parameter)
-      let invocation = "\(throwingPrefix(function))\(asyncPrefix(function))\(target)\(function.name.text)(\(label)\(valueName))"
+      let invocation =
+        "\(throwingPrefix(function))\(asyncPrefix(function))\(target)\(function.name.text)(\(label)\(valueName))"
       return """
             Benchmark(\(caseName), dimension: \(dimension), traits: \(caseTraits), input: { $0 }) { \(valueName) in
               \(invocation)
             }
         """
     }
-    let body = benchmarkExpressions.isEmpty ? "" : "\n\(benchmarkExpressions.joined(separator: "\n"))\n      "
+    let body =
+      benchmarkExpressions.isEmpty
+      ? "" : "\n\(benchmarkExpressions.joined(separator: "\n"))\n      "
 
     return [
       """
@@ -197,7 +204,8 @@ private func parameterizedBenchmarkExpression(
   let callArguments = zip(parameters, invocationArguments)
     .map { parameter, value in "\(callLabel(parameter))\(value)" }
     .joined(separator: ", ")
-  let invocation = "\(throwingPrefix(function))\(asyncPrefix(function))\(target)\(function.name.text)(\(callArguments))"
+  let invocation =
+    "\(throwingPrefix(function))\(asyncPrefix(function))\(target)\(function.name.text)(\(callArguments))"
   return """
         Benchmark(\(caseName), arguments: \(argumentList), traits: \(caseTraits)) { \(closureParameters.joined(separator: ", ")) in
           \(invocation)

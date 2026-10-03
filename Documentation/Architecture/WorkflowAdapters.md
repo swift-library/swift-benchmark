@@ -43,6 +43,10 @@ Generated host compilation supplies Swift module search paths and C modulemap
 include paths discovered from SwiftPM checkout roots. The active build/scratch
 root takes precedence, and package `.build` checkout roots are fallback
 behavior for default or older local layouts.
+Generated host linkage includes only discovered benchmark targets and their
+recursive dependencies. Consolidated object files in an Xcode products
+directory are filtered by that graph; unrelated libraries from another package
+target or an earlier build must not enter the benchmark host.
 The plugin builds discovered package/test targets with the same SwiftPM
 configuration as the plugin tool path, so `swift package --configuration
 release benchmark ...` can discover and link release object files from a clean

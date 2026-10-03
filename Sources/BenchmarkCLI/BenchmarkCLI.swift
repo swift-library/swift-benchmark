@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Benchmark
 import Dispatch
 import Foundation
@@ -40,6 +43,8 @@ struct BenchmarkCLI {
     }
 
     switch command {
+    case "--version":
+      return "swift-benchmark-cli \(CLIVersion.current)"
     case "help", "--help", "-h":
       return help()
     case "list":
@@ -80,6 +85,7 @@ struct BenchmarkCLI {
       help
 
     Options:
+      --version
       --host <path>
       --budget <metric>:<nanoseconds>
       --case-budget <suite>:<case>:<metric>:<nanoseconds>
@@ -103,10 +109,14 @@ struct BenchmarkCLI {
     """
   }
 
-  private static func runHostCommand(_ command: String, _ arguments: [String]) async throws -> String {
+  private static func runHostCommand(_ command: String, _ arguments: [String]) async throws
+    -> String
+  {
     let options = try CLIOptions(arguments)
     let host = try options.requiredValue(for: "--host")
-    let hostExclusions: Set<String> = ["--host", "--xctrace-output", "--xctrace-template", "--xcrun"]
+    let hostExclusions: Set<String> = [
+      "--host", "--xctrace-output", "--xctrace-template", "--xcrun",
+    ]
     var hostArguments = [command] + options.forwardedArguments(excluding: hostExclusions)
     if let xctraceOutput = options.value(for: "--xctrace-output") {
       let template = options.value(for: "--xctrace-template") ?? "Time Profiler"
@@ -154,7 +164,8 @@ struct BenchmarkCLI {
     let output = try options.format(default: .console).render(document)
     let emitted = try writeOrReturn(output, options: options)
     if failOnRegression || options.hasFlag("--fail-on-regression") {
-      guard document.summary.failedRegressionCount == 0 && document.summary.failedBudgetCount == 0 else {
+      guard document.summary.failedRegressionCount == 0 && document.summary.failedBudgetCount == 0
+      else {
         throw CLIError.regressionFailure(output: emitted)
       }
     }
@@ -195,7 +206,8 @@ struct BenchmarkCLI {
   }
 
   private static func writeBaseline(_ baseline: BaselineDocument, to path: String) throws {
-    try encodeJSON(baseline).write(to: URL(fileURLWithPath: path), atomically: true, encoding: .utf8)
+    try encodeJSON(baseline).write(
+      to: URL(fileURLWithPath: path), atomically: true, encoding: .utf8)
   }
 
   private static func invokeHost(path: String, arguments: [String]) throws -> String {
@@ -366,7 +378,8 @@ struct CLIOptions {
     return count == 0 ? .none : .iterations(count)
   }
 
-  func metric(default defaultMetric: Report.Measurement.Metric) throws -> Report.Measurement.Metric {
+  func metric(default defaultMetric: Report.Measurement.Metric) throws -> Report.Measurement.Metric
+  {
     guard let value = value(for: "--baseline-metric") ?? value(for: "--metric") else {
       return defaultMetric
     }
@@ -406,7 +419,9 @@ struct CLIOptions {
 
   func traceExporters(runID: ReportID) -> [any TraceExporter] {
     values(for: "--trace").map { traceExporter(path: $0, runID: runID, required: false) }
-      + values(for: "--required-trace").map { traceExporter(path: $0, runID: runID, required: true) }
+      + values(for: "--required-trace").map {
+        traceExporter(path: $0, runID: runID, required: true)
+      }
   }
 
   private func parseBudget(_ value: String) throws -> BudgetPolicy {
@@ -462,7 +477,8 @@ struct CLIOptions {
   }
 
   private func stable(_ value: String) -> String {
-    let stableValue = value
+    let stableValue =
+      value
       .lowercased()
       .map { character in
         character.isLetter || character.isNumber ? character : "-"

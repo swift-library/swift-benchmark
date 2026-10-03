@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Testing
 
 @testable import Instruments
@@ -396,7 +399,8 @@ struct InstrumentsMacroRuntimeTests {
       let value = DecoratedInstrumentedInitializer(8, mode: "abc")
 
       #expect(value.value == 11)
-      #expect(recorder.snapshot().spans.map(\.name) == ["DecoratedInstrumentedInitializer.init(_:mode:)"])
+      #expect(
+        recorder.snapshot().spans.map(\.name) == ["DecoratedInstrumentedInitializer.init(_:mode:)"])
       #expect(recorder.snapshot().spans.allSatisfy { $0.end != nil })
     }
   }

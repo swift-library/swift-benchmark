@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Benchmark
 import Instruments
 
@@ -125,12 +128,13 @@ public struct SpanTimingSummary: Sendable, Equatable, Codable {
   }
 
   static func summarize(spans: [SpanAttribution]) -> [SpanTimingSummary] {
-    let grouped = Dictionary(grouping: spans.compactMap { span -> (String, UInt64)? in
-      guard let duration = span.durationNanoseconds else {
-        return nil
-      }
-      return (span.name, duration)
-    }, by: \.0)
+    let grouped = Dictionary(
+      grouping: spans.compactMap { span -> (String, UInt64)? in
+        guard let duration = span.durationNanoseconds else {
+          return nil
+        }
+        return (span.name, duration)
+      }, by: \.0)
 
     return grouped.keys.sorted().map { name in
       let durations = (grouped[name] ?? []).map(\.1)
@@ -202,7 +206,9 @@ public enum TimelineCorrelator {
     }.map(SpanAttribution.init)
 
     let events = timeline.events.filter { record in
-      matches(record.attributes, suiteName: suiteName, caseName: caseName, size: size, iteration: iteration)
+      matches(
+        record.attributes, suiteName: suiteName, caseName: caseName, size: size,
+        iteration: iteration)
         || record.parentSpanID.map { includedSpanIDs.contains($0) } == true
     }.map(EventAttribution.init)
 

@@ -36,7 +36,10 @@ domain and should not be folded into the Instruments runtime layer.
 ```swift
 // Package.swift
 .dependencies: [
-  .package(url: "https://github.com/swift-library/swift-benchmark.git", from: "0.1.0"),
+  .package(
+    url: "https://github.com/swift-library/swift-benchmark.git",
+    .upToNextMinor(from: "0.1.0")
+  ),
 ],
 .targets: [
   .target(
@@ -224,12 +227,10 @@ Best-practice default: write benchmark workloads in `Tests` with
 library-target benchmark declarations, private same-scope macro discovery, or a
 benchmark suite that should never be seen by the ordinary Swift Testing runner.
 
-## Legacy Signpost Removal
+## Runtime Instrumentation
 
-Legacy Signpost public APIs are implementation sources only. Apple Signpost
-behavior belongs behind `SignpostRecorder`; user-facing APIs describe spans,
-events, recorders, tokens, and attributes instead of signpost IDs, signpost
-intervals, or subsystem/category wiring.
+`SignpostRecorder` owns the Apple Signpost backend. Public Instruments APIs
+describe spans, events, recorders, tokens, and attributes.
 
 ## Documentation
 
@@ -256,14 +257,20 @@ Current package settings:
 - macOS 15+
 - Swift tools 6.0+
 
+The supported system window covers the three most recent stable major releases
+for each declared Apple platform: currently iOS 18, 26 and 27, and macOS 15, 26
+and 27. Compiler requirements are maintained separately.
+
+[Versioning and release policy](Documentation/Architecture/VersioningAndRelease.md)
+describes compatibility and maintenance.
+
+Inspect the installed CLI or plugin version with `swift-benchmark-cli --version`
+or `swift package benchmark --version`.
+
 ## License
 
-Dual license:
-
-- `AGPL-3.0-or-later` for open-source use.
-- Commercial license for closed-source/proprietary use.
-
-See [LICENSE](./LICENSE) and [COMMERCIAL_LICENSE.md](./COMMERCIAL_LICENSE.md).
+Apache License 2.0 with the Swift Runtime Library Exception
+(`Apache-2.0 WITH Swift-exception`). See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 ## Repository Policy
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 public enum DiagnosticRequirement: String, Sendable, Codable {
   case optional
   case required
@@ -8,9 +11,9 @@ public protocol BenchmarkObserver: Sendable {
   func runDidFinish(scope: ReportScope) async
 }
 
-public extension BenchmarkObserver {
-  func runDidStart(scope: ReportScope) async {}
-  func runDidFinish(scope: ReportScope) async {}
+extension BenchmarkObserver {
+  public func runDidStart(scope: ReportScope) async {}
+  public func runDidFinish(scope: ReportScope) async {}
 }
 
 public protocol MetricProvider: Sendable {

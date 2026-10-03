@@ -1,4 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 public protocol _BenchmarkDiscovery: Sendable {
+  // Discovery macros and generated hosts share this witness name.
+  // swift-format-ignore: AlwaysUseLowerCamelCase
   static var __benchmarkSuites: [BenchmarkSuite] { get }
 }
 

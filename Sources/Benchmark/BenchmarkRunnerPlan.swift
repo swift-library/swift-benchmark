@@ -1,7 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 
-public extension BenchmarkRunner {
-  struct Plan: Sendable {
+extension BenchmarkRunner {
+  public struct Plan: Sendable {
     public var steps: [Step]
 
     public init(
@@ -15,7 +18,8 @@ public extension BenchmarkRunner {
           continue
         }
         for benchmarkCase in suite.cases {
-          let resolved = ResolvedCase(suite: suite, suiteTraits: suiteTraits, benchmarkCase: benchmarkCase)
+          let resolved = ResolvedCase(
+            suite: suite, suiteTraits: suiteTraits, benchmarkCase: benchmarkCase)
           guard filter.matchesCase(benchmarkCase.name),
             filter.matchesTags(resolved.tags)
           else {
@@ -69,16 +73,22 @@ public extension BenchmarkRunner {
     private static func measurementRows(for resolved: ResolvedCase) -> [PlannedAction] {
       if let rows = resolved.parameterizedRows {
         guard !rows.isEmpty else {
-          return [.action(.planningFailure(.invalidArguments(benchmarkName: resolved.caseName, reason: "requires at least one argument")))]
+          return [
+            .action(
+              .planningFailure(
+                .invalidArguments(
+                  benchmarkName: resolved.caseName, reason: "requires at least one argument")))
+          ]
         }
         if let invalid = rows.first(where: { ($0.metadata.scale?.rawValue ?? 1) <= 0 }) {
           return [
-            .action(.planningFailure(
-              .invalidDimension(
-                benchmarkName: resolved.caseName,
-                reason: "has invalid scale \(invalid.metadata.scale?.rawValue ?? 0)"
-              )
-            ))
+            .action(
+              .planningFailure(
+                .invalidDimension(
+                  benchmarkName: resolved.caseName,
+                  reason: "has invalid scale \(invalid.metadata.scale?.rawValue ?? 0)"
+                )
+              ))
           ]
         }
         return rows.map { .measure($0) }
@@ -95,16 +105,22 @@ public extension BenchmarkRunner {
         ]
       }
       guard !dimension.sizes.isEmpty else {
-        return [.action(.planningFailure(.invalidDimension(benchmarkName: resolved.caseName, reason: "requires at least one size")))]
+        return [
+          .action(
+            .planningFailure(
+              .invalidDimension(
+                benchmarkName: resolved.caseName, reason: "requires at least one size")))
+        ]
       }
       if let invalid = dimension.sizes.first(where: { $0.rawValue <= 0 }) {
         return [
-          .action(.planningFailure(
-            .invalidDimension(
-              benchmarkName: resolved.caseName,
-              reason: "has invalid size \(invalid.rawValue)"
-            )
-          ))
+          .action(
+            .planningFailure(
+              .invalidDimension(
+                benchmarkName: resolved.caseName,
+                reason: "has invalid size \(invalid.rawValue)"
+              )
+            ))
         ]
       }
       return dimension.sizes.map { size in
@@ -123,8 +139,8 @@ public extension BenchmarkRunner {
   }
 }
 
-public extension BenchmarkRunner.Plan {
-  struct Filter: Sendable, Equatable {
+extension BenchmarkRunner.Plan {
+  public struct Filter: Sendable, Equatable {
     public var suiteName: String?
     public var caseName: String?
     public var suitePattern: String?
@@ -193,7 +209,7 @@ public extension BenchmarkRunner.Plan {
     }
   }
 
-  struct Step: Sendable {
+  public struct Step: Sendable {
     public var suite: BenchmarkSuite
     public var benchmarkCase: BenchmarkCase
     public var configuration: BenchmarkConfiguration
@@ -273,7 +289,8 @@ public extension BenchmarkRunner.Plan {
     }
 
     private func stableIDComponent(_ value: String) -> String {
-      let normalized = value
+      let normalized =
+        value
         .lowercased()
         .map { character in
           character.isLetter || character.isNumber ? character : "-"
@@ -289,7 +306,7 @@ public extension BenchmarkRunner.Plan {
     }
   }
 
-  enum Action: Sendable {
+  public enum Action: Sendable {
     case measure(Benchmark.ArgumentRow)
     case skip(reason: String)
     case planningFailure(BenchmarkPlanningIssue)
@@ -423,7 +440,8 @@ private struct ResolvedCase {
       dimensionIssue = true
     }
 
-    configuration = benchmarkCase.configuration
+    configuration =
+      benchmarkCase.configuration
       ?? caseConfigurations.last
       ?? suiteTraits.configuration
       ?? suite.configuration
@@ -441,8 +459,8 @@ private struct ResolvedCase {
   }
 }
 
-private extension Array where Element == String {
-  func deduplicated() -> [String] {
+extension Array where Element == String {
+  fileprivate func deduplicated() -> [String] {
     var seen: Set<String> = []
     var result: [String] = []
     for item in self where !seen.contains(item) {
@@ -453,8 +471,8 @@ private extension Array where Element == String {
   }
 }
 
-private extension Array where Element: Equatable {
-  var containsConflict: Bool {
+extension Array where Element: Equatable {
+  fileprivate var containsConflict: Bool {
     guard let first else {
       return false
     }

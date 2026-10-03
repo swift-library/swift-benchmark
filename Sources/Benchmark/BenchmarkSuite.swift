@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 public struct BenchmarkSuite: Sendable {
   public let name: String
   public let configuration: BenchmarkConfiguration

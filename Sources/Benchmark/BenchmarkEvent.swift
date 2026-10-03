@@ -1,15 +1,18 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 
 public protocol BenchmarkEventRecorder: Sendable {
   func record(_ record: Benchmark.Event.Stream.Record) async
 }
 
-public extension Benchmark {
-  enum Event: Sendable {}
+extension Benchmark {
+  public enum Event: Sendable {}
 }
 
-public extension Benchmark.Event {
-  enum Kind: String, Sendable, Codable, Equatable, CaseIterable {
+extension Benchmark.Event {
+  public enum Kind: String, Sendable, Codable, Equatable, CaseIterable {
     case discoveryStarted
     case discoveryEnded
     case planStarted
@@ -32,7 +35,7 @@ public extension Benchmark.Event {
     case runEnded
   }
 
-  struct Context: Sendable, Codable, Equatable {
+  public struct Context: Sendable, Codable, Equatable {
     public var suiteName: String?
     public var caseName: String?
     public var stepID: String?
@@ -106,11 +109,11 @@ public extension Benchmark.Event {
     }
   }
 
-  enum Stream: Sendable {}
+  public enum Stream: Sendable {}
 }
 
-public extension Benchmark.Event.Stream {
-  struct Record: Sendable, Codable, Equatable {
+extension Benchmark.Event.Stream {
+  public struct Record: Sendable, Codable, Equatable {
     public var sequence: Int
     public var kind: Benchmark.Event.Kind
     public var context: Benchmark.Event.Context
@@ -127,8 +130,8 @@ public extension Benchmark.Event.Stream {
   }
 }
 
-public extension Benchmark.Event {
-  actor InMemoryRecorder: BenchmarkEventRecorder {
+extension Benchmark.Event {
+  public actor InMemoryRecorder: BenchmarkEventRecorder {
     private var storage: [Benchmark.Event.Stream.Record] = []
     private var nextSequence = 0
 
@@ -144,7 +147,7 @@ public extension Benchmark.Event {
     }
   }
 
-  struct ConsoleRecorder: BenchmarkEventRecorder {
+  public struct ConsoleRecorder: BenchmarkEventRecorder {
     public init() {}
 
     public func record(_ record: Benchmark.Event.Stream.Record) async {
@@ -154,7 +157,7 @@ public extension Benchmark.Event {
     }
   }
 
-  actor JSONLinesRecorder: BenchmarkEventRecorder {
+  public actor JSONLinesRecorder: BenchmarkEventRecorder {
     private var storage: [String] = []
     private var nextSequence = 0
     private let encoder: JSONEncoder
@@ -179,8 +182,8 @@ public extension Benchmark.Event {
   }
 }
 
-private extension Benchmark.Event.Stream.Record {
-  func withSequence(_ sequence: Int) -> Benchmark.Event.Stream.Record {
+extension Benchmark.Event.Stream.Record {
+  fileprivate func withSequence(_ sequence: Int) -> Benchmark.Event.Stream.Record {
     Benchmark.Event.Stream.Record(sequence: sequence, kind: kind, context: context)
   }
 }

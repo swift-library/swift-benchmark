@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Testing
 
 @testable import Instruments
@@ -134,6 +137,7 @@ struct InstrumentsRuntimeTests {
     await Instruments.withCurrentRecorder(outer) {
       do {
         try await Instruments.withCurrentRecorder(inner) {
+          await Task.yield()
           Instruments.current.recordEvent("async-inner", attributes: [:])
           throw DummyError.boom
         }

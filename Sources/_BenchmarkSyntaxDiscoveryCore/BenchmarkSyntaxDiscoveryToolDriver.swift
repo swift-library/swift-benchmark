@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 import SwiftParser
 import SwiftSyntax
@@ -104,11 +107,13 @@ struct SyntaxDiscoveryPlanner {
       ])
     }
 
-    let discoveryExpressions = nativeDiscoveries.map {
-      "\($0.moduleName).\($0.discoveryTypeName).self"
-    } + testingBridges.map {
-      "\($0.discoveryTypeName).self"
-    }
+    let discoveryExpressions =
+      nativeDiscoveries.map {
+        "\($0.moduleName).\($0.discoveryTypeName).self"
+      }
+      + testingBridges.map {
+        "\($0.discoveryTypeName).self"
+      }
     let hostSourcePath = try writeGeneratedBenchmarkHost(
       workDirectory: workDirectory,
       nativeDiscoveries: nativeDiscoveries,
@@ -307,9 +312,10 @@ private final class SyntaxDiscoveryVisitor: SyntaxVisitor {
     attributes: AttributeListSyntax
   ) {
     let qualifiedName = (contexts.last?.type.qualifiedName).map { "\($0).\(name)" } ?? name
-    let discoveryTypeName = (contexts.last?.type.qualifiedName).map {
-      "\($0).__BenchmarkDiscovery_\(sanitizedIdentifier(name))"
-    } ?? "__BenchmarkDiscovery_\(sanitizedIdentifier(name))"
+    let discoveryTypeName =
+      (contexts.last?.type.qualifiedName).map {
+        "\($0).__BenchmarkDiscovery_\(sanitizedIdentifier(name))"
+      } ?? "__BenchmarkDiscovery_\(sanitizedIdentifier(name))"
     let type = SyntaxTypeDeclaration(
       name: name,
       qualifiedName: qualifiedName,
@@ -326,7 +332,8 @@ private final class SyntaxDiscoveryVisitor: SyntaxVisitor {
       )
     }
 
-    let suiteInfo = attribute(named: "Suite", in: attributes)
+    let suiteInfo =
+      attribute(named: "Suite", in: attributes)
       .map(attributeInfo(from:)) ?? .empty
     let inherited = contexts.last?.isEnrolled == true
     let isEnrolled = inherited || suiteInfo.hasBenchmark
@@ -449,7 +456,8 @@ private final class SyntaxDiscoveryVisitor: SyntaxVisitor {
         for: node,
         suiteType: context?.type,
         argumentValues: argumentBinding?.invocationArguments
-          ?? (testInfo.dimensionExpression != nil && parameterCount == 1 ? ["__benchmarkScale"] : [])
+          ?? (testInfo.dimensionExpression != nil && parameterCount == 1
+            ? ["__benchmarkScale"] : [])
       )
     )
 
@@ -471,7 +479,8 @@ private final class SyntaxDiscoveryVisitor: SyntaxVisitor {
     suiteType: SyntaxTypeDeclaration?,
     argumentValues: [String] = []
   ) -> String {
-    let effectPrefix = "\(node.signature.effectSpecifiers?.throwsClause == nil ? "" : "try ")\(node.signature.effectSpecifiers?.asyncSpecifier == nil ? "" : "await ")"
+    let effectPrefix =
+      "\(node.signature.effectSpecifiers?.throwsClause == nil ? "" : "try ")\(node.signature.effectSpecifiers?.asyncSpecifier == nil ? "" : "await ")"
     let call = "\(node.name.text)(\(callArguments(for: node, values: argumentValues)))"
     guard let suiteType else {
       return "\(effectPrefix)\(call)"

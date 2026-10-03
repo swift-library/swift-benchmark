@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Benchmark
 
 public enum ReportExecutionStatus: String, Sendable, Codable {
@@ -110,13 +113,15 @@ public struct CaseReport: Sendable, Equatable, Codable {
     self.diagnostics = diagnostics
     self.attachments = attachments
     self.status = status
-    self.verdictCauses = verdictCauses ?? CaseReport.makeVerdictCauses(
-      scope: scope,
-      status: status,
-      baseline: baseline,
-      budgets: budgets,
-      diagnostics: diagnostics
-    )
+    self.verdictCauses =
+      verdictCauses
+      ?? CaseReport.makeVerdictCauses(
+        scope: scope,
+        status: status,
+        baseline: baseline,
+        budgets: budgets,
+        diagnostics: diagnostics
+      )
     if !self.verdictCauses.isEmpty {
       self.verdict = .failed
     } else if baseline != nil || !budgets.isEmpty {
@@ -163,10 +168,11 @@ public struct CaseReport: Sendable, Equatable, Codable {
     let measurement = try container.decode(Report.Measurement.self, forKey: .measurement)
     let baseline = try container.decodeIfPresent(BaselineComparison.self, forKey: .baseline)
     let budgets = try container.decodeIfPresent([BudgetComparison].self, forKey: .budgets) ?? []
-    let dimensionCurves = try container.decodeIfPresent(
-      [Report.DimensionCurve].self,
-      forKey: .dimensionCurves
-    ) ?? []
+    let dimensionCurves =
+      try container.decodeIfPresent(
+        [Report.DimensionCurve].self,
+        forKey: .dimensionCurves
+      ) ?? []
     let attribution = try container.decodeIfPresent(
       TimelineAttribution.self,
       forKey: .attribution
@@ -175,18 +181,21 @@ public struct CaseReport: Sendable, Equatable, Codable {
       [TimelineAttribution].self,
       forKey: .attributions
     )
-    let diagnostics = try container.decodeIfPresent(
-      [DiagnosticMetric].self,
-      forKey: .diagnostics
-    ) ?? []
-    let attachments = try container.decodeIfPresent(
-      [DiagnosticAttachment].self,
-      forKey: .attachments
-    ) ?? []
-    let status = try container.decodeIfPresent(
-      ReportExecutionStatus.self,
-      forKey: .status
-    ) ?? .passed
+    let diagnostics =
+      try container.decodeIfPresent(
+        [DiagnosticMetric].self,
+        forKey: .diagnostics
+      ) ?? []
+    let attachments =
+      try container.decodeIfPresent(
+        [DiagnosticAttachment].self,
+        forKey: .attachments
+      ) ?? []
+    let status =
+      try container.decodeIfPresent(
+        ReportExecutionStatus.self,
+        forKey: .status
+      ) ?? .passed
     let verdictCauses = try container.decodeIfPresent(
       [ReportVerdictCause].self,
       forKey: .verdictCauses
@@ -305,19 +314,22 @@ public struct ReportSummary: Sendable, Equatable, Codable {
       partial + suite.cases.filter { $0.baseline?.verdict == .failed }.count
     }
     self.failedBudgetCount = suites.reduce(0) { partial, suite in
-      partial + suite.cases.reduce(0) { casePartial, report in
-        casePartial + report.budgets.filter { $0.verdict == .failed }.count
-      }
+      partial
+        + suite.cases.reduce(0) { casePartial, report in
+          casePartial + report.budgets.filter { $0.verdict == .failed }.count
+        }
     }
     self.unavailableDiagnosticCount = suites.reduce(0) { partial, suite in
-      partial + suite.cases.reduce(0) { casePartial, report in
-        casePartial + report.diagnostics.filter { $0.state.kind == .unavailable }.count
-      }
+      partial
+        + suite.cases.reduce(0) { casePartial, report in
+          casePartial + report.diagnostics.filter { $0.state.kind == .unavailable }.count
+        }
     }
     self.failedDiagnosticCount = suites.reduce(0) { partial, suite in
-      partial + suite.cases.reduce(0) { casePartial, report in
-        casePartial + report.diagnostics.filter { $0.state.kind == .failed }.count
-      }
+      partial
+        + suite.cases.reduce(0) { casePartial, report in
+          casePartial + report.diagnostics.filter { $0.state.kind == .failed }.count
+        }
     }
     self.verdict =
       failedRegressionCount == 0 && failedBudgetCount == 0 && failedDiagnosticCount == 0
@@ -376,7 +388,8 @@ public struct ReportDocument: Sendable, Equatable, Codable {
               threshold: threshold
             )
           }
-        let budgetComparisons = budgets
+        let budgetComparisons =
+          budgets
           .filter { $0.applies(suiteName: result.suiteName, caseName: result.caseName) }
           .map { BudgetComparison(policy: $0, metrics: measurement.metrics) }
         let sourceLocation = result.sourceLocation.map(SourceLocationReport.init)
@@ -423,7 +436,8 @@ public struct ReportDocument: Sendable, Equatable, Codable {
   ) -> ReportDocument {
     let suites = self.suites.map { suite in
       let cases = suite.cases.map { report in
-        let baselineComparison = baseline?
+        let baselineComparison =
+          baseline?
           .baselineCase(suiteName: suite.name, caseName: report.name)
           .map { baselineCase in
             BaselineComparison(
@@ -511,7 +525,8 @@ public struct ReportDocument: Sendable, Equatable, Codable {
 
     return [.mean, .median, .p95].map { metric in
       Report.DimensionCurve(
-        id: ReportIDFactory.dimensionCurve(suiteName: suiteName, caseName: caseName, metric: metric),
+        id: ReportIDFactory.dimensionCurve(
+          suiteName: suiteName, caseName: caseName, metric: metric),
         scope: ReportScope(
           runID: scope.runID,
           suiteID: scope.suiteID,

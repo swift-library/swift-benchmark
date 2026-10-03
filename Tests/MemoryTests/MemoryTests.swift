@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Memory
 import Report
 import Testing
@@ -6,7 +9,8 @@ import Testing
 struct MemoryTests {
   @Test
   func unavailableMemoryProviderDoesNotFakeZeroMetrics() async {
-    let scope = ReportScope(runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
+    let scope = ReportScope(
+      runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
     let metrics = await UnavailableMemoryMetricProvider(reason: "unsupported").metrics(for: scope)
 
     #expect(metrics.count == 4)
@@ -17,7 +21,8 @@ struct MemoryTests {
 
   @Test
   func manualMemoryProviderReportsMeasuredValues() async {
-    let scope = ReportScope(runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
+    let scope = ReportScope(
+      runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
     let metrics = await ManualMemoryMetricProvider(
       peakResidentBytes: 4096,
       allocatedBytes: 2048,
@@ -30,24 +35,27 @@ struct MemoryTests {
 
   @Test
   func residentMemoryProviderReportsMeasuredOrUnavailableState() async {
-    let scope = ReportScope(runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
+    let scope = ReportScope(
+      runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
     let metrics = await ResidentMemoryMetricProvider().metrics(for: scope)
 
     #if canImport(Darwin)
-    #expect(metrics.map(\.name) == [
-      MemoryMetricName.residentBytes,
-      MemoryMetricName.peakResidentBytes,
-    ])
-    #expect(metrics.allSatisfy { $0.state.kind == .measured })
-    #expect(metrics.allSatisfy { ($0.state.value ?? 0) > 0 })
+      #expect(
+        metrics.map(\.name) == [
+          MemoryMetricName.residentBytes,
+          MemoryMetricName.peakResidentBytes,
+        ])
+      #expect(metrics.allSatisfy { $0.state.kind == .measured })
+      #expect(metrics.allSatisfy { ($0.state.value ?? 0) > 0 })
     #else
-    #expect(metrics.allSatisfy { $0.state.kind == .unavailable })
+      #expect(metrics.allSatisfy { $0.state.kind == .unavailable })
     #endif
   }
 
   @Test
   func manualAllocationProviderReportsNetPeakAndLeakToleranceMetrics() async {
-    let scope = ReportScope(runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
+    let scope = ReportScope(
+      runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
     let metrics = await ManualAllocationMetricProvider(
       snapshot: AllocationMetricSnapshot(
         allocatedBytes: 4096,
@@ -60,17 +68,18 @@ struct MemoryTests {
       )
     ).metrics(for: scope)
 
-    #expect(metrics.map(\.name) == [
-      MemoryMetricName.allocatedBytes,
-      MemoryMetricName.deallocatedBytes,
-      MemoryMetricName.netAllocatedBytes,
-      MemoryMetricName.peakAllocatedBytes,
-      MemoryMetricName.allocationCount,
-      MemoryMetricName.deallocationCount,
-      MemoryMetricName.netAllocationCount,
-      MemoryMetricName.leakCount,
-      MemoryMetricName.leakedBytes,
-    ])
+    #expect(
+      metrics.map(\.name) == [
+        MemoryMetricName.allocatedBytes,
+        MemoryMetricName.deallocatedBytes,
+        MemoryMetricName.netAllocatedBytes,
+        MemoryMetricName.peakAllocatedBytes,
+        MemoryMetricName.allocationCount,
+        MemoryMetricName.deallocationCount,
+        MemoryMetricName.netAllocationCount,
+        MemoryMetricName.leakCount,
+        MemoryMetricName.leakedBytes,
+      ])
     #expect(metrics.map(\.state.kind).allSatisfy { $0 == .measured })
     #expect(metrics[2].state.value == 3072)
     #expect(metrics[6].state.value == 6)
@@ -78,7 +87,8 @@ struct MemoryTests {
 
   @Test
   func manualAllocationProviderFailsLeaksAboveTolerance() async {
-    let scope = ReportScope(runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
+    let scope = ReportScope(
+      runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
     let metrics = await ManualAllocationMetricProvider(
       snapshot: AllocationMetricSnapshot(
         allocatedBytes: 4096,
@@ -99,7 +109,8 @@ struct MemoryTests {
 
   @Test
   func allocationRegressionAnalyzerDropsPreheatAndAggregatesMeasuredRuns() async throws {
-    let scope = ReportScope(runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
+    let scope = ReportScope(
+      runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
     let analyzer = AllocationRegressionAnalyzer(
       policy: AllocationRegressionPolicy(
         preheatIterations: 1,
@@ -155,7 +166,8 @@ struct MemoryTests {
 
   @Test
   func fileDescriptorLeakCheckReportsMeasuredAndFailedStates() {
-    let scope = ReportScope(runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
+    let scope = ReportScope(
+      runID: "run:memory", suiteID: "suite:parser", caseID: "case:parser.parse")
     let passing = FileDescriptorLeakCheck(
       before: FileDescriptorSnapshot(openFileDescriptorCount: 4),
       after: FileDescriptorSnapshot(openFileDescriptorCount: 5),
@@ -167,8 +179,11 @@ struct MemoryTests {
       tolerance: 1
     ).metrics(for: scope)
 
-    #expect(passing.first { $0.name == MemoryMetricName.fileDescriptorLeakCount }?.state.kind == .measured)
-    #expect(failing.first { $0.name == MemoryMetricName.fileDescriptorLeakCount }?.state.kind == .failed)
+    #expect(
+      passing.first { $0.name == MemoryMetricName.fileDescriptorLeakCount }?.state.kind == .measured
+    )
+    #expect(
+      failing.first { $0.name == MemoryMetricName.fileDescriptorLeakCount }?.state.kind == .failed)
     #expect(failing.first { $0.name == MemoryMetricName.fileDescriptorCount }?.state.value == 7)
   }
 }

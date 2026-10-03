@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
@@ -112,7 +115,8 @@ enum InstrumentsMacroExpansion {
     from node: some FreestandingMacroExpansionSyntax
   ) throws -> ExprSyntax {
     let parsed = try parseEventArguments(from: Array(node.arguments))
-    return "Instruments.current.recordEvent(\(parsed.nameExpr), attributes: \(parsed.attributesExpr))"
+    return
+      "Instruments.current.recordEvent(\(parsed.nameExpr), attributes: \(parsed.attributesExpr))"
   }
 
   static func spanNameExpression(
@@ -169,7 +173,8 @@ enum InstrumentsMacroExpansion {
       )
     }
 
-    throw InstrumentsMacroError.unsupportedAttachedDeclaration(explicitAttributeName ?? "Instrumented")
+    throw InstrumentsMacroError.unsupportedAttachedDeclaration(
+      explicitAttributeName ?? "Instrumented")
   }
 
   static func instrumentedFunctionBody(
@@ -335,7 +340,8 @@ private final class NestedInstrumentsMacroLowerer: SyntaxRewriter {
         let span = awaitExpr.expression.as(MacroExpansionExprSyntax.self),
         isSpanMacro(span)
       {
-        return try wrapTry(node, isAwaiting: true, around: lowerSpan(span, invocation: "try await "))
+        return try wrapTry(
+          node, isAwaiting: true, around: lowerSpan(span, invocation: "try await "))
       }
     } catch {
       record(error)
@@ -522,7 +528,8 @@ public struct InstrumentedMembersMacro: MemberAttributeMacro {
       functionDecl.body != nil,
       !InstrumentsMacroExpansion.hasInstrumentationAttribute(functionDecl)
     {
-      let spanName = "\(InstrumentsMacroExpansion.typeName(for: declaration)).\(functionDecl.name.text)"
+      let spanName =
+        "\(InstrumentsMacroExpansion.typeName(for: declaration)).\(functionDecl.name.text)"
       return ["@Span(\(literal: spanName))"]
     }
 

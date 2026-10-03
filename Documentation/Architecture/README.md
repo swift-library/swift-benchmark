@@ -44,3 +44,5 @@ Related implementation reference:
   test matrix, and report expectations for the Benchmark implementation goal.
 
 Official Apple/Swift alignment belongs in the relevant architecture documents.
+
+- `VersioningAndRelease.md`: version authority, compatibility, supported environments and release acceptance.

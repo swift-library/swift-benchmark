@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
+// Copyright (c) 2020-present Xudong Xu
+
 import Foundation
 import PackagePlugin
 
@@ -22,7 +25,12 @@ struct BenchmarkPlugin: CommandPlugin {
     }
     try runProcess(
       executable: cliTool.url,
-      arguments: [command, "--host", host.path] + Array(arguments.dropFirst())
+      arguments: [command, "--host", host.path] + Array(arguments.dropFirst()),
+      environment: [
+        "SWIFT_BENCHMARK_BUILD_CONFIGURATION": buildConfigurationName(
+          matching: cliTool.url
+        )
+      ]
     )
   }
 
@@ -46,8 +54,9 @@ struct BenchmarkPlugin: CommandPlugin {
       throw PluginError.noBenchmarksDiscovered
     }
 
+    let configuration = buildConfiguration(matching: cliTool.url)
     let parameters = PackageManager.BuildParameters(
-      configuration: buildConfiguration(matching: cliTool.url),
+      configuration: configuration,
       logging: .concise,
       echoLogs: false
     )
@@ -62,11 +71,14 @@ struct BenchmarkPlugin: CommandPlugin {
     let objectFiles = try objectFiles(
       forTargetNames: plan.discoveredTargetNames,
       in: context.package,
-      buildDirectory: buildDirectory
+      buildDirectory: buildDirectory,
+      workDirectory: context.pluginWorkDirectoryURL
     )
-    let generatedSources = [URL(fileURLWithPath: plan.generatedHostSourcePath)]
+    let generatedSources =
+      [URL(fileURLWithPath: plan.generatedHostSourcePath)]
       + plan.testingBridges.map { URL(fileURLWithPath: $0.sourcePath) }
-    let testingArguments = plan.requiresSwiftTesting
+    let testingArguments =
+      plan.requiresSwiftTesting
       ? try swiftTestingLibraryArguments()
       : []
     let moduleMapArguments = moduleMapImportArguments(
@@ -82,6 +94,8 @@ struct BenchmarkPlugin: CommandPlugin {
         "swiftc",
         "-parse-as-library",
         "-enable-testing",
+        "-I",
+        buildDirectory.path,
         "-I",
         buildDirectory.appendingPathComponent("Modules").path,
         "-o",
@@ -123,16 +137,21 @@ struct BenchmarkPlugin: CommandPlugin {
     return .debug
   }
 
+  private func buildConfigurationName(matching toolURL: URL) -> String {
+    buildConfiguration(matching: toolURL) == .release ? "release" : "debug"
+  }
+
   private func moduleMapImportArguments(
     package: Package,
     discoveredTargetNames: [String],
     packageDirectory: URL,
     buildDirectory: URL
   ) -> [String] {
-    let searchRoots = moduleMapCheckoutRoots(
-      packageDirectory: packageDirectory,
-      buildDirectory: buildDirectory
-    )
+    let searchRoots =
+      moduleMapCheckoutRoots(
+        packageDirectory: packageDirectory,
+        buildDirectory: buildDirectory
+      )
       + moduleMapSourceRoots(
         forTargetNames: discoveredTargetNames,
         in: package
@@ -155,7 +174,8 @@ struct BenchmarkPlugin: CommandPlugin {
       where file.lastPathComponent == "module.modulemap" {
         let includeDirectory = file.deletingLastPathComponent().path
         if let moduleName = moduleMapName(at: file) {
-          includeDirectoriesByModule[moduleName] = includeDirectoriesByModule[moduleName]
+          includeDirectoriesByModule[moduleName] =
+            includeDirectoriesByModule[moduleName]
             ?? includeDirectory
         } else {
           anonymousIncludeDirectories.insert(includeDirectory)
@@ -242,9 +262,10 @@ struct BenchmarkPlugin: CommandPlugin {
       )
     }
 
-    let shouldSearchPackageBuildRoot = activeBuildRoot.map {
-      samePath($0, packageBuildDirectory)
-    } ?? true
+    let shouldSearchPackageBuildRoot =
+      activeBuildRoot.map {
+        samePath($0, packageBuildDirectory)
+      } ?? true
     if shouldSearchPackageBuildRoot {
       appendUnique(
         packageBuildDirectory.appendingPathComponent("checkouts"),
@@ -264,11 +285,14 @@ struct BenchmarkPlugin: CommandPlugin {
     for _ in 0..<8 {
       if FileManager.default.fileExists(
         atPath: current.appendingPathComponent("workspace-state.json").path
-      ) || FileManager.default.fileExists(
-        atPath: current.appendingPathComponent("checkouts").path
-      ) || FileManager.default.fileExists(
-        atPath: current.appendingPathComponent("repositories").path
-      ) {
+      )
+        || FileManager.default.fileExists(
+          atPath: current.appendingPathComponent("checkouts").path
+        )
+        || FileManager.default.fileExists(
+          atPath: current.appendingPathComponent("repositories").path
+        )
+      {
         return current
       }
 
@@ -473,7 +497,8 @@ struct BenchmarkPlugin: CommandPlugin {
   private func objectFiles(
     forTargetNames discoveredTargetNames: [String],
     in package: Package,
-    buildDirectory: URL
+    buildDirectory: URL,
+    workDirectory: URL
   ) throws -> [URL] {
     var sourceTargetsByName: [String: any SourceModuleTarget] = [:]
     for target in package.sourceModules {
@@ -488,6 +513,12 @@ struct BenchmarkPlugin: CommandPlugin {
       }
       for dependency in target.recursiveTargetDependencies {
         if let sourceModule = dependency.sourceModule {
+          guard sourceModule.kind != .macro,
+            sourceModule.kind != .executable,
+            sourceModule.kind != .snippet
+          else {
+            continue
+          }
           targetNames.insert(sourceModule.name)
         } else {
           targetNames.insert(dependency.name)
@@ -495,12 +526,34 @@ struct BenchmarkPlugin: CommandPlugin {
       }
     }
 
-    var files: [URL] = []
-    for targetName in targetNames.sorted() {
-      let directory = buildDirectory.appendingPathComponent("\(targetName).build")
-      files += objectFiles(in: directory)
+    let requiredObjectNames = Set(targetNames.map { $0.lowercased() })
+    let productObjects = productObjectFiles(in: buildDirectory).filter {
+      requiredObjectNames.contains($0.deletingPathExtension().lastPathComponent.lowercased())
     }
-    files += nativeObjectFiles(in: buildDirectory)
+    let productObjectNames = Set(
+      productObjects.map {
+        $0.deletingPathExtension().lastPathComponent.lowercased()
+      }
+    )
+    var files = productObjects
+    for targetName in targetNames.sorted() {
+      guard !productObjectNames.contains(targetName.lowercased()) else {
+        continue
+      }
+      for directory in targetBuildDirectories(
+        named: targetName,
+        buildDirectory: buildDirectory
+      ) {
+        files += objectFiles(in: directory)
+        if let entryPoint = try sanitizedTestEntryPointObject(
+          in: directory,
+          targetName: targetName,
+          workDirectory: workDirectory
+        ) {
+          files.append(entryPoint)
+        }
+      }
+    }
     files = Array(Dictionary(grouping: files, by: \.path).values.compactMap(\.first))
     guard !files.isEmpty else {
       throw PluginError.noObjectFiles(buildDirectory.path)
@@ -509,45 +562,167 @@ struct BenchmarkPlugin: CommandPlugin {
   }
 
   private func objectFiles(in directory: URL) -> [URL] {
-    guard let enumerator = FileManager.default.enumerator(
-      at: directory,
-      includingPropertiesForKeys: nil
-    ) else {
+    guard
+      let enumerator = FileManager.default.enumerator(
+        at: directory,
+        includingPropertiesForKeys: nil
+      )
+    else {
       return []
     }
 
     var files: [URL] = []
     for case let file as URL in enumerator
-    where file.pathExtension == "o" && file.lastPathComponent != "main.swift.o" {
+    where file.pathExtension == "o" && !isEntryPointObject(file) {
       files.append(file)
     }
     return files
   }
 
-  private func nativeObjectFiles(in buildDirectory: URL) -> [URL] {
-    guard let targetDirectories = try? FileManager.default.contentsOfDirectory(
-      at: buildDirectory,
-      includingPropertiesForKeys: nil
-    ) else {
+  private func sanitizedTestEntryPointObject(
+    in directory: URL,
+    targetName: String,
+    workDirectory: URL
+  ) throws -> URL? {
+    #if os(macOS)
+      guard let input = testEntryPointObject(in: directory) else {
+        return nil
+      }
+
+      let symbols = workDirectory.appendingPathComponent("localized-entry-point-symbols.txt")
+      try Data("_main\n".utf8).write(to: symbols)
+      let output = workDirectory.appendingPathComponent(
+        "\(targetName)-localized-test-entry-point.o"
+      )
+      try? FileManager.default.removeItem(at: output)
+      try runProcess(
+        executable: URL(fileURLWithPath: "/usr/bin/xcrun"),
+        arguments: [
+          "nmedit",
+          "-R",
+          symbols.path,
+          input.path,
+          "-o",
+          output.path,
+        ],
+        captureOutputOnFailure: true
+      )
+      return output
+    #else
+      return nil
+    #endif
+  }
+
+  private func testEntryPointObject(in directory: URL) -> URL? {
+    guard
+      let enumerator = FileManager.default.enumerator(
+        at: directory,
+        includingPropertiesForKeys: nil
+      )
+    else {
+      return nil
+    }
+
+    for case let file as URL in enumerator
+    where file.lastPathComponent == "test_entry_point.o" {
+      return file
+    }
+    return nil
+  }
+
+  private func targetBuildDirectories(
+    named targetName: String,
+    buildDirectory: URL
+  ) -> [URL] {
+    let direct = buildDirectory.appendingPathComponent("\(targetName).build")
+    if FileManager.default.fileExists(atPath: direct.path) {
+      return [direct]
+    }
+
+    guard let buildRoot = swiftPMBuildRoot(containing: buildDirectory) else {
+      return []
+    }
+    let intermediates =
+      buildRoot
+      .appendingPathComponent("out")
+      .appendingPathComponent("Intermediates.noindex")
+    guard
+      let enumerator = FileManager.default.enumerator(
+        at: intermediates,
+        includingPropertiesForKeys: [.isDirectoryKey],
+        options: [.skipsHiddenFiles]
+      )
+    else {
       return []
     }
 
-    return targetDirectories
-      .filter { $0.pathExtension == "build" && !$0.lastPathComponent.hasSuffix("-tool.build") }
-      .flatMap(objectFiles(in:))
-      .filter { !$0.lastPathComponent.hasSuffix(".swift.o") }
+    let normalizedTargetName = targetName.lowercased()
+    let targetPrefix = "\(normalizedTargetName)-"
+    let configurationName = buildDirectory.lastPathComponent
+    var directories: [URL] = []
+    for case let directory as URL in enumerator {
+      guard directory.pathExtension == "build" else {
+        continue
+      }
+      let basename = directory.deletingPathExtension().lastPathComponent
+        .lowercased()
+      guard basename == normalizedTargetName || basename.hasPrefix(targetPrefix) else {
+        continue
+      }
+      guard
+        directory.pathComponents.contains(where: {
+          $0.caseInsensitiveCompare(configurationName) == .orderedSame
+        })
+      else {
+        enumerator.skipDescendants()
+        continue
+      }
+      directories.append(directory)
+      enumerator.skipDescendants()
+    }
+    return directories.sorted { $0.path < $1.path }
+  }
+
+  private func isEntryPointObject(_ file: URL) -> Bool {
+    switch file.lastPathComponent {
+    case "main.o", "Main.o", "main.swift.o", "test_entry_point.o":
+      return true
+    default:
+      return false
+    }
+  }
+
+  private func productObjectFiles(in buildDirectory: URL) -> [URL] {
+    guard
+      let products = try? FileManager.default.contentsOfDirectory(
+        at: buildDirectory,
+        includingPropertiesForKeys: nil
+      )
+    else {
+      return []
+    }
+
+    return
+      products
+      .filter { $0.pathExtension == "o" && !isEntryPointObject($0) }
+      .sorted { $0.path < $1.path }
   }
 
   @discardableResult
   private func runProcess(
     executable: URL,
     arguments: [String],
+    environment: [String: String] = [:],
     captureOutput: Bool = false,
     captureOutputOnFailure: Bool = false
   ) throws -> String {
     let process = Process()
     process.executableURL = executable
     process.arguments = arguments
+    process.environment = ProcessInfo.processInfo.environment.merging(
+      environment,
+      uniquingKeysWith: { _, override in override }
+    )
     let stdout = Pipe()
     let stderr = Pipe()
     if captureOutput || captureOutputOnFailure {
@@ -557,13 +732,37 @@ struct BenchmarkPlugin: CommandPlugin {
       process.standardError = stderr
     }
     try process.run()
-    process.waitUntilExit()
 
-    let output = (captureOutput || captureOutputOnFailure)
-      ? String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    let outputData = CapturedProcessData()
+    let errorData = CapturedProcessData()
+    let readers = DispatchGroup()
+    if captureOutput || captureOutputOnFailure {
+      let handle = stdout.fileHandleForReading
+      readers.enter()
+      DispatchQueue.global().async {
+        outputData.data = handle.readDataToEndOfFile()
+        readers.leave()
+      }
+    }
+    if captureOutputOnFailure {
+      let handle = stderr.fileHandleForReading
+      readers.enter()
+      DispatchQueue.global().async {
+        errorData.data = handle.readDataToEndOfFile()
+        readers.leave()
+      }
+    }
+
+    process.waitUntilExit()
+    readers.wait()
+
+    let output =
+      (captureOutput || captureOutputOnFailure)
+      ? String(decoding: outputData.data, as: UTF8.self)
       : ""
-    let error = captureOutputOnFailure
-      ? String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    let error =
+      captureOutputOnFailure
+      ? String(decoding: errorData.data, as: UTF8.self)
       : ""
 
     guard process.terminationStatus == 0 else {
@@ -576,6 +775,10 @@ struct BenchmarkPlugin: CommandPlugin {
     }
     return output
   }
+}
+
+private final class CapturedProcessData: @unchecked Sendable {
+  var data = Data()
 }
 
 private struct TargetManifest: Encodable {
@@ -636,7 +839,8 @@ enum PluginError: Error, CustomStringConvertible {
         ? "\(executable) exited with status \(status)."
         : "\(executable) exited with status \(status):\n\(details)"
     case .noBenchmarksDiscovered:
-      return "No @BenchmarkSuite declarations were discovered in library targets and no @Suite(.benchmark...) or @Test(.benchmark...) declarations were discovered in test targets."
+      return
+        "No @BenchmarkSuite declarations were discovered in library targets and no @Suite(.benchmark...) or @Test(.benchmark...) declarations were discovered in test targets."
     case .noObjectFiles(let directory):
       return "No Swift object files were found under \(directory)."
     case .swiftTestingRuntimeUnavailable(let attempted):
