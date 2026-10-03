@@ -44,6 +44,8 @@ include paths discovered from SwiftPM checkout roots. The active build/scratch
 root takes precedence, and package `.build` checkout roots are fallback
 behavior for default or older local layouts.
 Source-root lookup is limited to Clang targets and ignores hidden build trees.
+Explicit header modulemaps and SwiftPM-generated modulemaps for those Clang
+targets both contribute import paths.
 The host compiler's module cache belongs to the plugin work directory, which is
 writable within the command-plugin sandbox.
 Testing bridge hosts also use the selected SDK's test framework and support

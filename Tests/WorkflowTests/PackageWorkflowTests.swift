@@ -599,10 +599,12 @@ struct PackageWorkflowTests {
     #expect(run.contains("\"buildConfiguration\" : \"release\""))
   }
 
-  @Test(.timeLimit(.minutes(10)))
-  func fixturePackageCommandFindsCModuleMapsInExternalScratchPath() throws {
-    let sourceRoot = URL(fileURLWithPath: scratchPath("fixture-c-module-package-source"))
-    let scratch = URL(fileURLWithPath: scratchPath("fixture-c-module-package-external-scratch"))
+  @Test(.timeLimit(.minutes(10)), .serialized, arguments: [true, false])
+  func fixturePackageCommandFindsCModuleMapsInExternalScratchPath(explicitModuleMap: Bool) throws {
+    let layout = explicitModuleMap ? "explicit" : "generated"
+    let sourceRoot = URL(fileURLWithPath: scratchPath("fixture-c-module-package-source-\(layout)"))
+    let scratch = URL(
+      fileURLWithPath: scratchPath("fixture-c-module-package-external-scratch-\(layout)"))
     try? FileManager.default.removeItem(at: sourceRoot)
     try? FileManager.default.removeItem(at: scratch)
     try FileManager.default.createDirectory(
@@ -612,7 +614,7 @@ struct PackageWorkflowTests {
 
     let dependency = sourceRoot.appendingPathComponent("CModuleDependency")
     let package = sourceRoot.appendingPathComponent("CModuleBenchmarkPackage")
-    try writeCModuleDependencyPackage(at: dependency)
+    try writeCModuleDependencyPackage(at: dependency, explicitModuleMap: explicitModuleMap)
     try initializeGitRepository(at: dependency)
     try writeCModuleBenchmarkPackage(
       at: package,
@@ -807,7 +809,7 @@ struct PackageWorkflowTests {
       .path
   }
 
-  private func writeCModuleDependencyPackage(at package: URL) throws {
+  private func writeCModuleDependencyPackage(at package: URL, explicitModuleMap: Bool) throws {
     try writeFile(
       """
       // swift-tools-version: 6.0
@@ -842,17 +844,19 @@ struct PackageWorkflowTests {
         "Sources/CModuleDependency/include/CModuleDependency.h"
       )
     )
-    try writeFile(
-      """
-      module CModuleDependency {
-        header "CModuleDependency.h"
-        export *
-      }
-      """,
-      to: package.appendingPathComponent(
-        "Sources/CModuleDependency/include/module.modulemap"
+    if explicitModuleMap {
+      try writeFile(
+        """
+        module CModuleDependency {
+          header "CModuleDependency.h"
+          export *
+        }
+        """,
+        to: package.appendingPathComponent(
+          "Sources/CModuleDependency/include/module.modulemap"
+        )
       )
-    )
+    }
     try writeFile(
       """
       #include "CModuleDependency.h"

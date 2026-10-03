@@ -158,10 +158,11 @@ struct BenchmarkPlugin: CommandPlugin {
       )
       + moduleMapSourceRoots(
         forTargetNames: discoveredTargetNames,
-        in: package
+        in: package,
+        buildDirectory: buildDirectory
       )
-    var includeDirectoriesByModule: [String: String] = [:]
-    var anonymousIncludeDirectories: Set<String> = []
+    var moduleMapsByName: [String: String] = [:]
+    var anonymousModuleMaps: Set<String> = []
 
     for root in searchRoots {
       guard
@@ -176,26 +177,27 @@ struct BenchmarkPlugin: CommandPlugin {
       }
 
       for case let file as URL in enumerator
-      where file.lastPathComponent == "module.modulemap" {
-        let includeDirectory = file.deletingLastPathComponent().path
+      where file.pathExtension == "modulemap" {
         if let moduleName = moduleMapName(at: file) {
-          includeDirectoriesByModule[moduleName] =
-            includeDirectoriesByModule[moduleName]
-            ?? includeDirectory
+          moduleMapsByName[moduleName] = moduleMapsByName[moduleName] ?? file.path
         } else {
-          anonymousIncludeDirectories.insert(includeDirectory)
+          anonymousModuleMaps.insert(file.path)
         }
       }
     }
 
-    let includeDirectories = Set(includeDirectoriesByModule.values)
-      .union(anonymousIncludeDirectories)
+    let moduleMaps = Set(moduleMapsByName.values).union(anonymousModuleMaps).sorted()
+    let includeDirectories = Set(
+      moduleMaps.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
+    )
     return includeDirectories.sorted().flatMap { ["-I", $0] }
+      + moduleMaps.flatMap { ["-Xcc", "-fmodule-map-file=\($0)"] }
   }
 
   private func moduleMapSourceRoots(
     forTargetNames discoveredTargetNames: [String],
-    in package: Package
+    in package: Package,
+    buildDirectory: URL
   ) -> [URL] {
     var sourceTargetsByName: [String: any SourceModuleTarget] = [:]
     for target in package.sourceModules {
@@ -206,10 +208,18 @@ struct BenchmarkPlugin: CommandPlugin {
     var seen: Set<String> = []
 
     func appendSourceModule(_ module: any SourceModuleTarget) {
-      guard module is ClangSourceModuleTarget, let root = sourceRoot(for: module) else {
+      guard let clang = module as? ClangSourceModuleTarget else {
         return
       }
-      appendUnique(root, to: &roots, seen: &seen)
+      if let headers = clang.publicHeadersDirectoryURL {
+        appendUnique(headers, to: &roots, seen: &seen)
+      }
+      if let root = sourceRoot(for: clang) {
+        appendUnique(root, to: &roots, seen: &seen)
+      }
+      for directory in targetBuildDirectories(named: clang.name, buildDirectory: buildDirectory) {
+        appendUnique(directory, to: &roots, seen: &seen)
+      }
     }
 
     for targetName in discoveredTargetNames {
@@ -702,7 +712,6 @@ struct BenchmarkPlugin: CommandPlugin {
           $0.caseInsensitiveCompare(configurationName) == .orderedSame
         })
       else {
-        enumerator.skipDescendants()
         continue
       }
       directories.append(directory)
