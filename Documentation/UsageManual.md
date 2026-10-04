@@ -98,14 +98,14 @@ bridge, and runs them through `BenchmarkRunner` and `ReportDocument`.
 ```bash
 swift package benchmark list
 swift package benchmark run --format console
-swift package benchmark run --tag parser --format json --output .build/benchmark-report.json
+swift package --allow-writing-to-directory .build benchmark run --tag parser --format json --output .build/benchmark-report.json
 ```
 
 Use tags for local focus and CI selection:
 
 ```bash
 swift package benchmark list --tag parser --format json
-swift package benchmark run --tag parser --quiet --format json --output .build/parser-report.json
+swift package --allow-writing-to-directory .build benchmark run --tag parser --quiet --format json --output .build/parser-report.json
 ```
 
 ### Discovery Backend Selection
@@ -149,8 +149,8 @@ ordinary users depend on SwiftPM's current source-built SwiftSyntax plugin path.
 Create or refresh a baseline from a known-good report:
 
 ```bash
-swift package benchmark run --tag parser --format json --output .build/parser-report.json
-swift package benchmark baseline write \
+swift package --allow-writing-to-directory .build benchmark run --tag parser --format json --output .build/parser-report.json
+swift package --allow-writing-to-directory Benchmarks benchmark baseline write \
   --input .build/parser-report.json \
   --output Benchmarks/parser-baseline.json
 ```
@@ -158,7 +158,7 @@ swift package benchmark baseline write \
 Check future runs against that baseline:
 
 ```bash
-swift package benchmark check \
+swift package --allow-writing-to-directory .build benchmark check \
   --tag parser \
   --baseline Benchmarks/parser-baseline.json \
   --baseline-metric p95 \
@@ -176,7 +176,7 @@ regression failure, budget failure, or required diagnostic failure. Exit code
 Use a single-run budget when no saved baseline is desired:
 
 ```bash
-swift package benchmark run \
+swift package --allow-writing-to-directory .build benchmark run \
   --tag parser \
   --budget p95:5000000 \
   --format json \
@@ -307,10 +307,10 @@ for native benchmarks and lowers to `Benchmark.Scale` rows.
 JSON is the stable exchange format:
 
 ```bash
-swift package benchmark run --tag parser --format json --output .build/report.json
+swift package --allow-writing-to-directory .build benchmark run --tag parser --format json --output .build/report.json
 swift package benchmark render --input .build/report.json --format console
-swift package benchmark render --input .build/report.json --format markdown --output .build/report.md
-swift package benchmark render --input .build/report.json --format speedscope --output .build/report.speedscope.json
+swift package --allow-writing-to-directory .build benchmark render --input .build/report.json --format markdown --output .build/report.md
+swift package --allow-writing-to-directory .build benchmark render --input .build/report.json --format speedscope --output .build/report.speedscope.json
 ```
 
 HTML, dashboards, and richer presentations should consume `ReportDocument`
@@ -334,13 +334,21 @@ swift package benchmark diff --input <report.json> --baseline <baseline.json> --
 swift package benchmark render --input <report.json> --format console|json|markdown|speedscope
 ```
 
+SwiftPM runs command plugins in a sandbox. Commands that write a file with
+`--output`, or write a baseline, need write access to that directory, granted
+before `benchmark`:
+
+```bash
+swift package --allow-writing-to-directory .build benchmark run --format json --output .build/report.json
+```
+
 For performance baselines and CI gates, run the package workflow with SwiftPM's
 release configuration. Put `--configuration release` before `benchmark`,
 because it is a SwiftPM package option:
 
 ```bash
 swift package --configuration release benchmark list
-swift package --configuration release benchmark run --format json --output .build/release-benchmark-report.json
+swift package --configuration release --allow-writing-to-directory .build benchmark run --format json --output .build/release-benchmark-report.json
 swift package --configuration release benchmark check --baseline Benchmarks/baseline.json
 ```
 
@@ -371,7 +379,7 @@ targets, including workflows that use an external `--scratch-path`.
 Timeline attribution captures the Benchmark/Instruments execution path:
 
 ```bash
-swift package benchmark run \
+swift package --allow-writing-to-directory .build benchmark run \
   --tag parser \
   --timeline \
   --format json \
@@ -403,7 +411,7 @@ for deeper Instruments analysis.
 Attach an existing Instruments trace:
 
 ```bash
-swift package benchmark run \
+swift package --allow-writing-to-directory .build benchmark run \
   --tag parser \
   --trace .build/parser.trace \
   --format json \
@@ -422,7 +430,7 @@ swift package benchmark run \
 Record a trace through `xcrun xctrace`:
 
 ```bash
-swift package benchmark trace \
+swift package --allow-writing-to-directory .build benchmark trace \
   --tag parser \
   --xctrace-output .build/parser.trace \
   --xctrace-template "Time Profiler" \
