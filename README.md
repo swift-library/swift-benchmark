@@ -5,7 +5,7 @@
 <h1 align="center">swift-benchmark</h1>
 
 <p align="center">
-  Runtime instrumentation, repeatable benchmarks and structured performance reports for Swift packages.
+  Runtime instrumentation, repeatable benchmarks, and structured performance reports for Swift packages.
 </p>
 
 <p align="center">
@@ -33,11 +33,11 @@ as a timeline, and in Instruments through Apple Signpost.
 
 - Benchmarks declared with Swift Testing traits, or with native
   `@BenchmarkSuite` and `@Benchmark` in library targets.
-- Warmup, fixed or adaptive iterations, argument rows and input-size curves.
-- `ReportDocument` JSON with baselines, budgets, diffs and stable CI exit codes.
+- Warmup, fixed or adaptive iterations, argument rows, and input-size curves.
+- `ReportDocument` JSON with baselines, budgets, diffs, and stable CI exit codes.
 - `#span`, `#event` and `@Instrumented` backed by Apple Signpost, with portable
   fallbacks.
-- Resident memory, allocation and `xctrace` evidence attached to reports.
+- Resident memory, allocation, and `xctrace` evidence attached to reports.
 
 ## Install
 
@@ -103,7 +103,7 @@ swift package --configuration release benchmark run
 ```
 
 `swift test` still runs the declaration once as an ordinary test. Measurement,
-reports, baselines and budgets come from `swift package benchmark`.
+reports, baselines, and budgets come from `swift package benchmark`.
 
 SwiftPM runs the plugin in a sandbox, so commands that write files need write
 access to the target directory. Save a JSON report and record it as a baseline:
@@ -129,15 +129,19 @@ swift package --configuration release benchmark check \
 ```
 
 `check` exits with a nonzero status when a regression, budget, execution,
-configuration or required-diagnostic failure occurs.
+configuration, or required-diagnostic failure occurs.
+
+<p align="center">
+  <img src="Documentation/Assets/Demo.svg" alt="Terminal session: swift package benchmark list prints three argument rows of the Count words benchmark, then benchmark check against the saved baseline prints a passed verdict with mean and p95 timings">
+</p>
 
 ## Products
 
 | Product | Use it for |
 | --- | --- |
-| `Instruments` | Production-safe spans, events and instrumentation macros |
-| `Benchmark` | Benchmark declarations, discovery, runner and measurement rows |
-| `Report` | JSON reports, baselines, budgets, diffs and input-size curves |
+| `Instruments` | Production-safe spans, events, and instrumentation macros |
+| `Benchmark` | Benchmark declarations, discovery, runner, and measurement rows |
+| `Report` | JSON reports, baselines, budgets, diffs, and input-size curves |
 | `Memory` | Resident memory and allocation evidence |
 | `BenchmarkTesting` | The Swift Testing `.benchmark` trait |
 | `BenchmarkXCTest` | Benchmarks driven from XCTest |
@@ -220,8 +224,8 @@ func openProject() async throws -> Project {
 }
 ```
 
-The function and initializer macros preserve return values, thrown errors and
-async behavior. Run a benchmark with `--timeline` to attribute measured time to
+The function and initializer macros preserve return values, thrown errors,
+and async behavior. Run a benchmark with `--timeline` to attribute measured time to
 these spans in the report:
 
 ```bash
@@ -243,7 +247,7 @@ the run.
 - iOS 18 or later, macOS 15 or later
 
 Each release supports the three most recent major versions of each declared
-platform, currently iOS 18, 26 and 27, and macOS 15, 26 and 27. The
+platform, currently iOS 18, 26, and 27, and macOS 15, 26, and 27. The
 [versioning and release policy](Documentation/Architecture/VersioningAndRelease.md)
 describes compatibility and maintenance. `swift-benchmark-cli --version` and
 `swift package benchmark --version` print the installed version.
@@ -251,9 +255,9 @@ describes compatibility and maintenance. `swift-benchmark-cli --version` and
 ## Documentation
 
 - [Usage manual](Documentation/UsageManual.md): every API, command, CI workflow,
-  diagnostic and adapter, with troubleshooting.
+  diagnostic, and adapter, with troubleshooting.
 - [Product domains](Documentation/Architecture/ProductDomains.md): how
-  Instruments, Benchmark, Report and the adapters fit together.
+  Instruments, Benchmark, Report, and the adapters fit together.
 - [Architecture](Documentation/Architecture/README.md): design notes for each
   product.
 - [Changelog](CHANGELOG.md)
