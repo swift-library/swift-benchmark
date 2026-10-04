@@ -121,9 +121,8 @@ metrics, baselines, budgets, diffs, curve records, and attachments.
 
 ## Apple Alignment
 
-Apple `swift-collections-benchmark` remains the trusted source for the
-lower-level input-size mental model, but the local architecture does not copy
-Apple task topology.
+The lower-level input-size model follows Apple `swift-collections-benchmark`;
+the local architecture does not copy its task topology.
 
 | Apple concept | Local concept |
 | --- | --- |

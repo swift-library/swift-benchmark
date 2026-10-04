@@ -276,9 +276,9 @@ Input-size curve behavior is implemented through Benchmark Dimension and
 Report DimensionCurve. There is no separate input-size product domain or
 compatibility shim.
 
-Apple `swift-collections-benchmark` remains the trusted source for lower-level
-input-size and amortized semantics. Swift Testing remains the trusted source
-for the declaration/trait/plan user experience.
+Lower-level input-size and amortized semantics follow Apple
+`swift-collections-benchmark`. The declaration, trait, and plan experience
+follows Swift Testing.
 
 ### Memory
 
