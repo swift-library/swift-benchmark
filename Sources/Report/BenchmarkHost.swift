@@ -27,13 +27,23 @@ public struct BenchmarkListEntry: Sendable, Equatable, Codable {
 }
 
 public enum BenchmarkHost {
+  package static let regressionFailureExitStatus: Int32 = 20
+
   public static func run(
     discoveries: [any _BenchmarkDiscovery.Type],
     arguments: [String] = Array(CommandLine.arguments.dropFirst()),
     metadata: RunMetadata = .local(id: "run:benchmark-host")
   ) async throws {
-    let output = try await render(
-      discoveries: discoveries, arguments: arguments, metadata: metadata)
+    let output: String
+    do {
+      output = try await render(
+        discoveries: discoveries, arguments: arguments, metadata: metadata)
+    } catch BenchmarkHostError.regressionFailure(let report) {
+      if !report.isEmpty {
+        print(report)
+      }
+      exit(regressionFailureExitStatus)
+    }
     if !output.isEmpty {
       print(output)
     }
@@ -95,7 +105,8 @@ public enum BenchmarkHost {
         throw BenchmarkHostError.noBenchmarksSelected
       }
       let baseline = try options.value(for: "--baseline").map(readBaseline)
-      let output = try await BenchmarkCommand().run(
+      let format = try options.format(default: .console)
+      let document = try await BenchmarkCommand().report(
         plan: plan,
         metadata: metadata,
         baseline: baseline,
@@ -105,26 +116,10 @@ public enum BenchmarkHost {
         timelineCapture: command == "trace" || options.hasFlag("--timeline")
           ? .benchmarkIterations : .disabled,
         metricProviders: options.metricProviders(),
-        traceExporters: options.traceExporters(runID: metadata.id),
-        format: try options.format(default: .console)
+        traceExporters: options.traceExporters(runID: metadata.id)
       )
-      let emitted = try writeOrReturn(output, options: options)
+      let emitted = try writeOrReturn(try format.render(document), options: options)
       if command == "check" {
-        let document = try JSONDecoder().decode(
-          ReportDocument.self,
-          from: Data(
-            try await BenchmarkCommand().run(
-              plan: plan,
-              metadata: metadata,
-              baseline: baseline,
-              baselineMetric: try options.metric(default: .mean),
-              threshold: try options.threshold(default: .relativePercentage(10)),
-              budgets: try options.budgets(),
-              metricProviders: options.metricProviders(),
-              traceExporters: options.traceExporters(runID: metadata.id),
-              format: .json
-            ).utf8)
-        )
         guard document.summary.failedRegressionCount == 0 && document.summary.failedBudgetCount == 0
         else {
           throw BenchmarkHostError.regressionFailure(output: emitted)

@@ -227,6 +227,11 @@ struct BenchmarkCLI {
 
     let output = stdoutCapture.string()
     let errorOutput = stderrCapture.string()
+    if process.terminationReason == .exit,
+      process.terminationStatus == BenchmarkHost.regressionFailureExitStatus
+    {
+      throw CLIError.regressionFailure(output: output.trimmingCharacters(in: .newlines))
+    }
     guard process.terminationStatus == 0 else {
       throw CLIError.hostFailure(status: process.terminationStatus, stderr: errorOutput)
     }

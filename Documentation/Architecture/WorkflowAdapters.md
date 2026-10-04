@@ -128,6 +128,11 @@ Exit codes distinguish:
 
 Success, no regression, and improvement all use exit code `0`.
 
+`check` measures the selected plan once; the rendered report and the exit
+status come from that same `ReportDocument`. A host whose check fails prints
+the report and exits with the regression-failure status, and the CLI forwards
+that report with its regression-failure exit code.
+
 Generated host compilation is a plugin implementation detail. When the plugin
 invokes `swiftc` directly, it must provide only the search paths needed to
 match the package build. C modulemap include paths come from SwiftPM checkout

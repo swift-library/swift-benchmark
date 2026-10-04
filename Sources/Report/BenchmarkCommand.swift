@@ -88,6 +88,42 @@ public struct BenchmarkCommand: Sendable {
     traceExporters: [any TraceExporter] = [],
     format: ReportFormat = .console
   ) async throws -> String {
+    try format.render(
+      await report(
+        plan: plan,
+        metadata: metadata,
+        baseline: baseline,
+        baselineMetric: baselineMetric,
+        threshold: threshold,
+        budgets: budgets,
+        attributions: attributions,
+        diagnostics: diagnostics,
+        attachments: attachments,
+        timelineCapture: timelineCapture,
+        executionObservers: executionObservers,
+        observers: observers,
+        metricProviders: metricProviders,
+        traceExporters: traceExporters
+      )
+    )
+  }
+
+  func report(
+    plan: BenchmarkRunner.Plan,
+    metadata: RunMetadata,
+    baseline: BaselineDocument? = nil,
+    baselineMetric: Report.Measurement.Metric = .mean,
+    threshold: ThresholdPolicy = .relativePercentage(10),
+    budgets: [BudgetPolicy] = [],
+    attributions: [TimelineAttribution] = [],
+    diagnostics: [DiagnosticMetric] = [],
+    attachments: [DiagnosticAttachment] = [],
+    timelineCapture: TimelineCapturePolicy = .disabled,
+    executionObservers: [any BenchmarkExecutionObserver] = [],
+    observers: [any BenchmarkObserver] = [],
+    metricProviders: [any MetricProvider] = [],
+    traceExporters: [any TraceExporter] = []
+  ) async throws -> ReportDocument {
     let runScope = ReportScope(runID: metadata.id)
     for observer in observers {
       await observer.runDidStart(scope: runScope)
@@ -158,7 +194,7 @@ public struct BenchmarkCommand: Sendable {
     for observer in observers {
       await observer.runDidFinish(scope: runScope)
     }
-    return try format.render(document)
+    return document
   }
 
   private static func validate(
