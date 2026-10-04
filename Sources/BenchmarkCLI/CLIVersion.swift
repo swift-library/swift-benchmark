@@ -2,5 +2,5 @@
 // Copyright (c) 2026 Xudong Xu
 
 enum CLIVersion {
-  static let current = "0.1.0"
+  static let current = "0.1.1"
 }

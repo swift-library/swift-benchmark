@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.1
+
+- `swift package benchmark check` measures the selected benchmarks once and
+  takes both the printed verdict and the exit status from that measurement.
+  Previously a second, separate run chose the exit status, so a check could
+  print a failed verdict and still exit 0.
+- A failed baseline or budget check prints its report before exiting nonzero.
+  `swift-benchmark-cli check` exits with its regression-failure code instead of
+  reporting a benchmark host failure.
+
 ## 0.1.0
 
 - Instruments spans, events, function/initializer macros and recorder context
