@@ -2,10 +2,8 @@
 
 ## Scope / Purpose
 
-This document records the implemented Benchmark scope. It is
-not an upstream comparison matrix. Durable architecture truth names local concepts
-and official Apple/Swift alignment only; temporary comparison evidence remains
-outside durable architecture docs.
+This document records the implemented Benchmark scope, the Apple and Swift
+sources it aligns with, and the boundaries that remain open.
 
 The implemented pipeline is:
 
