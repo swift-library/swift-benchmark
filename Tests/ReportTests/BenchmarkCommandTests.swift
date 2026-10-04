@@ -15,6 +15,14 @@ struct HostBenchmarks {
   }
 }
 
+@BenchmarkSuite("HostCheck")
+struct HostCheckBenchmarks {
+  @Benchmark("Slow first invocation")
+  func slowFirstInvocation() {
+    HostCheckWorkload.shared.invoke()
+  }
+}
+
 @Suite("Benchmark Command", .serialized)
 struct BenchmarkCommandTests {
   @Test
@@ -323,6 +331,73 @@ struct BenchmarkCommandTests {
     #expect(attachment.metadata["tool"] == "xctrace")
     #expect(attachment.metadata["template"] == "Time Profiler")
     #expect(attachment.metadata["command"] == "xcrun xctrace record")
+  }
+
+  @Test
+  func benchmarkHostCheckFailsFromTheMeasurementItReports() async throws {
+    let baselinePath = FileManager.default.temporaryDirectory
+      .appendingPathComponent("benchmark-host-baseline-\(UUID().uuidString).json")
+      .path
+    defer {
+      try? FileManager.default.removeItem(atPath: baselinePath)
+    }
+    let baseline = BaselineDocument(cases: [
+      BaselineCase(
+        suiteName: "HostCheck", caseName: "Slow first invocation", meanNanoseconds: 1_000_000)
+    ])
+    try JSONEncoder().encode(baseline).write(to: URL(fileURLWithPath: baselinePath))
+    HostCheckWorkload.shared.reset()
+
+    do {
+      _ = try await BenchmarkHost.render(
+        discoveries: [HostCheckBenchmarks.self],
+        arguments: [
+          "check",
+          "--baseline",
+          baselinePath,
+          "--threshold-ns",
+          "10000000",
+          "--warmup",
+          "0",
+          "--iterations",
+          "1",
+          "--format",
+          "json",
+        ],
+        metadata: .fixture()
+      )
+      Issue.record("Expected the regressed check to fail")
+    } catch BenchmarkHostError.regressionFailure(let output) {
+      let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
+      #expect(document.summary.verdict == .failed)
+      #expect(document.summary.failedRegressionCount == 1)
+    }
+    #expect(HostCheckWorkload.shared.invocationCount == 1)
+  }
+}
+
+private final class HostCheckWorkload: @unchecked Sendable {
+  static let shared = HostCheckWorkload()
+
+  private let lock = NSLock()
+  private var invocations = 0
+
+  var invocationCount: Int {
+    lock.withLock { invocations }
+  }
+
+  func reset() {
+    lock.withLock { invocations = 0 }
+  }
+
+  func invoke() {
+    let isFirstInvocation = lock.withLock {
+      invocations += 1
+      return invocations == 1
+    }
+    if isFirstInvocation {
+      Thread.sleep(forTimeInterval: 0.05)
+    }
   }
 }
 

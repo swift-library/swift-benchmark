@@ -94,12 +94,29 @@ struct PackageWorkflowTests {
         "Noop",
       ]
     )
+    let failedCheck = try processResult(
+      executable: cli,
+      arguments: [
+        "check",
+        "--host",
+        hostPath,
+        "--case",
+        "Noop",
+        "--budget",
+        "mean:-1",
+        "--format",
+        "json",
+      ]
+    )
 
     #expect(list.contains("\"suite\" : \"Fixture\""))
     #expect(list.contains("\"caseName\" : \"Noop\""))
     #expect(run.contains("\"schemaVersion\" : 2"))
     #expect(run.contains("\"name\" : \"Noop\""))
     #expect(run.contains("\"measurement\""))
+    #expect(failedCheck.status == 20)
+    #expect(failedCheck.output.contains("\"verdict\" : \"failed\""))
+    #expect(failedCheck.errorOutput.contains("Regression check failed."))
   }
 
   @Test(.timeLimit(.minutes(10)))
