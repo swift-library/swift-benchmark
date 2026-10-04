@@ -8,4 +8,4 @@ permissions:
   contents: read
 jobs:
   validate:
-    uses: swift-library/.github/.github/workflows/swift-package-ci.yml@298bf0f90708d264db72afb9469613aeaa358a55
+    uses: swift-library/.github/.github/workflows/swift-package-ci.yml@20a14023f84411951787364d3475961a68e098bb
