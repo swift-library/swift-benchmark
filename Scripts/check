@@ -12,6 +12,13 @@ case "${1:-all}" in
 esac
 mkdir -p .build/release-validation
 Scripts/validate-version --json > .build/release-validation/version.json
+version=$(Scripts/validate-version)
+for manual in README.md Documentation/UsageManual.md; do
+  if ! grep -Fq ".upToNextMinor(from: \"$version\")" "$manual"; then
+    echo "$manual must pin .upToNextMinor(from: \"$version\")" >&2
+    exit 1
+  fi
+done
 if [ "$RELEASE_CHECK_SCOPE" = all ] || [ "$RELEASE_CHECK_SCOPE" = format ]; then
   xcrun swift-format lint --strict --configuration .swift-format --recursive Package.swift Sources Tests Plugins
 fi
@@ -21,7 +28,6 @@ if [ "$RELEASE_CHECK_SCOPE" = all ] || [ "$RELEASE_CHECK_SCOPE" = compiler ]; th
   swift build -c release --force-resolved-versions
 
 bin=$(swift build -c release --show-bin-path)
-version=$(Scripts/validate-version)
 test "$("$bin/swift-benchmark-cli" --version)" = "swift-benchmark-cli $version"
 test "$("$bin/BenchmarkCLI" --version)" = "swift-benchmark-cli $version"
 test "$(swift package --configuration release benchmark --version)" = "swift-benchmark-cli $version"
@@ -41,7 +47,7 @@ result['xcode'] = subprocess.check_output(['xcodebuild', '-version'], text=True)
 result['sdk'] = subprocess.check_output(['xcrun', '--sdk', 'macosx', '--show-sdk-version'], text=True).strip()
 result['validation_script_sha256'] = hashlib.sha256(pathlib.Path('Scripts/check').read_bytes()).hexdigest()
 scope = os.environ['RELEASE_CHECK_SCOPE']
-result['checks'] = ['version']
+result['checks'] = ['version', 'package-pins']
 if scope in ('all', 'format'):
     result['checks'] += ['strict-format']
     result['formatter'] = subprocess.check_output(['xcrun', 'swift-format', '--version'], text=True).strip()
