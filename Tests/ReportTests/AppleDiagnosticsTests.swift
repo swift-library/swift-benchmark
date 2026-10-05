@@ -147,6 +147,26 @@ struct AppleDiagnosticsTests {
   }
 
   @Test
+  func xctraceRecorderRoutesTargetStandardOutputBeforeLaunch() async throws {
+    let recorder = XctraceRecorder(xcrunPath: "/usr/bin/xcrun") { arguments in
+      #expect(
+        arguments.suffix(6) == [
+          "--target-stdout", "/tmp/host.json", "--launch", "/tmp/generated-host", "--", "run",
+        ])
+      return XctraceCommandResult(terminationStatus: 0)
+    }
+
+    let artifact = try await recorder.record(
+      executablePath: "/tmp/generated-host",
+      executableArguments: ["run"],
+      outputTracePath: "/tmp/run.trace",
+      targetStandardOutputPath: "/tmp/host.json"
+    )
+
+    #expect(artifact.command.contains("--target-stdout"))
+  }
+
+  @Test
   func xctraceRecorderSurfacesUnavailableCommandFailure() async {
     let recorder = XctraceRecorder(xcrunPath: "/missing/xcrun") { _ in
       XctraceCommandResult(terminationStatus: 127, standardError: "xcrun unavailable")

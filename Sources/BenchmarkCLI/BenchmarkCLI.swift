@@ -117,29 +117,64 @@ struct BenchmarkCLI {
     let hostExclusions: Set<String> = [
       "--host", "--xctrace-output", "--xctrace-template", "--xcrun",
     ]
-    var hostArguments = [command] + options.forwardedArguments(excluding: hostExclusions)
-    if let xctraceOutput = options.value(for: "--xctrace-output") {
-      let template = options.value(for: "--xctrace-template") ?? "Time Profiler"
-      let xcrunPath = options.value(for: "--xcrun") ?? "/usr/bin/xcrun"
-      let artifact = try await XctraceRecorder(xcrunPath: xcrunPath).record(
-        executablePath: host,
-        executableArguments: hostArguments,
-        outputTracePath: xctraceOutput,
-        template: template,
-        metadata: ["scope": "benchmark-cli"]
-      )
-      hostArguments.append(contentsOf: [
-        "--trace",
-        artifact.tracePath,
-        "--trace-tool",
-        artifact.metadata["tool"] ?? "xctrace",
-        "--trace-template",
-        template,
-        "--trace-command",
-        artifact.command.joined(separator: " "),
-      ])
+    guard let xctraceOutput = options.value(for: "--xctrace-output") else {
+      let hostArguments = [command] + options.forwardedArguments(excluding: hostExclusions)
+      return try invokeHost(path: host, arguments: hostArguments)
     }
-    return try invokeHost(path: host, arguments: hostArguments)
+    guard command != "list" else {
+      throw CLIError.unexpectedArgument("--xctrace-output")
+    }
+    return try await runTracedHostCommand(
+      command, options: options, host: host, xctraceOutput: xctraceOutput,
+      hostExclusions: hostExclusions)
+  }
+
+  // xctrace turns every nonzero host exit into its own failure status, so the traced host
+  // always emits JSON and the CLI applies the requested format, output, and check gate.
+  private static func runTracedHostCommand(
+    _ command: String,
+    options: CLIOptions,
+    host: String,
+    xctraceOutput: String,
+    hostExclusions: Set<String>
+  ) async throws -> String {
+    let reportURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("swift-benchmark-host-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: reportURL) }
+    let hostArguments =
+      [command == "check" ? "run" : command]
+      + options.forwardedArguments(
+        excluding: hostExclusions.union(["--format", "--output", "--quiet"]))
+      + ["--format", "json"]
+    let artifact = try await XctraceRecorder(
+      xcrunPath: options.value(for: "--xcrun") ?? "/usr/bin/xcrun"
+    ).record(
+      executablePath: host,
+      executableArguments: hostArguments,
+      outputTracePath: xctraceOutput,
+      template: options.value(for: "--xctrace-template") ?? "Time Profiler",
+      targetStandardOutputPath: reportURL.path
+    )
+
+    var document = try readReport(reportURL.path)
+    let exporter = TraceArtifactExporter(artifact: artifact)
+    for suiteIndex in document.suites.indices {
+      for caseIndex in document.suites[suiteIndex].cases.indices {
+        let scope = document.suites[suiteIndex].cases[caseIndex].scope
+        document.suites[suiteIndex].cases[caseIndex].attachments +=
+          await exporter.attachments(for: scope)
+      }
+    }
+
+    let output = try options.format(default: .console).render(document)
+    let emitted = try writeOrReturn(output, options: options)
+    if command == "check" {
+      guard document.summary.failedRegressionCount == 0 && document.summary.failedBudgetCount == 0
+      else {
+        throw CLIError.regressionFailure(output: emitted)
+      }
+    }
+    return emitted
   }
 
   private static func render(_ arguments: [String]) throws -> String {
