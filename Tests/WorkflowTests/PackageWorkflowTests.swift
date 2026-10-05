@@ -34,6 +34,61 @@ struct PackageWorkflowTests {
     #expect(version == aliasVersion)
   }
 
+  @Test(.timeLimit(.minutes(3)))
+  func tracedCommandsLaunchTheHostOnce() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("swift-benchmark-trace-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let launchesPath = directory.appendingPathComponent("launches").path
+    let hostURL = directory.appendingPathComponent("host")
+    let xcrunPath = directory.appendingPathComponent("xcrun").path
+    let reportPath = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .appendingPathComponent("ReportTests/Fixtures/report-v2.json")
+      .path
+    try writeFile(
+      """
+      #!/bin/sh
+      echo "$*" >> '\(launchesPath)'
+      cat '\(reportPath)'
+      """,
+      to: hostURL
+    )
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o755], ofItemAtPath: hostURL.path)
+    try writeFakeXcrun(to: xcrunPath)
+
+    let trace = try runProcess(
+      executable: try cliPath(),
+      arguments: [
+        "trace", "--host", hostURL.path, "--format", "json",
+        "--xctrace-output", directory.appendingPathComponent("trace.trace").path,
+        "--xcrun", xcrunPath,
+      ]
+    )
+    let check = try processResult(
+      executable: try cliPath(),
+      arguments: [
+        "check", "--host", hostURL.path, "--format", "json",
+        "--baseline", directory.appendingPathComponent("baseline.json").path,
+        "--xctrace-output", directory.appendingPathComponent("check.trace").path,
+        "--xcrun", xcrunPath,
+      ]
+    )
+    let launches = try String(contentsOfFile: launchesPath, encoding: .utf8)
+      .split(separator: "\n")
+
+    #expect(launches.count == 2)
+    #expect(launches.first?.hasPrefix("trace ") == true)
+    #expect(launches.last?.hasPrefix("run ") == true)
+    #expect(launches.allSatisfy { $0.hasSuffix("--format json") })
+    #expect(trace.contains("\"Instruments trace\""))
+    #expect(check.status == 20)
+    #expect(check.output.contains("\"Instruments trace\""))
+  }
+
   @Test(.timeLimit(.minutes(10)))
   func fixturePackageHostWorksThroughCLI() throws {
     let fixturePath = fixturePackagePath()
@@ -1013,13 +1068,21 @@ struct PackageWorkflowTests {
     let script = """
       #!/bin/sh
       output=""
+      target_stdout=/dev/stdout
       while [ "$#" -gt 0 ]; do
-        if [ "$1" = "--output" ]; then
-          shift
-          output="$1"
-        fi
+        case "$1" in
+          --output) shift; output="$1" ;;
+          --target-stdout) shift; target_stdout="$1" ;;
+          --launch) shift; break ;;
+        esac
         shift
       done
+      executable="$1"
+      shift
+      if [ "$1" = "--" ]; then
+        shift
+      fi
+      "$executable" "$@" > "$target_stdout" || exit 54
       if [ -n "$output" ]; then
         mkdir -p "$output"
       fi

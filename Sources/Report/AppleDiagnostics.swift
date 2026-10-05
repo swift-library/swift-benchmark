@@ -349,20 +349,21 @@ public struct XctraceRecorder: Sendable {
     executableArguments: [String] = [],
     outputTracePath: String,
     template: String = "Time Profiler",
+    targetStandardOutputPath: String? = nil,
     metadata: [String: String] = [:]
   ) async throws -> TraceArtifact {
-    let arguments =
-      [
-        "xctrace",
-        "record",
-        "--template",
-        template,
-        "--output",
-        outputTracePath,
-        "--launch",
-        executablePath,
-        "--",
-      ] + executableArguments
+    var arguments = [
+      "xctrace",
+      "record",
+      "--template",
+      template,
+      "--output",
+      outputTracePath,
+    ]
+    if let targetStandardOutputPath {
+      arguments += ["--target-stdout", targetStandardOutputPath]
+    }
+    arguments += ["--launch", executablePath, "--"] + executableArguments
     let result = await runner(arguments)
     guard result.terminationStatus == 0 else {
       throw XctraceRecorderError.commandFailed(arguments: [xcrunPath] + arguments, result: result)
