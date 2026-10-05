@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.2
+
+- Commands with `--xctrace-output` launch the benchmark host once, under
+  xctrace, and report that traced run. Previously the host ran a second time
+  outside the trace and the printed results came from that untraced run. A
+  traced `check` applies the baseline and budget gate to the traced run and
+  exits with the regression-failure code.
+- Report JSON encodes the percentage change against a zero baseline as `null`
+  and decodes it as an infinite change. Previously rendering such a report as
+  JSON failed.
+- `XctraceRecorder.record` accepts `targetStandardOutputPath` to write the
+  launched process's standard output to a file.
+- The README and UsageManual pin `.upToNextMinor(from: "0.1.2")`.
+
 ## 0.1.1
 
 - `swift package benchmark check` measures the selected benchmarks once and
