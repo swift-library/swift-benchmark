@@ -284,6 +284,34 @@ struct ReportDocumentTests {
   }
 
   @Test
+  func zeroBaselineJSONRoundTrip() throws {
+    let document = ReportDocument(
+      metadata: .fixture(),
+      results: [
+        BenchmarkResult(
+          suiteName: "Parser",
+          caseName: "Tokenize",
+          configuration: .default,
+          measurement: Measurement(samples: [Sample(iteration: 0, durationNanoseconds: 2_000)])
+        )
+      ],
+      baseline: BaselineDocument(cases: [
+        BaselineCase(suiteName: "Parser", caseName: "Tokenize", meanNanoseconds: 0)
+      ]),
+      threshold: .relativePercentage(10)
+    )
+    let report = try #require(document.suites.first?.cases.first)
+    #expect(report.baseline?.percentageDelta == .infinity)
+    #expect(report.verdict == .failed)
+
+    let json = try JSONReportRenderer.render(document)
+    #expect(json.contains("\"percentageDelta\" : null"))
+    #expect(!json.contains("\"percentageDelta\" : 0"))
+    let decoded = try JSONDecoder().decode(ReportDocument.self, from: Data(json.utf8))
+    #expect(decoded == document)
+  }
+
+  @Test
   func absoluteThresholdAllowsSmallRegression() throws {
     let comparison = BaselineComparison(
       currentMeanNanoseconds: 1_100,

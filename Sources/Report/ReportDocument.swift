@@ -252,7 +252,7 @@ public struct CaseReport: Sendable, Equatable, Codable {
           actualNanoseconds: baseline.currentValueNanoseconds,
           expectedNanoseconds: baseline.baselineValueNanoseconds,
           deltaNanoseconds: baseline.absoluteDeltaNanoseconds,
-          percentageDelta: baseline.percentageDelta
+          percentageDelta: baseline.percentageDelta.isFinite ? baseline.percentageDelta : nil
         )
       )
     }

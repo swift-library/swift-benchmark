@@ -180,6 +180,56 @@ public struct BaselineComparison: Sendable, Equatable, Codable {
   }
 }
 
+extension BaselineComparison {
+  private enum CodingKeys: String, CodingKey {
+    case metric
+    case currentValueNanoseconds
+    case baselineValueNanoseconds
+    case currentMeanNanoseconds
+    case baselineMeanNanoseconds
+    case absoluteDeltaNanoseconds
+    case percentageDelta
+    case threshold
+    case verdict
+  }
+
+  /// Decodes a comparison. A `null` percentage delta comes from a zero baseline
+  /// and decodes as an infinite delta with the sign of the absolute delta.
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    metric = try container.decode(Report.Measurement.Metric.self, forKey: .metric)
+    currentValueNanoseconds = try container.decode(Double.self, forKey: .currentValueNanoseconds)
+    baselineValueNanoseconds = try container.decode(Double.self, forKey: .baselineValueNanoseconds)
+    currentMeanNanoseconds = try container.decode(Double.self, forKey: .currentMeanNanoseconds)
+    baselineMeanNanoseconds = try container.decode(Double.self, forKey: .baselineMeanNanoseconds)
+    absoluteDeltaNanoseconds = try container.decode(Double.self, forKey: .absoluteDeltaNanoseconds)
+    percentageDelta =
+      try container.decodeIfPresent(Double.self, forKey: .percentageDelta)
+      ?? (absoluteDeltaNanoseconds < 0 ? -.infinity : .infinity)
+    threshold = try container.decode(ThresholdPolicy.self, forKey: .threshold)
+    verdict = try container.decode(ReportVerdict.self, forKey: .verdict)
+  }
+
+  /// Encodes a comparison. JSON has no infinity, so the infinite percentage
+  /// delta of a zero baseline is encoded as `null`.
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(metric, forKey: .metric)
+    try container.encode(currentValueNanoseconds, forKey: .currentValueNanoseconds)
+    try container.encode(baselineValueNanoseconds, forKey: .baselineValueNanoseconds)
+    try container.encode(currentMeanNanoseconds, forKey: .currentMeanNanoseconds)
+    try container.encode(baselineMeanNanoseconds, forKey: .baselineMeanNanoseconds)
+    try container.encode(absoluteDeltaNanoseconds, forKey: .absoluteDeltaNanoseconds)
+    if percentageDelta.isFinite {
+      try container.encode(percentageDelta, forKey: .percentageDelta)
+    } else {
+      try container.encodeNil(forKey: .percentageDelta)
+    }
+    try container.encode(threshold, forKey: .threshold)
+    try container.encode(verdict, forKey: .verdict)
+  }
+}
+
 public struct BudgetPolicy: Sendable, Equatable, Codable {
   public var suiteName: String?
   public var caseName: String?
