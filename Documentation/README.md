@@ -18,9 +18,9 @@ quick-start and best-practice entrypoint, while `Documentation/UsageManual.md` i
 complete manual. Target-level API documentation should live with the SwiftPM
 target it documents when DocC catalogs are added.
 
-No target-level DocC catalogs are currently checked in. That is an intentional
-documentation gap for future API reference work; when added, catalogs should be
-colocated with SwiftPM targets at `Sources/<Target>/<Target>.docc/`.
+The six public library targets have DocC catalogs at
+`Sources/<Target>/<Target>.docc/`. These own module introductions and API
+reference; complete usage examples remain in the README and usage manual.
 
 Documentation roles:
 

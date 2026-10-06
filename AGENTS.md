@@ -276,3 +276,31 @@ If macro file paths are renamed/moved, clean build artifacts first:
 ```bash
 swift package clean
 ```
+
+## Code Review Rules
+
+### Compatibility and versioning
+
+- Flag a change to public API or observable behavior, including a raised
+  minimum platform or Swift version, without the change record and version
+  bump `Documentation/Architecture/VersioningAndRelease.md` requires. Safe
+  path: record the change under the next version with that bump.
+
+### Claims
+
+- Flag README, DocC, or release-note statements that the code and tests do
+  not support: capabilities that do not exist, existing behavior described as
+  new, or platforms CI does not build. Safe path: describe what the code
+  shows.
+
+### Public documentation
+
+- Flag a new public symbol without a documentation comment, and public prose
+  that compares the package with other projects or describes internal
+  process. Safe path: document the symbol, and describe only this package's
+  own behavior.
+
+### Tests
+
+- Flag a behavior change without a test that would fail before the change.
+  Safe path: add the test beside the existing suite for that behavior.
