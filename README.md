@@ -254,6 +254,9 @@ describes compatibility and maintenance. `swift-benchmark-cli --version` and
 
 ## Documentation
 
+- [Module documentation](Sources/Instruments/Instruments.docc/Instruments.md):
+  the public API reference and module overview.
+
 - [Usage manual](Documentation/UsageManual.md): every API, command, CI workflow,
   diagnostic, and adapter, with troubleshooting.
 - [Product domains](Documentation/Architecture/ProductDomains.md): how
