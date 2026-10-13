@@ -245,13 +245,13 @@ useful.
 
 ## Licensing Guardrails
 
-- Do not change `LICENSE`, `NOTICE`, or the `README` license section unless
+- Do not change `LICENSE.txt`, `NOTICE`, or the `README` license section unless
   explicitly requested.
 - Keep license wording consistent across all docs.
 - For open-source release review:
   - keep public README free of workspace-internal refs metadata;
     refs tracking belongs in `.refs.yaml` / canonical refs only
-  - keep `LICENSE` copyright holder/year accurate
+  - keep `LICENSE.txt` copyright holder/year accurate
   - for new source files, prefer SPDX + copyright header
     (for example `// SPDX-License-Identifier: Apache-2.0 WITH Swift-exception`)
   - preserve third-party license/notice lines when code is copied or adapted

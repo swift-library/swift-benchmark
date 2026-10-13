@@ -1,27 +1,12 @@
 # Contributing
 
-## Development Policy
+External contributions are welcome. Use a Conventional Commit PR title and
+follow `.swift-format`. Maintainers follow the shared
+[signing instructions](https://github.com/swift-library/.github/blob/master/MAINTENANCE.md#signing).
 
-- Commit subjects must follow Conventional Commits:
-  - `feat(scope): summary`
-  - `fix: summary`
-- Local validation:
-  - `git config --local core.hooksPath .githooks`
-- CI validation:
-  - `.github/workflows/commit-message.yml` enforces commit subject format on PRs.
-
-- Repository type policy: `swift-package`.
-- All contributors (human and AI) must respect repository `.swift-format` when editing Swift code.
-- Keep formatting consistent before commit.
-
-## Validation and Releases
-
-Run `Scripts/check` before submitting code/API changes. This performs version,
-release-tool, strict-format, Swift test, Release build and CLI/plugin checks.
-
+Run `Scripts/check` before submitting changes. It checks documentation version
+pins, strict formatting, Swift tests, the release build and CLI/plugin behavior.
 Read [Versioning and Release](Documentation/Architecture/VersioningAndRelease.md)
-before changing a version, requirement, dependency or release workflow. Update
-README and UsageManual when public behavior changes. CI and maintenance updates
-are reviewed through pull requests.
-
-Report vulnerabilities through the private route in [SECURITY.md](SECURITY.md).
+before changing compatibility, requirements or release inputs. Update README
+and UsageManual when public behavior changes. Preserve source and dependency notices.
+Report vulnerabilities through [SECURITY.md](SECURITY.md).

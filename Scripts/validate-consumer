@@ -28,7 +28,7 @@ def main():
     config = json.loads((root / ".github/release.json").read_text())
     if args.revision and not re.fullmatch(r"[0-9a-f]{40}", args.revision):
         parser.error("Use the complete candidate commit SHA")
-    version = subprocess.check_output([str(root / "Scripts/validate-version")], text=True).strip()
+    version = re.search(config["version_pattern"], (root / config["version_file"]).read_text())[1]
     if args.version and args.version != version:
         parser.error("SemVer acceptance must use the declared package version")
     output = args.output.resolve()

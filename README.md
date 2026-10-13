@@ -12,12 +12,12 @@
   <a href="https://github.com/swift-library/swift-benchmark/actions/workflows/ci.yml"><img src="https://github.com/swift-library/swift-benchmark/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
   <img src="https://img.shields.io/badge/Swift-6.0%2B-F05138" alt="Swift 6.0+">
   <img src="https://img.shields.io/badge/platforms-iOS%2018%2B%20%7C%20macOS%2015%2B-lightgrey" alt="Platforms: iOS 18+ | macOS 15+">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0 WITH Swift-exception"></a>
+  <a href="LICENSE.txt"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0 WITH Swift-exception"></a>
 </p>
 
 [Overview](#overview) · [Install](#install) · [Quick start](#quick-start) ·
 [Products](#products) · [Usage](#usage) · [Requirements](#requirements) ·
-[Documentation](#documentation) · [License](#license)
+[Documentation](#documentation) · [Contributing](#contributing) · [License](#license)
 
 > [!NOTE]
 > swift-benchmark is pre-1.0. Minor releases may include source-breaking
@@ -274,4 +274,4 @@ private route in [SECURITY.md](SECURITY.md).
 ## License
 
 swift-benchmark is available under the Apache License 2.0 with the Swift
-Runtime Library Exception. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Runtime Library Exception. See [LICENSE.txt](LICENSE.txt) and [NOTICE](NOTICE).
