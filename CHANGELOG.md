@@ -1,5 +1,7 @@
 # Changelog
 
+## Unreleased
+
 ## 0.1.2
 
 - Commands with `--xctrace-output` launch the benchmark host once, under
