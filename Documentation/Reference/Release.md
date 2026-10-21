@@ -14,7 +14,7 @@ restate those rules.
 
 | Shipped component | Version meaning | Version source | Mirrors and derived fields | Update and read-only check |
 | --- | --- | --- | --- | --- |
-| All library products, both CLI products and the command plugin | Package release version | `CLIVersion.current` in [Sources/BenchmarkCLI/CLIVersion.swift](../../Sources/BenchmarkCLI/CLIVersion.swift) | README/UsageManual pins and CLI/plugin version output; [CHANGELOG.md](../../CHANGELOG.md) records release notes. | [.github/release.json](../../.github/release.json) selects validation through `Scripts/check`. |
+| All library products, both CLI products and the command plugin | Package release version | `CLIVersion.current` in [Sources/BenchmarkCLI/CLIVersion.swift](../../Sources/BenchmarkCLI/CLIVersion.swift), named by `version_file` in [`.github/release.json`](../../.github/release.json) | README/UsageManual pins and CLI/plugin version output; [CHANGELOG.md](../../CHANGELOG.md) records release notes. | [.github/release.json](../../.github/release.json) selects validation through `Scripts/check`. |
 
 ## Compatibility Surface
 
@@ -44,7 +44,8 @@ plugin's `--version` output against the declared version.
 
 `Scripts/validate-consumer --revision COMMIT --output NEW_DIRECTORY --ios`
 creates an independent consumer from the remote candidate, exercises native
-library/macro behavior and the no-host plugin, checks report/baseline behavior
+library/macro behavior and the no-host plugin, verifies discovery of library and
+Swift Testing declarations, checks report/baseline behavior
 and runs tests on each declared iOS generation. It selects installed runtimes,
 creates temporary devices and removes those devices after testing. Its fixture
 declares the iOS deployment floor in Package.swift.
@@ -73,7 +74,7 @@ evidence.
 | Version update and check | Update: Not established. Check: `Scripts/check`. | Local worktree and Swift/Xcode tools. |
 | Candidate validation and build | `Scripts/check`; `Scripts/validate-consumer --revision COMMIT --output NEW_DIRECTORY --ios`. | Local worktree, Swift/Xcode tools, remote source access and installed iOS runtimes. |
 | Status and interrupted-run recovery | Not established. | Not established. |
-| Acceptance and publication | After tagging, `Scripts/validate-consumer --version VERSION --output NEW_DIRECTORY --ios` validates the next-minor dependency requirement. | Swift/Xcode tools, remote source access and installed iOS runtimes. |
+| Acceptance and publication | Run [`Release`](../../.github/workflows/release.yml) with the accepted tag; it validates the tag and publishes the GitHub release. After tagging, `Scripts/validate-consumer --version VERSION --output NEW_DIRECTORY --ios` validates the next-minor dependency requirement. | Swift/Xcode tools, remote source access and installed iOS runtimes; repository write access to run workflows |
 | Cleanup | `Scripts/validate-consumer` removes its temporary simulator devices after testing. | Xcode simulator tools. |
 
 Temporary consumer packages, logs and provenance belong under ignored `.build`
