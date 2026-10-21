@@ -99,7 +99,7 @@ The [usage manual](Documentation/UsageManual.md) covers native and Swift Testing
 
 Each release supports the three most recent major versions of each declared
 platform, currently iOS 18, 26, and 27, and macOS 15, 26, and 27. The
-[versioning and release policy](Documentation/Architecture/VersioningAndRelease.md)
+[release reference](Documentation/Reference/Release.md)
 describes compatibility and maintenance. `swift-benchmark-cli --version` and
 `swift package benchmark --version` print the installed version.
 

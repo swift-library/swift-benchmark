@@ -10,3 +10,4 @@ Current reference documents:
   validation target.
 - `InstrumentsAlignmentChecklist.md`: Instruments alignment checklist and
   validation target.
+- [Release](Release.md): release facts and mechanics; version rules are in VERSIONING.

@@ -42,7 +42,6 @@ Related implementation reference:
   Instruments architecture.
 - `../Reference/BenchmarkCompletionChecklist.md`: implementation checklist,
   test matrix, and report expectations for the Benchmark implementation goal.
+- [Release](../Reference/Release.md): release facts and mechanics; version rules are in VERSIONING.
 
 Official Apple/Swift alignment belongs in the relevant architecture documents.
-
-- `VersioningAndRelease.md`: version authority, compatibility, supported environments and release acceptance.
