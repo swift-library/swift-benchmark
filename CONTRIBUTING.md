@@ -6,7 +6,7 @@ follow `.swift-format`. Maintainers follow the shared
 
 Run `Scripts/check` before submitting changes. It checks documentation version
 pins, strict formatting, Swift tests, the release build and CLI/plugin behavior.
-Read [Versioning and Release](Documentation/Architecture/VersioningAndRelease.md)
+Read [Release](Documentation/Reference/Release.md)
 before changing compatibility, requirements or release inputs. Update README
 and UsageManual when public behavior changes. Preserve source and dependency notices.
 Report vulnerabilities through [SECURITY.md](SECURITY.md).
