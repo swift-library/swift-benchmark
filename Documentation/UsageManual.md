@@ -317,7 +317,7 @@ swift package --allow-writing-to-directory .build benchmark render --input .buil
 ```
 
 HTML, dashboards, and richer presentations should consume `ReportDocument`
-JSON. Swift library code owns data shape and evidence contracts, not hardcoded
+JSON. Swift library code owns data shape and report contracts, not hardcoded
 presentation authoring.
 
 ## CLI And Plugin Commands
@@ -444,16 +444,17 @@ swift package --allow-writing-to-directory .build benchmark trace \
 The report stores trace attachment provenance and command metadata. It does
 not parse private `.trace` internals as a stable API.
 
-MetricKit is future optional production diagnostics evidence. It is not part
-of the current benchmark acceptance path and should not be treated as a
-deterministic per-iteration metric source.
+MetricKit is future optional production diagnostics. It is not part of the
+current benchmark acceptance path and should not be treated as a deterministic
+per-iteration metric source.
 
-## Memory And Allocation Evidence
+## Memory And Allocation Measurements
 
 On Darwin, `ResidentMemoryMetricProvider` reports current resident bytes and
 the process-lifetime maximum resident size from one Mach snapshot.
 
-Memory/allocation evidence is Report-scoped. Current built-in concepts include:
+Memory and allocation measurements are Report-scoped. Current built-in
+concepts include:
 
 - Darwin resident memory sampling where available,
 - manual memory/allocation snapshots,

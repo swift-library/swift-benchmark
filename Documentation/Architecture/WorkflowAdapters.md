@@ -74,7 +74,8 @@ This is the primary production benchmark entry point. It preserves Benchmark
 semantics that a plain Swift Testing `@Test` body does not provide by itself:
 warmup, measured iterations, adaptive/min/max-duration policies, samples,
 argument/scale rows, `ReportDocument`, baseline/budget verdicts, CI exit codes,
-Memory/allocation evidence, timeline attribution, and xctrace artifacts.
+Memory and allocation measurements, timeline attribution, and xctrace
+artifacts.
 
 Package workflow rules:
 
@@ -187,7 +188,7 @@ Adapter rules:
 - preserve source location where possible,
 - do not replace Benchmark runner behavior.
 
-## Acceptance Evidence
+## Acceptance Checks
 
 - Fixture package tests for list/run/check/baseline/update/diff/trace.
 - CLI/plugin behavior parity tests.

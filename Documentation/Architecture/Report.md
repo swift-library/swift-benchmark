@@ -4,7 +4,7 @@
 
 Report is the product layer that turns Benchmark, Instruments, and optional
 diagnostics data into structured, comparable, attributable, and exportable
-performance evidence.
+performance reports.
 
 Report is not the Benchmark runner and is not the Instruments runtime. It
 consumes their public outputs and preserves enough structure for local review,
@@ -13,7 +13,7 @@ profiler-compatible diagnosis.
 
 ## Core Direction
 
-Report owns the target versioned, structured performance evidence graph:
+Report owns the target versioned, structured performance report graph:
 
 ```text
 Run
@@ -228,10 +228,10 @@ Adapter/provider target surface:
 
 Apple-specific adapters may use Signpost timelines and Instruments trace
 artifacts behind platform checks. Future production diagnostics may add
-MetricKit payload evidence. Future non-Apple adapters may use their own
-platform metric providers.
+MetricKit payloads. Future non-Apple adapters may use their own platform metric
+providers.
 
-MetricKit is future optional Report evidence. It is primarily app-session or
+MetricKit is future optional Report diagnostics. It is primarily app-session or
 run-window scoped, not deterministic per-iteration benchmark data, and it is not
 current Benchmark closure acceptance.
 
@@ -273,8 +273,8 @@ visible in reports. Required unavailable diagnostics fail configuration.
 
 - Benchmark measures workloads and produces structured results.
 - Instruments records spans/events and owns runtime instrumentation.
-- Report correlates, compares, attributes, and exports structured evidence.
-- Diagnostics adapters provide optional scoped evidence for Report.
+- Report correlates, compares, attributes, and exports structured report data.
+- Diagnostics adapters provide optional scoped diagnostic data for Report.
 - CLI/plugin execution is an entry point over Benchmark and Report, not a
   separate result model.
 
@@ -288,7 +288,7 @@ Report can be considered complete for the accepted scope only when:
   codes,
 - per-iteration timeline attribution links samples to span/event hierarchy and
   timing distributions,
-- Dimension curves, Memory, Testing, XCTest, trace evidence, and future
+- Dimension curves, Memory, Testing, XCTest, trace artifacts, and future
   MetricKit production diagnostics enter through typed measurements,
   diagnostics, or attachments,
 - unavailable optional diagnostics remain visible and required unavailable

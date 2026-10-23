@@ -3,7 +3,7 @@
 ## Scope / Purpose
 
 This document owns Memory and allocation diagnostics. Memory enriches benchmark
-reports with resident-memory and allocator evidence. It does not define
+reports with resident-memory and allocator measurements. It does not define
 Benchmark runner semantics and does not belong inside Instruments runtime.
 
 ## Current Implementation Status
@@ -36,7 +36,7 @@ Allocator metrics:
 - net bytes,
 - peak allocated bytes,
 - leak/tolerance data,
-- profiler/histogram evidence where feasible.
+- profiler data and histograms where feasible.
 
 ## Provider States
 
@@ -63,7 +63,7 @@ preserve:
 
 ## Integration
 
-Memory evidence enters through Report diagnostics and adapter verdicts:
+Memory measurements enter through Report diagnostics and adapter verdicts:
 
 ```text
 BenchmarkRunner
@@ -80,7 +80,7 @@ Memory/allocation must remain compatible with Swift Testing adapters:
 - source-location context comes from benchmark declarations or adapter call
   sites.
 
-## Acceptance Evidence
+## Acceptance Checks
 
 - Provider/profiler tests.
 - Platform-gated resident-memory tests.

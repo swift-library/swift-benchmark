@@ -153,7 +153,7 @@ part of the implemented architecture:
 Those ideas are recorded in `../Decisions/FutureMultiDimensionMeasurement.md`
 so they can evolve without contaminating the current model.
 
-## Acceptance Evidence
+## Acceptance Checks
 
 - `.dimension(sizes:)` / `Benchmark.Dimension.Trait` macro and trait tests.
 - Discovery tests preserving Dimension sizes and generator metadata.

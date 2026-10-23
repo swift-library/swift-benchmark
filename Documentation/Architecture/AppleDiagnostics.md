@@ -2,13 +2,12 @@
 
 ## Scope / Purpose
 
-This document owns Apple-only diagnostics that enrich Report evidence. Current
+This document owns Apple-only diagnostics that enrich Report data. Current
 implemented scope is `xcrun xctrace` artifact orchestration, trace attachment
 provenance, and Signpost/trace correlation through public Report and
-Instruments seams. MetricKit is future optional production diagnostics
-evidence.
+Instruments seams. MetricKit is future optional production diagnostics.
 
-These diagnostics are optional Report evidence. They do not enter Benchmark
+These diagnostics are optional Report data. They do not enter Benchmark
 core and do not redefine Instruments runtime.
 
 ## Current Implementation Status
@@ -30,7 +29,7 @@ future work, not current Benchmark closure acceptance.
 MetricKit is Apple-only and primarily online app/session scoped. It is not a
 current Benchmark closure requirement and should not block portable acceptance.
 
-Future MetricKit evidence should include:
+Future MetricKit diagnostics should include:
 
 - payload window,
 - payload version,
@@ -59,7 +58,7 @@ backend behavior. Apple Diagnostics can attach trace artifacts to reports, and
 future production diagnostics can attach MetricKit payloads, but neither path
 may leak Signpost, xctrace, or MetricKit concepts into Benchmark core.
 
-## Acceptance Evidence
+## Acceptance Checks
 
 - Unavailable/notConfigured/failed tests.
 - xctrace unavailable/available path tests.

@@ -37,12 +37,12 @@ map cleanly to the local framework:
   constraints.
 
 MetricKit is official Apple API surface, but it is future optional production
-diagnostics evidence for this package because it is app/session scoped. It is
-not current Benchmark acceptance.
+diagnostics for this package because it is app/session scoped. It is not
+current Benchmark acceptance.
 
 ## Implemented Capability Matrix
 
-| Capability | Architecture authority | Implemented local state | Acceptance evidence |
+| Capability | Architecture authority | Implemented local state | Acceptance checks |
 | --- | --- | --- | --- |
 | Swift Testing declaration shape | Swift Testing | `@BenchmarkSuite` / `@Benchmark` lower to generated discovery records and sidecars without a Testing runtime dependency. | Macro expansion and integration tests |
 | Discovery | Swift Testing | `_BenchmarkDiscovery` and `BenchmarkDiscovery` materialize deterministic suite/case records with source locations, traits, tags, Dimension metadata, and stable IDs. | Discovery, macro, and package fixture tests |
@@ -63,7 +63,7 @@ not current Benchmark acceptance.
 | XCTest adapter | XCTest | XCTest helper projects Report verdicts and JSON artifacts as adapter output while Benchmark core stays independent. | Adapter tests |
 | Resident memory | Platform memory APIs | Resident memory provider reports measured/unavailable states without fake zero values. | Memory tests |
 | Allocation/resource regression | Swift performance discipline | Allocation snapshots, leak tolerance, preheat/repeated-run aggregation, remaining allocation checks, and FD/resource leak checks are modeled in Memory. | Memory regression and resource tests |
-| MetricKit | MetricKit | Future optional production diagnostics evidence; no current acceptance requirement and no Benchmark core dependency. | Future boundary documented |
+| MetricKit | MetricKit | Future optional production diagnostics; no current acceptance requirement and no Benchmark core dependency. | Future boundary documented |
 | xctrace | Instruments public tool | `XctraceRecorder` orchestrates `xcrun xctrace record`; CLI/plugin trace flows attach `.trace` artifacts and command/template provenance. | Apple diagnostics and package trace tests |
 | Signpost backend | OSLog/OSSignposter | Signpost remains the Apple backend behind Instruments; Benchmark/Report consume public Instruments timeline data. | Instruments runtime/macro tests |
 
@@ -108,11 +108,11 @@ Rejected:
   without making Benchmark core depend on Testing.
 - Platform memory and allocation hooks vary by OS/toolchain. Unsupported data
   must remain explicit `unavailable`, `notConfigured`, or `failed` states.
-- MetricKit remains future optional production diagnostics evidence.
+- MetricKit remains future optional production diagnostics.
 - Multi-Dimension coordinates, heatmaps, and presentation templates remain
   future proposals over the stable `ReportDocument`.
 
-## Acceptance Evidence
+## Acceptance Checks
 
 Current acceptance is proven by:
 
