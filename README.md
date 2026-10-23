@@ -118,8 +118,8 @@ describes compatibility and maintenance. `swift-benchmark-cli --version` and
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and run
-`Scripts/check` before submitting changes. Report vulnerabilities through the
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and run its local validation commands
+before opening a pull request. Report vulnerabilities through the
 private route in [SECURITY.md](SECURITY.md).
 
 ## License

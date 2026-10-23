@@ -1,8 +1,9 @@
 # Release
 
-Release status: partly manual; [Scripts/check](../../Scripts/check) provides
-local validation and [Scripts/validate-consumer](../../Scripts/validate-consumer)
-provides remote consumer acceptance.
+The shared workflows validate the package and publish releases from signed
+version tags. Validation is declared in
+[`.github/swift-package.json`](../../.github/swift-package.json); release
+identity is declared in [`.github/release.json`](../../.github/release.json).
 
 Version rules for swift-benchmark, covering tags, release timing, choosing the
 next version and the changelog, are in
@@ -14,7 +15,7 @@ restate those rules.
 
 | Shipped component | Version meaning | Version source | Mirrors and derived fields | Update and read-only check |
 | --- | --- | --- | --- | --- |
-| All library products, both CLI products and the command plugin | Package release version | `CLIVersion.current` in [Sources/BenchmarkCLI/CLIVersion.swift](../../Sources/BenchmarkCLI/CLIVersion.swift), named by `version_file` in [`.github/release.json`](../../.github/release.json) | README/UsageManual pins and CLI/plugin version output; [CHANGELOG.md](../../CHANGELOG.md) records release notes. | [.github/release.json](../../.github/release.json) selects validation through `Scripts/check`. |
+| All library products, both CLI products and the command plugin | Package release version | `CLIVersion.current` in [Sources/BenchmarkCLI/CLIVersion.swift](../../Sources/BenchmarkCLI/CLIVersion.swift), named by `version_file` in [`.github/release.json`](../../.github/release.json) | README/UsageManual pins and CLI/plugin version output; [CHANGELOG.md](../../CHANGELOG.md) records release notes. | Update the declaration and its mirrors together. Shared policy validates the declaration; the `cli-plugin-version` command in [`.github/swift-package.json`](../../.github/swift-package.json) checks executable output. |
 
 ## Compatibility Surface
 
@@ -29,54 +30,33 @@ their documented behavior.
 ## Dependencies and Verified Combinations
 
 The package requires Swift 6.0, iOS 18 or macOS 15. The maintained system window
-covers iOS 18/26/27 and macOS 15/26/27. CI tests Swift 6.0 on macOS 15 and
-Swift 6.3 on macOS 26; strict formatting runs separately. Native macOS 27 and
-the maintained iOS simulator generations are additional release checks.
+covers iOS 18/26/27 and macOS 15/26/27. CI tests and builds releases with Swift
+6.0 on macOS 15 and Swift 6.3 on macOS 26. Strict formatting, DocC validation
+and the CLI/plugin version command use the last compiler entry.
 
-## Derived Metadata and Drift Checks
+## Validation
 
-`Scripts/check` checks README/UsageManual pins, formatting, Swift tests, release
-builds, both CLI products and the command plugin. It reads the version file and
-pattern from `.github/release.json` and checks both CLI products' and the command
-plugin's `--version` output against the declared version.
+The required checks are `policy / policy` and `validate / result`.
+[Source policy](../../.github/workflows/source-policy.yml) validates commit
+signatures, Conventional Commit messages and PR titles, added-line rules, the
+version declaration, changelog and Swift minimum.
+[CI](../../.github/workflows/ci.yml) aggregates formatting, tests, release
+builds, the six declared DocC targets and the CLI/plugin version command.
 
-## Candidate, Acceptance and Publication
+The version command reads the version source and pattern from
+`.github/release.json` and compares both CLI products' and the command plugin's
+`--version` output with that declaration. Package tests cover instrumentation,
+discovery, generated hosts, report samples, adapters, baselines and budget
+failures.
 
-`Scripts/validate-consumer --revision COMMIT --output NEW_DIRECTORY --ios`
-creates an independent consumer from the remote candidate, exercises native
-library/macro behavior and the no-host plugin, verifies discovery of library and
-Swift Testing declarations, checks report/baseline behavior
-and runs tests on each declared iOS generation. It selects installed runtimes,
-creates temporary devices and removes those devices after testing. Its fixture
-declares the iOS deployment floor in Package.swift.
-The harness verifies the selected remote source before enabling its macros for
-the unattended Xcode build. Macro trust is scoped to that build command.
+Local validation commands are listed in [CONTRIBUTING.md](../../CONTRIBUTING.md).
+Build outputs belong under ignored `.build/`.
 
-After tagging, use `--version VERSION` in place of `--revision COMMIT` and a new
-output directory to validate the next-minor dependency requirement.
+## Publication
 
-## Evidence Reuse and Invalidation
-
-Evidence belongs in `.build/release-validation`. `Scripts/check` records the
-source commit and tree, OS, Swift/Xcode/SDK versions, validation-script hash and
-completed check scopes in `provenance.json`.
-
-`Scripts/validate-consumer` records the selected dependency and dependency pins,
-lockfile hash, consumer-manifest and checker hashes, toolchain and simulator
-details, and check exit statuses in its output directory's `provenance.json`.
-Keep the resulting lockfile, logs, simulator results and provenance with release
-evidence.
-
-## Entry Points and Artifact Retention
-
-| Operation | Existing command or explicit manual procedure | Required access |
-| --- | --- | --- |
-| Version update and check | Update: Not established. Check: `Scripts/check`. | Local worktree and Swift/Xcode tools. |
-| Candidate validation and build | `Scripts/check`; `Scripts/validate-consumer --revision COMMIT --output NEW_DIRECTORY --ios`. | Local worktree, Swift/Xcode tools, remote source access and installed iOS runtimes. |
-| Status and interrupted-run recovery | Not established. | Not established. |
-| Acceptance and publication | Run [`Release`](../../.github/workflows/release.yml) with the accepted tag; it validates the tag and publishes the GitHub release. After tagging, `Scripts/validate-consumer --version VERSION --output NEW_DIRECTORY --ios` validates the next-minor dependency requirement. | Swift/Xcode tools, remote source access and installed iOS runtimes; repository write access to run workflows |
-| Cleanup | `Scripts/validate-consumer` removes its temporary simulator devices after testing. | Xcode simulator tools. |
-
-Temporary consumer packages, logs and provenance belong under ignored `.build`
-paths. Run-specific versions, device identifiers and workstation paths belong
-in evidence, not package policy or reusable scripts.
+Pushing a signed `v*` tag triggers [Release](../../.github/workflows/release.yml).
+Its `validate` job runs the shared package workflow on the tagged commit. After
+validation succeeds, the shared release workflow verifies the signed annotated
+tag, accepted commit, version declaration and changelog, then publishes the
+changelog entry as GitHub release notes. Publication requires repository
+contents write access.

@@ -2,6 +2,7 @@
 // Copyright (c) 2020-present Xudong Xu
 
 import Foundation
+import Report
 import Testing
 
 // Fixture deadlines include cold dependency builds on hosted runners.
@@ -32,6 +33,16 @@ struct PackageWorkflowTests {
     ).trimmingCharacters(in: .whitespacesAndNewlines)
     #expect(version.hasPrefix("swift-benchmark-cli "))
     #expect(version == aliasVersion)
+  }
+
+  @Test(.timeLimit(.minutes(3)))
+  func cliReportsHelpAndInvalidCommands() throws {
+    let help = try runProcess(executable: cliPath(), arguments: ["--help"])
+    let invalidCommand = try processResult(
+      executable: cliPath(), arguments: ["invalid-command"])
+
+    #expect(help.contains("Commands:"))
+    #expect(invalidCommand.status == 2)
   }
 
   @Test(.timeLimit(.minutes(3)))
@@ -186,6 +197,8 @@ struct PackageWorkflowTests {
     let reportPath = URL(fileURLWithPath: scratchPath).appendingPathComponent("report.json").path
     let baselinePath = URL(fileURLWithPath: scratchPath).appendingPathComponent("baseline.json")
       .path
+    let failedReportPath = URL(fileURLWithPath: scratchPath)
+      .appendingPathComponent("budget-failure.json").path
     let tracePath = URL(fileURLWithPath: scratchPath).appendingPathComponent("run.trace").path
     let testingReportPath = URL(fileURLWithPath: scratchPath)
       .appendingPathComponent("testing-report.json")
@@ -523,6 +536,23 @@ struct PackageWorkflowTests {
         "json",
       ]
     )
+    let failedCheck = try processResult(
+      executable: "/usr/bin/env",
+      arguments: [
+        "swift", "package", "-q", "--package-path", fixturePath, "--scratch-path", scratchPath,
+        "--allow-writing-to-directory", scratchPath, "benchmark", "check", "--tag", "library",
+        "--baseline", baselinePath, "--budget", "mean:-1", "--format", "json",
+        "--output", failedReportPath, "--quiet",
+      ]
+    )
+    let failedReport = try JSONDecoder().decode(
+      ReportDocument.self, from: Data(contentsOf: URL(fileURLWithPath: failedReportPath)))
+    let runReport = try JSONDecoder().decode(
+      ReportDocument.self, from: Data(contentsOf: URL(fileURLWithPath: reportPath)))
+    let rows = runReport.suites.flatMap(\.cases).flatMap(\.measurement.rows)
+    let testingReport = try JSONDecoder().decode(
+      ReportDocument.self, from: Data(contentsOf: URL(fileURLWithPath: testingReportPath)))
+    let testingRows = testingReport.suites.flatMap(\.cases).flatMap(\.measurement.rows)
     let trace = try runProcess(
       executable: "/usr/bin/env",
       arguments: [
@@ -573,6 +603,13 @@ struct PackageWorkflowTests {
     #expect(FileManager.default.fileExists(atPath: testingReportPath))
     #expect(FileManager.default.fileExists(atPath: testingBaselinePath))
     #expect(check.contains("\"baseline\""))
+    #expect(failedCheck.status != 0)
+    #expect(failedReport.summary.failedBudgetCount == 1)
+    #expect(runReport.summary.caseCount == 1)
+    #expect(!rows.isEmpty)
+    #expect(rows.allSatisfy { !$0.samples.isEmpty })
+    #expect(!testingRows.isEmpty)
+    #expect(testingRows.allSatisfy { !$0.samples.isEmpty })
     #expect(diff.contains("\"baseline\""))
     #expect(testingCheck.contains("\"baseline\""))
     #expect(testingDiff.contains("\"baseline\""))

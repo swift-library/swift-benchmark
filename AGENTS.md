@@ -264,13 +264,22 @@ Keep validation tied to the changed behavior and owning layer.
 
 ## Validation
 
+Shared CI reads `.github/swift-package.json` for compiler, formatting, DocC and
+repository-command validation. Required checks are `policy / policy` and
+`validate / result`. Release identity and compatibility declarations live in
+`.github/release.json`.
+
 For documentation-only changes, run targeted repository searches that confirm
 the changed docs do not reintroduce Signpost-first public wording.
 
-For code/API changes, run at least:
+For code/API or CI changes, run local validation and every `commands` entry in
+`.github/swift-package.json`:
 
 ```bash
+swift build
 swift test
+swift build -c release
+xcrun swift-format lint --strict --configuration .swift-format --recursive Package.swift Sources Tests Plugins
 ```
 
 If macro file paths are renamed/moved, clean build artifacts first:

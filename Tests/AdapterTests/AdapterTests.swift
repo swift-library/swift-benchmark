@@ -4,11 +4,38 @@
 import Benchmark
 import BenchmarkTesting
 import BenchmarkXCTest
+import Foundation
 import Report
 import Testing
 
 @Suite("Testing Adapters")
 struct AdapterTests {
+  @Test
+  func successfulAdaptersPreserveArgumentSamplesAndAttachmentSummary() async throws {
+    let suite = BenchmarkSuite(
+      "Adapters",
+      configuration: .init(warmup: .iterations(1), iterations: .iterations(3))
+    ) {
+      Benchmark("Arguments", arguments: [1, 2]) { value in
+        blackHole(value)
+      }
+    }
+    let adapter = BenchmarkTestingAdapter(
+      command: BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 10))))
+
+    let document = try await adapter.report(
+      suites: [suite], metadata: .local(id: "run:adapter", packageIdentity: "swift-benchmark"))
+    let report = try #require(document.suites.first?.cases.first)
+    let payload = try #require(
+      BenchmarkXCTestAdapter().reportAttachmentPayloads(for: document).first)
+    let decoded = try JSONDecoder().decode(ReportDocument.self, from: Data(payload.content.utf8))
+
+    #expect(report.measurement.rows.count == 2)
+    #expect(report.measurement.rows.allSatisfy { $0.samples.count == 3 })
+    #expect(adapter.failureSummary(for: document) == nil)
+    #expect(decoded.summary == document.summary)
+  }
+
   @Test
   func testingAndXCTestAdaptersUseReportVerdicts() async throws {
     let metadata = RunMetadata(
