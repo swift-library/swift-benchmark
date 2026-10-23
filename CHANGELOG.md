@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Breaking**: Requires Swift 6.3 or later. Deployment minimums are iOS 18
+  and macOS 15 for all library and command-line products.
+
 ## 0.1.2
 
 - Commands with `--xctrace-output` launch the benchmark host once, under

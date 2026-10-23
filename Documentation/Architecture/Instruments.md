@@ -116,7 +116,7 @@ baseline `swift test` result.
 
 Current package facts:
 
-- Swift tools version: `6.0`.
+- Swift tools version: `6.3`.
 - SwiftSyntax dependency: `602.0.0`.
 - Public products include `Instruments`, `Benchmark`, `Report`, `Memory`,
   `BenchmarkTesting`, and `BenchmarkXCTest`.

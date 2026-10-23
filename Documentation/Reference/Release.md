@@ -29,10 +29,12 @@ their documented behavior.
 
 ## Dependencies and Verified Combinations
 
-The package requires Swift 6.0, iOS 18 or macOS 15. The maintained system window
-covers iOS 18/26/27 and macOS 15/26/27. CI tests and builds releases with Swift
-6.0 on macOS 15 and Swift 6.3 on macOS 26. Strict formatting, DocC validation
-and the CLI/plugin version command use the last compiler entry.
+The package requires Swift 6.3, iOS 18 or macOS 15, including its command-line
+products. The maintained system window covers iOS 18/26/27 and macOS 15/26/27.
+Shared CI uses one compiler entry: Xcode 26.6 on macOS 26, with bundled Swift
+6.3, for tests, release builds, strict formatting, DocC validation and the
+CLI/plugin version command. The latest SDK checks API availability against the
+deployment floors at compile time; CI does not run on older systems.
 
 ## Validation
 

@@ -264,6 +264,10 @@ Keep validation tied to the changed behavior and owning layer.
 
 ## Validation
 
+The package requires Swift 6.3 and deployment minimums of iOS 18 and macOS 15
+for all products. Shared CI uses only Xcode 26.6 on macOS 26 with bundled Swift
+6.3; the latest SDK checks availability against the deployment floors.
+
 Shared CI reads `.github/swift-package.json` for compiler, formatting, DocC and
 repository-command validation. Required checks are `policy / policy` and
 `validate / result`. Release identity and compatibility declarations live in
@@ -295,8 +299,9 @@ swift package clean
 - Flag a change to the compatibility surface recorded in
   `Documentation/Reference/Release.md`, such as public API, observable
   behavior or a raised minimum platform or Swift version, without the
-  changelog entry and version bump VERSIONING requires. Safe path: record the
-  change under the next version with that bump.
+  changelog entry VERSIONING requires. Record unreleased compatibility changes
+  under `## Unreleased` with a **Breaking** marker and the new minimums when
+  requirements change. Assign the version at release time under VERSIONING.
 
 ### Claims
 
