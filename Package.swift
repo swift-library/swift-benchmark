@@ -166,6 +166,7 @@ let package = Package(
     ),
     .testTarget(
       name: "WorkflowTests",
+      dependencies: ["Report"],
       path: "Tests/WorkflowTests"
     ),
     .testTarget(
