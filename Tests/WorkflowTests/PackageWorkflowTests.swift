@@ -934,7 +934,7 @@ struct PackageWorkflowTests {
   private func writeCModuleDependencyPackage(at package: URL, explicitModuleMap: Bool) throws {
     try writeFile(
       """
-      // swift-tools-version: 6.0
+      // swift-tools-version: 6.3
       import PackageDescription
 
       let package = Package(
@@ -1030,7 +1030,7 @@ struct PackageWorkflowTests {
     let dependencyURL = dependency.absoluteURL
     try writeFile(
       """
-      // swift-tools-version: 6.0
+      // swift-tools-version: 6.3
       import PackageDescription
 
       let package = Package(
