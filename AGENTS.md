@@ -8,7 +8,7 @@
   before changing reusable files.
 - Change the owning layer: runtime/API code, macro implementation, report
   layer, current architecture truth, reference checklist, or docs.
-- Keep changes traceable to the request, source evidence, or owning invariant.
+- Keep changes traceable to the request, a cited source, or the owning invariant.
 - Validate code/API changes with `swift test` unless the task explicitly
   narrows validation.
 
@@ -130,7 +130,7 @@ duration policies, CLI/plugin flag wiring, Memory/allocation seams, and
 use the advanced `--host` override, the BenchmarkTesting bridge diagnoses
 `private`/`fileprivate` tests; argument rows are supported. Testing/XCTest adapter
 depth stays behind available APIs, platform memory/allocation hooks vary, and
-MetricKit is future optional production diagnostics evidence.
+MetricKit is future optional production diagnostics.
 
 When implementation completes, absorb durable facts into
 `Documentation/Architecture/`, focused `Documentation/Reference/` checklists

@@ -79,7 +79,7 @@ Benchmark adds capabilities Swift Testing does not provide:
 - memory/allocation diagnostics,
 - timeline attribution,
 - baseline/budget/diff/check,
-- `ReportDocument` evidence,
+- `ReportDocument`,
 - package benchmark workflow.
 
 These additions extend the Swift Testing-shaped skeleton. They should not
@@ -101,5 +101,5 @@ replace it with unrelated topology.
 
 - `BenchmarkDeclarations.md`
 - `BenchmarkExecution.md`
-- `ReportEvidence.md`
+- `ReportDocument.md`
 - `WorkflowAdapters.md`

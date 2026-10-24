@@ -1,8 +1,8 @@
-# Report Evidence
+# Report Document
 
 ## Scope / Purpose
 
-This document owns the structured evidence architecture: report documents,
+This document owns the structured report architecture: report documents,
 baseline/budget comparison, CI verdicts, output contracts, and the relationship
 between live event streams and durable report snapshots.
 
@@ -20,7 +20,7 @@ build the same durable `ReportDocument` truth from runner lifecycle events.
 CLI, plugin, Testing/XCTest adapters, diagnostics, and trace attachment flows
 consume that same schema.
 
-## Evidence Flow
+## Data Flow
 
 ```text
 Benchmark.Event.Stream
@@ -87,20 +87,20 @@ Report owns comparison policy:
 
 ## Attachments
 
-Report attachments are structured evidence, not presentation strings.
+Report attachments are structured data, not presentation strings.
 
 Attachment examples:
 
 - trace artifacts,
 - exported `xctrace` metadata,
 - future MetricKit payload references,
-- memory/allocation evidence,
+- memory and allocation measurements,
 - agent/tool presentation assets.
 
 Swift Testing `Issue` and `Attachment` are adapter sinks only. They do not
 become Report truth.
 
-## Acceptance Evidence
+## Acceptance Checks
 
 - JSON schema fixture compatibility tests.
 - Baseline read/write/update/check/diff tests.

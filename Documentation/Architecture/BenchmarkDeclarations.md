@@ -133,7 +133,7 @@ Discovery rules:
 - Automatic insertion of `#span` / `@Instrumented` into benchmark bodies.
 - Swift Testing runtime dependency in Benchmark core.
 
-## Acceptance Evidence
+## Acceptance Checks
 
 - Macro expansion tests for `@BenchmarkSuite` and `@Benchmark`.
 - Source-location tests at user declarations.

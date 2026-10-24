@@ -273,12 +273,12 @@ measurement. It is where discovery results, filters, traits, effective
 configuration, Dimension inputs, and planning failures become explicit steps
 before measurement begins.
 
-## Correlated Performance Evidence
+## Correlated Performance Reports
 
-The target is a structured performance evidence graph. The
-core runner measures wall-clock samples; Report correlates those samples with
-baselines, budgets, timeline spans/events, diagnostics metrics, source
-locations, and trace artifacts.
+The target is a structured performance report graph. The core runner measures
+wall-clock samples; Report correlates those samples with baselines, budgets,
+timeline spans/events, diagnostics metrics, source locations, and trace
+artifacts.
 
 The model should be typed and scope-linked, not rendered by hand-built strings:
 
@@ -540,7 +540,7 @@ Swift Testing provides the declaration and trait mental model, but Swift
 Testing's native runner is not the Benchmark runner. Package workflow bridges
 supported Testing declarations into Benchmark discovery records and then enters
 the local Benchmark runner to preserve warmup, repeated measured iterations,
-samples, Dimension expansion, Report comparison, and diagnostics evidence.
+samples, Dimension expansion, Report comparison, and diagnostics.
 
 Native Benchmark execution path:
 
@@ -616,7 +616,7 @@ The following concerns are Benchmark-adjacent product/adaptor boundaries:
 - Memory/allocation metrics,
 - Instruments timeline aggregation.
 
-Completion is measured by tests and workflow evidence, not by the existence of
+Completion is measured by tests and workflow runs, not by the existence of
 type names alone.
 
 ## Report And Baseline Boundary
@@ -707,7 +707,7 @@ Platform policy:
   JSON, and summary rendering should remain portable.
 - Apple platform diagnostics may use Signpost timelines and Instruments trace
   artifacts behind platform-checked adapter/backend files. Future production
-  diagnostics may add MetricKit payload evidence.
+  diagnostics may add MetricKit payloads.
 - Unsupported optional diagnostics report structured unavailable states.
 - Unsupported required diagnostics fail configuration explicitly.
 - Never report unsupported metrics as zero.
@@ -719,7 +719,7 @@ must not become a product domain or leak into Benchmark core.
 ## Risks / Ongoing Extension Points
 
 - Optional platform providers and presentation templates may grow, but they
-  should remain Report/adapters over the structured evidence model.
+  should remain Report/adapters over the structured report model.
 - Durable official-source alignment belongs in architecture documents.
 
 ## Related Documents

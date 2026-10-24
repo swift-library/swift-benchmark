@@ -124,7 +124,7 @@ Implemented event coverage:
 - diagnostic metric captured/unavailable/failed,
 - attachment recorded.
 
-## Acceptance Evidence
+## Acceptance Checks
 
 - Plan construction tests for filters, traits, Dimension expansion, skips, and
   planning failures.

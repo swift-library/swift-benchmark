@@ -48,9 +48,9 @@ Implemented scope:
    `BenchmarkDiscovery` -> `BenchmarkRunner.Plan` -> `BenchmarkRunner`.
 3. Swift Testing and XCTest native adapter UX over Benchmark/Report.
 4. Apple-aligned Dimension workflow and Report-backed curve/comparison model.
-5. Report-owned baseline, budget, diff, check, and stable JSON evidence.
+5. Report-owned baseline, budget, diff, check, and stable JSON reports.
 6. Memory/allocation provider depth and resource-regression discipline.
-7. Optional Apple diagnostics as Report evidence and trace artifacts.
+7. Optional Apple diagnostics as Report data and trace artifacts.
 
 The implemented scope is complete within the accepted boundaries. It
 does not copy unrelated package structure, result formats, or private platform
@@ -199,8 +199,8 @@ They must not:
 
 ### Report
 
-Report is structured evidence, comparison, attribution, diagnostics, and
-export. It owns the evidence graph that explains regressions and feeds
+Report provides structured report data, comparison, attribution, diagnostics,
+and export. It owns the report graph that explains regressions and feeds
 agent/tool/UI/profiler-compatible outputs.
 
 It owns:
@@ -373,9 +373,9 @@ Unsupported optional diagnostics should produce structured unavailable states,
 not fake zero values. Unsupported required diagnostics should fail
 configuration explicitly.
 
-MetricKit is future Apple-only optional Report evidence. It is run/app-session
-scoped, must not be promised as deterministic per-iteration benchmark data, and
-is not current Benchmark closure acceptance.
+MetricKit is future Apple-only optional Report diagnostics. It is
+run/app-session scoped, must not be promised as deterministic per-iteration
+benchmark data, and is not current Benchmark closure acceptance.
 
 `xcrun xctrace record` orchestration is an optional diagnostics workflow. The
 `.trace` package and exported public metadata are attachments/provenance, not a
@@ -419,9 +419,9 @@ stable private data model to parse.
   must stay behind compile/availability gates.
 - Memory/allocation provider behavior varies by platform and toolchain.
 - `xctrace` behavior is Apple-tooling-dependent and must remain optional Report
-  evidence. MetricKit remains future optional production diagnostics evidence.
+  diagnostics. MetricKit remains future optional production diagnostics.
 - Future presentation templates may grow, but they should remain artifacts over
-  the structured evidence model rather than new product semantics.
+  the structured report model rather than new product semantics.
 
 ## Related Documents
 

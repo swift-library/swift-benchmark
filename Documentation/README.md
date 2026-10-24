@@ -30,11 +30,11 @@ Documentation roles:
 - `Documentation/README.md`: documentation router.
 - `Documentation/Architecture/*`: current architecture truth.
 - `Documentation/Architecture/CapabilityMap.md`: capability-track router across
-  product domains, implementation phases, and acceptance evidence.
+  product domains, implementation phases, and acceptance checks.
 - `Documentation/Architecture/SwiftTestingAlignment.md`,
   `Documentation/Architecture/BenchmarkDeclarations.md`,
   `Documentation/Architecture/BenchmarkExecution.md`,
-  `Documentation/Architecture/ReportEvidence.md`,
+  `Documentation/Architecture/ReportDocument.md`,
   `Documentation/Architecture/Dimension.md`,
   `Documentation/Architecture/Memory.md`,
   `Documentation/Architecture/AppleDiagnostics.md`, and
