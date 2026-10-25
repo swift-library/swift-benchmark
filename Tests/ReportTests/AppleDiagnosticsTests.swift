@@ -7,32 +7,24 @@ import Testing
 @Suite("Apple Diagnostics")
 struct AppleDiagnosticsTests {
   @Test
-  func traceArtifactExporterAttachesTraceAndOfficialExportsOnlyWhenPresent() async {
+  func traceArtifactExporterAttachesTheTraceOnlyWhenItExists() async {
     let scope = ReportScope(
       runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
-    let exporter = TraceArtifactExporter(
-      artifact: TraceArtifact(
-        tracePath: "/tmp/run.trace",
-        exportedXMLPath: "/tmp/run.xml",
-        tableOfContentsPath: "/tmp/run-toc.xml",
-        command: ["xctrace", "export", "--input", "/tmp/run.trace"],
-        metadata: ["tool": "xctrace"]
-      ),
-      fileExists: { path in
-        path == "/tmp/run.trace" || path == "/tmp/run.xml" || path == "/tmp/run-toc.xml"
-      }
+    let artifact = TraceArtifact(
+      tracePath: "/tmp/run.trace",
+      command: ["xcrun", "xctrace", "record"],
+      metadata: ["tool": "xctrace"]
     )
 
-    let attachments = await exporter.attachments(for: scope)
+    let present = await TraceArtifactExporter(artifact: artifact, fileExists: { _ in true })
+      .attachments(for: scope)
+    let missing = await TraceArtifactExporter(artifact: artifact, fileExists: { _ in false })
+      .attachments(for: scope)
 
-    #expect(attachments.map(\.kind) == [.trace, .structuredData, .structuredData])
-    #expect(
-      attachments.map(\.contentType) == [
-        "application/vnd.apple.instruments.trace",
-        "application/xml",
-        "application/xml",
-      ])
-    #expect(attachments.allSatisfy { $0.metadata["command"]?.contains("xctrace export") == true })
+    #expect(present.map(\.kind) == [.trace])
+    #expect(present.first?.contentType == "application/vnd.apple.instruments.trace")
+    #expect(present.first?.metadata == ["tool": "xctrace", "command": "xcrun xctrace record"])
+    #expect(missing.isEmpty)
   }
 
   @Test

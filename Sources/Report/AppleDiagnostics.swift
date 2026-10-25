@@ -3,23 +3,14 @@
 
 import Foundation
 
+/// An Instruments trace on disk and how it was produced.
 package struct TraceArtifact: Sendable, Equatable {
   package var tracePath: String
-  package var exportedXMLPath: String?
-  package var tableOfContentsPath: String?
   package var command: [String]
   package var metadata: [String: String]
 
-  package init(
-    tracePath: String,
-    exportedXMLPath: String? = nil,
-    tableOfContentsPath: String? = nil,
-    command: [String] = [],
-    metadata: [String: String] = [:]
-  ) {
+  package init(tracePath: String, command: [String] = [], metadata: [String: String] = [:]) {
     self.tracePath = tracePath
-    self.exportedXMLPath = exportedXMLPath
-    self.tableOfContentsPath = tableOfContentsPath
     self.command = command
     self.metadata = metadata
   }
@@ -52,7 +43,7 @@ package struct TraceArtifactExporter: TraceExporter {
       metadata["command"] = artifact.command.joined(separator: " ")
     }
 
-    var attachments = [
+    return [
       DiagnosticAttachment(
         id: ReportID(rawValue: "attachment:trace:\(stable(artifact.tracePath))"),
         scope: scope,
@@ -63,36 +54,6 @@ package struct TraceArtifactExporter: TraceExporter {
         metadata: metadata
       )
     ]
-
-    if let exportedXMLPath = artifact.exportedXMLPath, fileExists(exportedXMLPath) {
-      attachments.append(
-        DiagnosticAttachment(
-          id: ReportID(rawValue: "attachment:trace-export-xml:\(stable(exportedXMLPath))"),
-          scope: scope,
-          kind: .structuredData,
-          title: "xctrace export XML",
-          location: exportedXMLPath,
-          contentType: "application/xml",
-          metadata: metadata
-        )
-      )
-    }
-
-    if let tableOfContentsPath = artifact.tableOfContentsPath, fileExists(tableOfContentsPath) {
-      attachments.append(
-        DiagnosticAttachment(
-          id: ReportID(rawValue: "attachment:trace-toc:\(stable(tableOfContentsPath))"),
-          scope: scope,
-          kind: .structuredData,
-          title: "xctrace table of contents",
-          location: tableOfContentsPath,
-          contentType: "application/xml",
-          metadata: metadata
-        )
-      )
-    }
-
-    return attachments
   }
 
   private func stable(_ value: String) -> String {
