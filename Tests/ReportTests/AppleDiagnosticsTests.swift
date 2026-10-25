@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
 // Copyright (c) 2020-present Xudong Xu
 
+import Foundation
 import Report
 import Testing
 
@@ -73,24 +74,26 @@ struct AppleDiagnosticsTests {
     #expect(artifact.metadata["run"] == "fixture")
   }
 
-  @Test
-  func xctraceRecorderRoutesTargetStandardOutputBeforeLaunch() async throws {
-    let recorder = XctraceRecorder(xcrunPath: "/usr/bin/xcrun") { arguments in
-      #expect(
-        arguments.suffix(6) == [
-          "--target-stdout", "/tmp/host.json", "--launch", "/tmp/generated-host", "--", "run",
-        ])
-      return XctraceCommandResult(terminationStatus: 0)
-    }
+  @Test(.timeLimit(.minutes(1)))
+  func xctraceRecorderDrainsOutputWhileTheCommandRuns() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("swift-benchmark-xcrun-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let xcrun = directory.appendingPathComponent("xcrun")
+    // Each stream carries more than a pipe buffers.
+    try """
+    #!/bin/sh
+    head -c 1048576 /dev/zero | tr '\\0' o
+    head -c 1048576 /dev/zero | tr '\\0' e >&2
+    """.write(to: xcrun, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: xcrun.path)
+    let tracePath = directory.appendingPathComponent("run.trace").path
 
-    let artifact = try await recorder.record(
-      executablePath: "/tmp/generated-host",
-      executableArguments: ["run"],
-      outputTracePath: "/tmp/run.trace",
-      targetStandardOutputPath: "/tmp/host.json"
-    )
+    let artifact = try await XctraceRecorder(xcrunPath: xcrun.path)
+      .record(executablePath: "/bin/true", outputTracePath: tracePath)
 
-    #expect(artifact.command.contains("--target-stdout"))
+    #expect(artifact.tracePath == tracePath)
   }
 
   @Test

@@ -271,11 +271,9 @@ func writeFakeXcrun(to path: String) throws {
   let script = """
     #!/bin/sh
     output=""
-    target_stdout=/dev/stdout
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --output) shift; output="$1" ;;
-        --target-stdout) shift; target_stdout="$1" ;;
         --launch) shift; break ;;
       esac
       shift
@@ -285,7 +283,7 @@ func writeFakeXcrun(to path: String) throws {
     if [ "$1" = "--" ]; then
       shift
     fi
-    "$executable" "$@" > "$target_stdout" || exit 54
+    "$executable" "$@" || exit 54
     if [ -n "$output" ]; then
       mkdir -p "$output"
     fi

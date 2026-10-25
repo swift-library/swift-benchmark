@@ -122,7 +122,6 @@ package struct XctraceRecorder: Sendable {
     executableArguments: [String] = [],
     outputTracePath: String,
     template: String = "Time Profiler",
-    targetStandardOutputPath: String? = nil,
     metadata: [String: String] = [:]
   ) async throws -> TraceArtifact {
     var arguments = [
@@ -133,9 +132,6 @@ package struct XctraceRecorder: Sendable {
       "--output",
       outputTracePath,
     ]
-    if let targetStandardOutputPath {
-      arguments += ["--target-stdout", targetStandardOutputPath]
-    }
     arguments += ["--launch", executablePath, "--"] + executableArguments
     let result = await runner(arguments)
     guard result.terminationStatus == 0 else {
@@ -165,17 +161,15 @@ package struct XctraceRecorder: Sendable {
       process.standardError = stderr
       do {
         try process.run()
+        let output = PipeCapture()
+        let errorOutput = PipeCapture()
+        output.startReading(stdout.fileHandleForReading)
+        errorOutput.startReading(stderr.fileHandleForReading)
         process.waitUntilExit()
         return XctraceCommandResult(
           terminationStatus: process.terminationStatus,
-          standardOutput: String(
-            decoding: stdout.fileHandleForReading.readDataToEndOfFile(),
-            as: UTF8.self
-          ),
-          standardError: String(
-            decoding: stderr.fileHandleForReading.readDataToEndOfFile(),
-            as: UTF8.self
-          )
+          standardOutput: output.string(),
+          standardError: errorOutput.string()
         )
       } catch {
         return XctraceCommandResult(
