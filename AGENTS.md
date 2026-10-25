@@ -265,8 +265,11 @@ Keep validation tied to the changed behavior and owning layer.
 ## Validation
 
 The package requires Swift 6.3 and deployment minimums of iOS 18 and macOS 15
-for all products. Shared CI uses only Xcode 26.6 on macOS 26 with bundled Swift
-6.3; the latest SDK checks availability against the deployment floors.
+for all products. Shared CI tests with Xcode 26.6 on macOS 26 (bundled Swift
+6.3, the minimum) and with Xcode 27.2 and 27.1, tests on a Swift 6.3 Linux
+image, and builds the libraries for iOS; the latest SDKs check availability
+against the deployment floors. `Documentation/Reference/Release.md` records the
+matrix.
 
 Shared CI reads `.github/swift-package.json` for compiler, formatting, DocC and
 repository-command validation. Required checks are `policy / policy` and

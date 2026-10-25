@@ -89,10 +89,16 @@ struct BenchmarkMeasurementTests {
 
     let results = try await BenchmarkRunner(cpuClock: nil).run(suite)
     let samples = try #require(results.first?.measurement.samples)
-    let counting = try #require(samples.first { $0.value(for: .allocations) != nil })
+    #expect(samples.first?.value(for: .allocations) == nil)
+    guard let counting = samples.first(where: { $0.value(for: .allocations) != nil }) else {
+      // A runtime without the instrumentation hooks leaves the counts out.
+      #if canImport(Darwin)
+        Issue.record("The Swift runtime on Darwin provides the instrumentation hooks.")
+      #endif
+      return
+    }
 
     #expect(samples.count == 2)
-    #expect(samples.first?.value(for: .allocations) == nil)
     #expect(counting.batchSize == 10)
     // The runtime hooks count every thread of the test process, so other
     // tests running at the same time can only add to these counts.

@@ -187,7 +187,30 @@ struct CLIWorkflowTests {
         "json",
       ]
     )
+    // Each step runs in a host process of its own, so no other work shares
+    // the counting pass and the counts are exact.
+    let allocations = try JSONDecoder().decode(
+      ReportDocument.self,
+      from: Data(
+        runProcess(
+          executable: cli,
+          arguments: [
+            "run", "--host", hostPath, "--case", "Allocate1000", "--warmup", "0",
+            "--iterations", "1", "--format", "json",
+          ]
+        ).utf8)
+    ).suites.first?.cases.first?.measurement
 
+    #if canImport(Darwin)
+      #expect(allocations?.statistics(for: .allocations)?.median == 1_000)
+      #expect(allocations?.statistics(for: .allocatedBytes)?.median == 24_000)
+    #else
+      // A runtime without the instrumentation hooks leaves the counts out;
+      // counts it reports must still be exact.
+      if let counted = allocations?.statistics(for: .allocations) {
+        #expect(counted.median == 1_000)
+      }
+    #endif
     #expect(list.contains("\"suite\" : \"Fixture\""))
     #expect(list.contains("\"caseName\" : \"Noop\""))
     #expect(run.contains("\"wallClock\""))

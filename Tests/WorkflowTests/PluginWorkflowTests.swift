@@ -6,8 +6,17 @@ import Foundation
 import Report
 import Testing
 
+#if os(macOS)
+  private let pluginWorkflowIsSupported = true
+#else
+  private let pluginWorkflowIsSupported = false
+#endif
+
 // Fixture deadlines include cold dependency builds on hosted runners.
-@Suite("Plugin Workflow")
+@Suite(
+  "Plugin Workflow",
+  .enabled(if: pluginWorkflowIsSupported, "The command plugin supports Apple platforms only.")
+)
 struct PluginWorkflowTests {
   @Test(.timeLimit(.minutes(10)))
   func fixturePackageCommandGeneratesHostWithoutUserBoilerplate() throws {
@@ -325,27 +334,25 @@ struct PluginWorkflowTests {
 
   @Test(.timeLimit(.minutes(15)))
   func fixturePackageCommandLinksMixedLanguageResourceAndBinaryTargets() throws {
-    #if os(macOS)
-      let package = URL(fileURLWithPath: scratchPath("fixture-mixed-targets-package"))
-      let scratch = URL(fileURLWithPath: scratchPath("fixture-mixed-targets-scratch"))
-      try? FileManager.default.removeItem(at: package)
-      try? FileManager.default.removeItem(at: scratch)
-      try writeMixedTargetPackage(at: package, swiftBenchmarkRoot: repositoryRoot())
+    let package = URL(fileURLWithPath: scratchPath("fixture-mixed-targets-package"))
+    let scratch = URL(fileURLWithPath: scratchPath("fixture-mixed-targets-scratch"))
+    try? FileManager.default.removeItem(at: package)
+    try? FileManager.default.removeItem(at: scratch)
+    try writeMixedTargetPackage(at: package, swiftBenchmarkRoot: repositoryRoot())
 
-      // No write permission beyond the plugin's own work directory: the
-      // host must build where the sandbox lets the plugin write.
-      let run = try runProcess(
-        executable: "/usr/bin/env",
-        arguments: [
-          "swift", "package", "-q", "--package-path", package.path, "--scratch-path", scratch.path,
-          "benchmark", "run", "--warmup", "0", "--iterations", "2", "--format", "json",
-        ]
-      )
+    // No write permission beyond the plugin's own work directory: the
+    // host must build where the sandbox lets the plugin write.
+    let run = try runProcess(
+      executable: "/usr/bin/env",
+      arguments: [
+        "swift", "package", "-q", "--package-path", package.path, "--scratch-path", scratch.path,
+        "benchmark", "run", "--warmup", "0", "--iterations", "2", "--format", "json",
+      ]
+    )
 
-      #expect(run.contains("\"name\" : \"Total\""))
-      #expect(run.contains("\"name\" : \"sameLine\""))
-      #expect(run.contains("\"name\" : \"peakMemory\""))
-    #endif
+    #expect(run.contains("\"name\" : \"Total\""))
+    #expect(run.contains("\"name\" : \"sameLine\""))
+    #expect(run.contains("\"name\" : \"peakMemory\""))
   }
 
   @Test(.timeLimit(.minutes(10)))

@@ -15,6 +15,18 @@ struct FixtureBenchmarks {
   func sized() {
     blackHole(2)
   }
+
+  @Benchmark("Allocate1000")
+  func allocate1000() {
+    for _ in 0..<1_000 {
+      blackHole(AllocationProbe())
+    }
+  }
+}
+
+/// A heap object of known size: a 16-byte object header and one `Int`.
+final class AllocationProbe {
+  var value = 0
 }
 
 @main
