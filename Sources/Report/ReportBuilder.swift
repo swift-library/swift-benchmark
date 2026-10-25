@@ -100,6 +100,7 @@ public struct ReportBuilder: Sendable {
             let compared = comparison.compare(
               suiteName: accumulator.suiteName,
               caseName: accumulator.caseName,
+              scope: scope,
               measurement: measurement,
               baseline: baseline
             )
@@ -126,7 +127,8 @@ public struct ReportBuilder: Sendable {
               ),
               attributions: attributions.filter { $0.scope.caseID == caseID },
               diagnostics: diagnostics.filter { $0.scope.caseID == caseID },
-              attachments: attachments.filter { $0.scope.caseID == caseID }
+              attachments: attachments.filter { $0.scope.caseID == caseID },
+              warnings: compared.warnings
             )
           }
         return SuiteReport(
@@ -137,7 +139,11 @@ public struct ReportBuilder: Sendable {
         )
       }
 
-    return ReportDocument(metadata: metadata, suites: suites)
+    return ReportDocument(
+      metadata: metadata,
+      suites: suites,
+      warnings: ReportWarning.runWarnings(metadata: metadata, baseline: baseline)
+    )
   }
 
   private func caseAccumulators() -> [CaseKey: CaseAccumulator] {

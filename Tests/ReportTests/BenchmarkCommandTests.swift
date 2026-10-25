@@ -391,6 +391,7 @@ struct BenchmarkCommandTests {
         discoveries: [HostCheckBenchmarks.self],
         arguments: [
           "check",
+          "--allow-debug",
           "--baseline",
           baselinePath,
           "--threshold",

@@ -18,6 +18,9 @@ public enum ConsoleReportRenderer {
     var lines: [String] = []
     lines.append("Benchmark Report \(document.metadata.id.rawValue)")
     lines.append("Verdict: \(document.summary.verdict.rawValue)")
+    for warning in document.warnings {
+      lines.append("Warning: \(warning.message)")
+    }
     for suite in document.suites {
       lines.append("")
       lines.append("[\(suite.name)]")
@@ -33,6 +36,9 @@ public enum ConsoleReportRenderer {
         lines.append(
           "\(report.name): \(metrics.joined(separator: "; ")); budgets \(failedBudgets)/\(report.budgets.count), causes \(report.verdictCauses.count), verdict \(report.verdict.rawValue)"
         )
+        for warning in report.warnings {
+          lines.append("  warning: \(warning.message)")
+        }
       }
     }
     return lines.joined(separator: "\n")

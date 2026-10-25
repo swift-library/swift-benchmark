@@ -54,6 +54,11 @@ public struct RunMetadata: Sendable, Equatable, Codable {
     self.device = device
   }
 
+  /// Metadata for a run in the current process.
+  ///
+  /// Without an explicit `buildConfiguration`, the configuration comes from
+  /// `SWIFT_BENCHMARK_BUILD_CONFIGURATION`, which the command plugin sets, and
+  /// otherwise from whether this module was compiled with assertions enabled.
   public static func local(
     id: ReportID,
     packageIdentity: String = "swift-benchmark",
@@ -63,18 +68,72 @@ public struct RunMetadata: Sendable, Equatable, Codable {
   ) -> RunMetadata {
     RunMetadata(
       id: id,
-      swiftVersion: "unknown",
+      swiftVersion: SwiftCompilerVersion.current,
       packageIdentity: packageIdentity,
       gitCommit: gitCommit,
-      platform: ProcessInfo.processInfo.operatingSystemVersionString,
+      platform: OperatingSystemName.current,
       architecture: SystemArchitecture.current,
       osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
       generatedAt: generatedAt,
       buildConfiguration: buildConfiguration
         ?? ProcessInfo.processInfo.environment["SWIFT_BENCHMARK_BUILD_CONFIGURATION"]
-        ?? "debug",
-      device: nil
+        ?? (_isDebugAssertConfiguration() ? "debug" : "release"),
+      device: MachineModel.current
     )
+  }
+}
+
+enum SwiftCompilerVersion {
+  static var current: String {
+    #if compiler(>=6.5)
+      "6.5 or later"
+    #elseif compiler(>=6.4)
+      "6.4"
+    #else
+      "6.3"
+    #endif
+  }
+}
+
+enum OperatingSystemName {
+  static var current: String {
+    #if os(macOS)
+      "macOS"
+    #elseif os(iOS)
+      "iOS"
+    #elseif os(tvOS)
+      "tvOS"
+    #elseif os(watchOS)
+      "watchOS"
+    #elseif os(visionOS)
+      "visionOS"
+    #elseif os(Linux)
+      "Linux"
+    #elseif os(Windows)
+      "Windows"
+    #else
+      "unknown"
+    #endif
+  }
+}
+
+enum MachineModel {
+  /// The hardware model identifier, such as `Mac15,8`, where the platform reports one.
+  static var current: String? {
+    #if canImport(Darwin)
+      var size = 0
+      guard sysctlbyname("hw.model", nil, &size, nil, 0) == 0, size > 0 else {
+        return nil
+      }
+      var buffer = [CChar](repeating: 0, count: size)
+      guard sysctlbyname("hw.model", &buffer, &size, nil, 0) == 0 else {
+        return nil
+      }
+      return String(
+        decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    #else
+      return nil
+    #endif
   }
 }
 

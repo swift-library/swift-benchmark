@@ -25,6 +25,9 @@ struct BenchmarkCLI {
     } catch let error as ComparisonArgumentError {
       fputs("swift-benchmark-cli: \(error.description)\n", stderr)
       Foundation.exit(CLIExitCode.invalidConfiguration.rawValue)
+    } catch let error as CheckGateError {
+      fputs("swift-benchmark-cli: \(error.description)\n", stderr)
+      Foundation.exit(CLIExitCode.invalidConfiguration.rawValue)
     } catch let error as BaselineReadError {
       fputs("swift-benchmark-cli: \(error.description)\n", stderr)
       Foundation.exit(CLIExitCode.invalidConfiguration.rawValue)
@@ -81,7 +84,7 @@ struct BenchmarkCLI {
     Commands:
       list --host <path> [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json]
       run --host <path> [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json|speedscope] [--output <path>]
-      check --host <path> --baseline <baseline.json> [--suite <name>] [--case <name>] [--tag <tag>]
+      check --host <path> --baseline <baseline.json> [--allow-debug] [--suite <name>] [--case <name>] [--tag <tag>]
       trace --host <path> [same options as run]
       render --input <report.json> [--format console|json|speedscope] [--output <path>]
       compare|diff --input <report.json> --baseline <baseline.json> [--statistic <name>] [--threshold [<metric>=]<value>] [--fail-on-regression]
@@ -166,6 +169,11 @@ struct BenchmarkCLI {
     )
 
     var document = try readReport(reportURL.path)
+    if command == "check" {
+      try CheckGate.validate(
+        buildConfiguration: document.metadata.buildConfiguration,
+        allowDebug: options.hasFlag("--allow-debug"))
+    }
     let exporter = TraceArtifactExporter(artifact: artifact)
     for suiteIndex in document.suites.indices {
       for caseIndex in document.suites[suiteIndex].cases.indices {
@@ -206,6 +214,9 @@ struct BenchmarkCLI {
     let output = try options.format(default: .console).render(document)
     let emitted = try writeOrReturn(output, options: options)
     if failOnRegression || options.hasFlag("--fail-on-regression") {
+      try CheckGate.validate(
+        buildConfiguration: document.metadata.buildConfiguration,
+        allowDebug: options.hasFlag("--allow-debug"))
       guard document.summary.failedRegressionCount == 0 && document.summary.failedBudgetCount == 0
       else {
         throw CLIError.regressionFailure(output: emitted)
@@ -318,6 +329,7 @@ private final class PipeCapture: @unchecked Sendable {
 struct CLIOptions {
   private static let flags: Set<String> = [
     "--adaptive",
+    "--allow-debug",
     "--fail-on-regression",
     "--quiet",
     "--timeline",

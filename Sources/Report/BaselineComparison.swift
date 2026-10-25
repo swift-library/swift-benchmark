@@ -64,15 +64,20 @@ public struct ComparisonPolicy: Sendable, Equatable {
   }
 
   /// Compares every metric that both the measurement and its baseline case
-  /// have, and evaluates the budgets that apply to the case.
+  /// have, evaluates the budgets that apply to the case, and warns about
+  /// comparisons that noise or too few samples make unreliable.
   func compare(
     suiteName: String,
     caseName: String,
+    scope: ReportScope,
     measurement: Report.Measurement,
     baseline: BaselineDocument?
-  ) -> (baselines: [BaselineComparison], budgets: [BudgetComparison]) {
+  ) -> (
+    baselines: [BaselineComparison], budgets: [BudgetComparison], warnings: [ReportWarning]
+  ) {
+    let baselineCase = baseline?.baselineCase(suiteName: suiteName, caseName: caseName)
     var baselines: [BaselineComparison] = []
-    if let baselineCase = baseline?.baselineCase(suiteName: suiteName, caseName: caseName) {
+    if let baselineCase {
       for metric in measurement.metrics {
         guard let current = measurement.statistics(for: metric),
           let previous = baselineCase.measurement.statistics(for: metric)
@@ -94,7 +99,16 @@ public struct ComparisonPolicy: Sendable, Equatable {
       budgets
       .filter { $0.applies(suiteName: suiteName, caseName: caseName) }
       .map { BudgetComparison(policy: $0, measurement: measurement) }
-    return (baselines, budgetComparisons)
+    let isCompared = !baselines.isEmpty || budgetComparisons.contains { $0.verdict != .notCompared }
+    let warnings =
+      isCompared
+      ? ReportWarning.comparisonWarnings(
+        scope: scope,
+        measurement: measurement,
+        baseline: baselineCase?.measurement,
+        comparisons: baselines
+      ) : []
+    return (baselines, budgetComparisons, warnings)
   }
 }
 

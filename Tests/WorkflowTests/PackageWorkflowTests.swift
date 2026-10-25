@@ -82,7 +82,7 @@ struct PackageWorkflowTests {
     let check = try processResult(
       executable: try cliPath(),
       arguments: [
-        "check", "--host", hostURL.path, "--format", "json",
+        "check", "--allow-debug", "--host", hostURL.path, "--format", "json",
         "--baseline", directory.appendingPathComponent("baseline.json").path,
         "--xctrace-output", directory.appendingPathComponent("check.trace").path,
         "--xcrun", xcrunPath,
@@ -164,6 +164,7 @@ struct PackageWorkflowTests {
       executable: cli,
       arguments: [
         "check",
+        "--allow-debug",
         "--host",
         hostPath,
         "--case",
@@ -291,6 +292,7 @@ struct PackageWorkflowTests {
         scratchPath,
         "benchmark",
         "check",
+        "--allow-debug",
         "--tag",
         "testingBridge",
         "--baseline",
@@ -504,6 +506,7 @@ struct PackageWorkflowTests {
         scratchPath,
         "benchmark",
         "check",
+        "--allow-debug",
         "--tag",
         "library",
         "--baseline",
@@ -540,7 +543,8 @@ struct PackageWorkflowTests {
       executable: "/usr/bin/env",
       arguments: [
         "swift", "package", "-q", "--package-path", fixturePath, "--scratch-path", scratchPath,
-        "--allow-writing-to-directory", scratchPath, "benchmark", "check", "--tag", "library",
+        "--allow-writing-to-directory", scratchPath, "benchmark", "check", "--allow-debug", "--tag",
+        "library",
         "--baseline", baselinePath, "--budget", "wallClock:mean:-1", "--format", "json",
         "--output", failedReportPath, "--quiet",
       ]

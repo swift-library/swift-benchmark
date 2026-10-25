@@ -77,6 +77,8 @@ public struct CaseReport: Sendable, Equatable, Codable {
   public var status: ReportExecutionStatus
   public var verdict: ReportVerdict
   public var verdictCauses: [ReportVerdictCause]
+  /// Conditions that make this case's comparisons less trustworthy.
+  public var warnings: [ReportWarning]
 
   public var samples: [SampleReport] {
     measurement.samples
@@ -98,7 +100,8 @@ public struct CaseReport: Sendable, Equatable, Codable {
     diagnostics: [DiagnosticMetric] = [],
     attachments: [DiagnosticAttachment] = [],
     status: ReportExecutionStatus = .passed,
-    verdictCauses: [ReportVerdictCause]? = nil
+    verdictCauses: [ReportVerdictCause]? = nil,
+    warnings: [ReportWarning] = []
   ) {
     self.id = id
     self.scope = scope
@@ -115,6 +118,7 @@ public struct CaseReport: Sendable, Equatable, Codable {
     self.diagnostics = diagnostics
     self.attachments = attachments
     self.status = status
+    self.warnings = warnings
     self.verdictCauses =
       verdictCauses
       ?? CaseReport.makeVerdictCauses(
@@ -151,6 +155,7 @@ public struct CaseReport: Sendable, Equatable, Codable {
     case status
     case verdict
     case verdictCauses
+    case warnings
   }
 
   public init(from decoder: any Decoder) throws {
@@ -180,7 +185,8 @@ public struct CaseReport: Sendable, Equatable, Codable {
       status: try container.decodeIfPresent(ReportExecutionStatus.self, forKey: .status)
         ?? .passed,
       verdictCauses: try container.decodeIfPresent(
-        [ReportVerdictCause].self, forKey: .verdictCauses)
+        [ReportVerdictCause].self, forKey: .verdictCauses),
+      warnings: try container.decodeIfPresent([ReportWarning].self, forKey: .warnings) ?? []
     )
     if let verdict = try container.decodeIfPresent(ReportVerdict.self, forKey: .verdict) {
       self.verdict = verdict
@@ -272,10 +278,13 @@ public struct ReportSummary: Sendable, Equatable, Codable {
   public var failedBudgetCount: Int
   public var unavailableDiagnosticCount: Int
   public var failedDiagnosticCount: Int
+  /// Run warnings plus every case's warnings.
+  public var warningCount: Int
   public var verdict: ReportVerdict
 
-  public init(suites: [SuiteReport]) {
+  public init(suites: [SuiteReport], runWarnings: [ReportWarning] = []) {
     let cases = suites.flatMap(\.cases)
+    self.warningCount = runWarnings.count + cases.reduce(0) { $0 + $1.warnings.count }
     self.suiteCount = suites.count
     self.caseCount = cases.count
     self.failedRegressionCount =
@@ -300,12 +309,15 @@ public struct ReportSummary: Sendable, Equatable, Codable {
 public struct ReportDocument: Sendable, Equatable, Codable {
   public var metadata: RunMetadata
   public var suites: [SuiteReport]
+  /// Conditions that make the whole run's comparisons less trustworthy.
+  public var warnings: [ReportWarning]
   public var summary: ReportSummary
 
-  public init(metadata: RunMetadata, suites: [SuiteReport]) {
+  public init(metadata: RunMetadata, suites: [SuiteReport], warnings: [ReportWarning] = []) {
     self.metadata = metadata
     self.suites = suites
-    self.summary = ReportSummary(suites: suites)
+    self.warnings = warnings
+    self.summary = ReportSummary(suites: suites, runWarnings: warnings)
   }
 
   public init(
@@ -331,6 +343,7 @@ public struct ReportDocument: Sendable, Equatable, Codable {
         let compared = comparison.compare(
           suiteName: result.suiteName,
           caseName: result.caseName,
+          scope: scope,
           measurement: measurement,
           baseline: baseline
         )
@@ -355,7 +368,8 @@ public struct ReportDocument: Sendable, Equatable, Codable {
           ),
           attributions: attributions.filter { $0.scope.caseID == caseID },
           diagnostics: diagnostics.filter { $0.scope.caseID == caseID },
-          attachments: attachments.filter { $0.scope.caseID == caseID }
+          attachments: attachments.filter { $0.scope.caseID == caseID },
+          warnings: compared.warnings
         )
       }
 
@@ -367,7 +381,11 @@ public struct ReportDocument: Sendable, Equatable, Codable {
       )
     }
 
-    self.init(metadata: metadata, suites: suites)
+    self.init(
+      metadata: metadata,
+      suites: suites,
+      warnings: ReportWarning.runWarnings(metadata: metadata, baseline: baseline)
+    )
   }
 
   /// Replaces every case's baseline comparisons and budgets with the result
@@ -382,9 +400,11 @@ public struct ReportDocument: Sendable, Equatable, Codable {
         let compared = comparison.compare(
           suiteName: suite.name,
           caseName: report.name,
+          scope: report.scope,
           measurement: report.measurement,
           baseline: baseline
         )
+        let recompared = baseline != nil || !comparison.budgets.isEmpty
         return CaseReport(
           id: report.id,
           scope: report.scope,
@@ -400,12 +420,18 @@ public struct ReportDocument: Sendable, Equatable, Codable {
           attributions: report.attributions,
           diagnostics: report.diagnostics,
           attachments: report.attachments,
-          status: report.status
+          status: report.status,
+          warnings: recompared ? compared.warnings : report.warnings
         )
       }
       return SuiteReport(id: suite.id, scope: suite.scope, name: suite.name, cases: cases)
     }
-    return ReportDocument(metadata: metadata, suites: suites)
+    return ReportDocument(
+      metadata: metadata,
+      suites: suites,
+      warnings: baseline == nil
+        ? warnings : ReportWarning.runWarnings(metadata: metadata, baseline: baseline)
+    )
   }
 
   private static func reportMeasurement(from result: BenchmarkResult) -> Report.Measurement {

@@ -104,6 +104,11 @@ public enum BenchmarkHost {
       guard !plan.steps.isEmpty else {
         throw BenchmarkHostError.noBenchmarksSelected
       }
+      if command == "check" {
+        try CheckGate.validate(
+          buildConfiguration: metadata.buildConfiguration,
+          allowDebug: options.hasFlag("--allow-debug"))
+      }
       let baseline = try options.value(for: "--baseline").map(BaselineDocument.read(path:))
       let format = try options.format(default: .console)
       let document = try await BenchmarkCommand().report(
@@ -136,7 +141,7 @@ public enum BenchmarkHost {
     Commands:
       list [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json]
       run [--suite <name>] [--case <name>] [--tag <tag>] [--warmup <n>] [--iterations <n>] [--batch-size <n>] [--adaptive] [--min-duration-ns <n>] [--max-duration-ns <n>] [--format console|json|speedscope] [--baseline <path>] [--statistic <name>] [--threshold [<metric>=]<value>] [--budget <metric>:<statistic>:<value>] [--output <path>] [--trace <path>] [--required-trace <path>]
-      check --baseline <path> [--suite <name>] [--case <name>] [--tag <tag>]
+      check --baseline <path> [--allow-debug] [--suite <name>] [--case <name>] [--tag <tag>]
       trace [same options as run, with timeline capture enabled]
     """
   }
@@ -190,6 +195,7 @@ public enum BenchmarkHostError: Error, CustomStringConvertible {
 private struct BenchmarkHostOptions {
   private static let flags: Set<String> = [
     "--adaptive",
+    "--allow-debug",
     "--quiet",
     "--timeline",
   ]

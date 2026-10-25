@@ -172,6 +172,8 @@
     "failedRegressionCount": 0,
     "suiteCount": 1,
     "unavailableDiagnosticCount": 0,
-    "verdict": "failed"
-  }
+    "verdict": "failed",
+    "warningCount": 0
+  },
+  "warnings": []
 }

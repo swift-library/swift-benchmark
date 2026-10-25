@@ -169,3 +169,27 @@ package enum ComparisonArgumentError: Error, CustomStringConvertible, Equatable 
     }
   }
 }
+
+/// The rule a `check` command applies before it treats a report as a verdict.
+package enum CheckGate {
+  /// Rejects a debug build unless `allowDebug` is set: debug code is slower
+  /// and makes more reference-counting calls than release code, so its
+  /// verdicts say little about release performance.
+  package static func validate(buildConfiguration: String, allowDebug: Bool) throws {
+    guard buildConfiguration != "debug" || allowDebug else {
+      throw CheckGateError.debugBuild
+    }
+  }
+}
+
+package enum CheckGateError: Error, CustomStringConvertible, Equatable {
+  case debugBuild
+
+  package var description: String {
+    switch self {
+    case .debugBuild:
+      return
+        "Refusing to check a debug build, whose times and counts do not represent release performance. Run the check in release (swift package -c release benchmark check), or pass --allow-debug to check anyway."
+    }
+  }
+}
