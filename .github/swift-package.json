@@ -15,7 +15,6 @@
       "BenchmarkTesting",
       "BenchmarkXCTest",
       "Instruments",
-      "Memory",
       "Report"
     ]
   },

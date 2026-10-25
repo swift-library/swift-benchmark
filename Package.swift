@@ -12,7 +12,6 @@ let package = Package(
     .library(name: "Instruments", targets: ["Instruments"]),
     .library(name: "Benchmark", targets: ["Benchmark"]),
     .library(name: "Report", targets: ["Report"]),
-    .library(name: "Memory", targets: ["Memory"]),
     .library(name: "BenchmarkTesting", targets: ["BenchmarkTesting"]),
     .library(name: "BenchmarkXCTest", targets: ["BenchmarkXCTest"]),
     .executable(name: "swift-benchmark-cli", targets: ["BenchmarkCLI"]),
@@ -57,11 +56,6 @@ let package = Package(
       name: "Report",
       dependencies: ["Benchmark", "Instruments"],
       path: "Sources/Report"
-    ),
-    .target(
-      name: "Memory",
-      dependencies: ["Report"],
-      path: "Sources/Memory"
     ),
     .target(
       name: "BenchmarkTesting",
@@ -143,11 +137,6 @@ let package = Package(
       dependencies: ["Benchmark", "Instruments", "Report"],
       path: "Tests/ReportTests",
       resources: [.process("Fixtures")]
-    ),
-    .testTarget(
-      name: "MemoryTests",
-      dependencies: ["Memory", "Report"],
-      path: "Tests/MemoryTests"
     ),
     .testTarget(
       name: "AdapterTests",
