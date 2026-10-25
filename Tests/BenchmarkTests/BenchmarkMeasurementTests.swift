@@ -5,6 +5,12 @@ import Benchmark
 import Foundation
 import Testing
 
+#if canImport(Darwin)
+  import Darwin
+#elseif canImport(Glibc)
+  import Glibc
+#endif
+
 @Suite("Benchmark Measurement")
 struct BenchmarkMeasurementTests {
   @Test
@@ -126,35 +132,45 @@ struct BenchmarkMeasurementTests {
     #expect(results.first?.measurement.samples.map { $0.value(for: bytesWritten) } == [512, 512])
   }
 
+  // Peak memory a step raises is checked in an isolated host process, where
+  // nothing else shares the process's lifetime peak.
   @Test
-  func peakMemoryIsTheGrowthAboveTheStepsStartingFootprint() async throws {
-    let allocationBytes = 256 << 20
+  func peakMemoryIsLeftOutWhenTheProcessPeakedHigherBeforeTheStep() async throws {
+    #if canImport(Darwin) || os(Linux)
+      // Unmapping returns the memory to the system, which leaves the
+      // process's lifetime peak above its footprint. Freed heap memory can
+      // stay in the footprint instead.
+      #if canImport(Darwin)
+        let anonymous = MAP_ANON
+      #else
+        let anonymous = MAP_ANONYMOUS
+      #endif
+      let size = 256 << 20
+      let region = try #require(
+        mmap(nil, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | anonymous, -1, 0))
+      try #require(region != UnsafeMutableRawPointer(bitPattern: -1))
+      memset(region, 1, size)
+      munmap(region, size)
+    #endif
     let suite = BenchmarkSuite(
       "Peak",
       configuration: BenchmarkConfiguration(
         warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("Allocates") {
-        var buffer = [UInt8](repeating: 1, count: allocationBytes)
-        buffer[allocationBytes / 2] = 2
-        blackHole(buffer)
+        blackHole([UInt8](repeating: 1, count: 1 << 20))
       }
     }
 
-    // The allocator can keep freed memory in the process footprint, so the
-    // measured run must make the process's first allocation of this size.
     let owned = try await BenchmarkRunner(
       cpuClock: nil, countsAllocations: false, recordsPeakMemory: true
     ).run(suite)
     let shared = try await BenchmarkRunner(cpuClock: nil, countsAllocations: false).run(suite)
 
-    #expect(
-      shared.first?.measurement.samples.contains { $0.value(for: .peakMemory) != nil } == false)
-    #if canImport(Darwin) || os(Linux)
-      let peak = owned.first?.measurement.samples.compactMap { $0.value(for: .peakMemory) }
-      #expect(peak?.count == 1)
-      #expect((peak?.first ?? 0) >= Double(allocationBytes / 2))
-    #endif
+    for results in [owned, shared] {
+      #expect(
+        results.first?.measurement.samples.contains { $0.value(for: .peakMemory) != nil } == false)
+    }
   }
 
   @Test

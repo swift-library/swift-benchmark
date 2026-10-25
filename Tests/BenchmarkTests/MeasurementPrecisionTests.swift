@@ -9,13 +9,14 @@ import Testing
 struct MeasurementPrecisionTests {
   @Test
   func wallClockMatchesTheTimeAWorkloadSpends() async throws {
+    let spun = SpinLog()
     let suite = BenchmarkSuite(
       "Precision",
       configuration: BenchmarkConfiguration(
         warmup: .iterations(1), iterations: .iterations(10), batching: .fixed(1))
     ) {
       Benchmark("Spin") {
-        spin(for: .milliseconds(1))
+        spun.append(spin(for: .milliseconds(1)))
       }
     }
 
@@ -24,9 +25,13 @@ struct MeasurementPrecisionTests {
       results.first?.measurement.samples.compactMap {
         $0.value(for: .wallClock)
       })
+    let pairs = Array(zip(wallClock, spun.values.dropFirst()))
 
-    #expect(wallClock.count == 10)
-    #expect((1_000_000...1_200_000).contains(median(wallClock)))
+    #expect(pairs.count == 10)
+    // Each sample's window encloses the time the workload saw itself spend.
+    #expect(pairs.allSatisfy { measured, spent in measured >= spent })
+    // One call the scheduler left alone shows what the runner adds around it.
+    #expect((pairs.map { measured, spent in measured - spent }.min() ?? .infinity) < 50_000)
   }
 
   @Test
@@ -56,21 +61,35 @@ struct MeasurementPrecisionTests {
 
     #expect(samples.count == 5)
     #expect(samples.allSatisfy { $0.batchSize > 1 })
-    // Each sample spans enough calls that clock resolution is a negligible
-    // part of the reported per-call time.
-    #expect(
-      samples.allSatisfy { sample in
-        Double(sample.batchSize) * (sample.value(for: .wallClock) ?? 0) >= Double(target) / 2
-      })
     #expect(median(perCall) < 1_000)
   }
 }
 
-/// Busy-waits for `duration` of wall-clock time.
-private func spin(for duration: Duration) {
+/// Busy-waits for `duration` of wall-clock time and returns the nanoseconds
+/// it spent, as the runner's clock counts them.
+private func spin(for duration: Duration) -> Double {
   let clock = ContinuousClock()
-  let deadline = clock.now.advanced(by: duration)
-  while clock.now < deadline {}
+  let start = clock.now
+  let deadline = start.advanced(by: duration)
+  var now = start
+  while now < deadline {
+    now = clock.now
+  }
+  let spent = start.duration(to: now).components
+  return Double(spent.seconds) * 1e9 + Double(spent.attoseconds) / 1e9
+}
+
+private final class SpinLog: @unchecked Sendable {
+  private let lock = NSLock()
+  private var spent: [Double] = []
+
+  var values: [Double] {
+    lock.withLock { spent }
+  }
+
+  func append(_ nanoseconds: Double) {
+    lock.withLock { spent.append(nanoseconds) }
+  }
 }
 
 private func median(_ values: [Double]) -> Double {

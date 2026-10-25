@@ -215,6 +215,21 @@ struct CLIWorkflowTests {
         ).utf8)
     ).suites.first?.cases.first?.measurement
 
+    let touched = try JSONDecoder().decode(
+      ReportDocument.self,
+      from: Data(
+        runProcess(
+          executable: cli,
+          arguments: [
+            "run", "--host", hostPath, "--case", "Touch64MiB", "--warmup", "0",
+            "--iterations", "1", "--batch-size", "1", "--format", "json",
+          ]
+        ).utf8)
+    ).suites.first?.cases.first?.measurement
+
+    #if canImport(Darwin) || os(Linux)
+      #expect((touched?.statistics(for: .peakMemory)?.median ?? 0) >= Double(64 << 20))
+    #endif
     #if canImport(Darwin)
       #expect(allocations?.statistics(for: .allocations)?.median == 1_000)
       #expect(allocations?.statistics(for: .allocatedBytes)?.median == 24_000)

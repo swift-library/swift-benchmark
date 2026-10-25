@@ -22,6 +22,13 @@ struct FixtureBenchmarks {
       blackHole(AllocationProbe())
     }
   }
+
+  @Benchmark("Touch64MiB")
+  func touch64MiB() {
+    var buffer = [UInt8](repeating: 1, count: 64 << 20)
+    buffer[buffer.count / 2] = 2
+    blackHole(buffer)
+  }
 }
 
 /// A heap object of known size: a 16-byte object header and one `Int`.
