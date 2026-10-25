@@ -6,6 +6,7 @@
 /// A sample measures `batchSize` consecutive calls of the workload and stores
 /// each metric's value per single call.
 public struct Sample: Sendable, Equatable {
+  /// The sample's position among its step's samples.
   public let iteration: Int
   /// The number of consecutive calls the sample measured.
   public let batchSize: Int

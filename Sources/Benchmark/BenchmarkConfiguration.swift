@@ -66,6 +66,7 @@ public enum BatchingPolicy: Sendable, Equatable, CustomStringConvertible {
   /// Calls the workload `count` times per sample.
   case fixed(Int)
 
+  /// The policy as it is written in Swift, such as `fixed(10)`.
   public var description: String {
     switch self {
     case .automatic(let targetNanoseconds, let maxBatchSize):

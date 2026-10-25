@@ -245,7 +245,8 @@ The console format prints warnings after the results, and JSON lists them in
 
 ## Metrics
 
-Every step records these metrics, reported per call of the workload:
+A step records these metrics, each reported per call of the workload, where
+the platform and runtime provide them; the notes after the table say when:
 
 | Metric | Unit | Measured |
 | --- | --- | --- |

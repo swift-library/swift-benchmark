@@ -14,14 +14,19 @@ extension Benchmark {
   public struct Metric: Sendable, Hashable, Codable, CustomStringConvertible {
     /// The unit a metric's values are expressed in.
     public enum Unit: String, Sendable, Hashable, Codable {
+      /// Time in nanoseconds.
       case nanoseconds
+      /// An amount of memory in bytes.
       case bytes
+      /// A number of events or items.
       case count
     }
 
     /// Which direction of change counts as an improvement.
     public enum Direction: String, Sendable, Hashable, Codable {
+      /// A decrease is an improvement, as for times, counts and bytes.
       case lowerIsBetter
+      /// An increase is an improvement, as for throughput.
       case higherIsBetter
     }
 
@@ -41,14 +46,17 @@ extension Benchmark {
       self.direction = direction
     }
 
+    /// The metric's name.
     public var description: String {
       name
     }
 
+    /// Whether two metrics have the same name.
     public static func == (lhs: Metric, rhs: Metric) -> Bool {
       lhs.name == rhs.name
     }
 
+    /// Hashes the metric's name.
     public func hash(into hasher: inout Hasher) {
       hasher.combine(name)
     }

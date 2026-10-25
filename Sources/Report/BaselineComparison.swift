@@ -28,7 +28,10 @@ public struct BaselineComparison: Sendable, Equatable, Codable {
   public var delta: Double
   /// `delta` as a percentage of `baseline`; infinite when the baseline is zero.
   public var percentageDelta: Double
+  /// The threshold the comparison applied.
   public var threshold: ThresholdPolicy
+  /// `failed` when the metric worsened past ``threshold``, and `passed`
+  /// otherwise.
   public var verdict: ReportVerdict
 
   /// Compares `current` with `baseline`. A change in the metric's better
@@ -124,6 +127,7 @@ public struct BaselineComparison: Sendable, Equatable, Codable {
 
 /// The evaluation of one budget on one measurement row.
 public struct BudgetComparison: Sendable, Equatable, Codable {
+  /// The budget evaluated.
   public var policy: BudgetPolicy
   /// The row's Dimension size, if it has one.
   public var size: Benchmark.Scale?

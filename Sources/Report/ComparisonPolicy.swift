@@ -6,6 +6,7 @@ import Benchmark
 /// How far a metric may move in its worse direction before a baseline
 /// comparison fails.
 public struct ThresholdPolicy: Sendable, Equatable, Codable {
+  /// How a threshold's ``value`` is read.
   public enum Kind: String, Sendable, Codable {
     /// A percentage of the baseline value.
     case relativePercentage
@@ -13,10 +14,12 @@ public struct ThresholdPolicy: Sendable, Equatable, Codable {
     case absolute
   }
 
+  /// How ``value`` is read.
   public var kind: Kind
   /// The percentage or the absolute amount, depending on ``kind``.
   public var value: Double
 
+  /// Creates a threshold of `value`, read as `kind` says.
   public init(kind: Kind, value: Double) {
     self.kind = kind
     self.value = value
@@ -53,6 +56,8 @@ public struct ComparisonPolicy: Sendable, Equatable {
   /// Limits on individual metrics, applied to every row of the cases they match.
   public var budgets: [BudgetPolicy]
 
+  /// Creates a policy. The defaults compare medians, allow every metric to
+  /// worsen by 10%, and apply no budgets.
   public init(
     statistic: Report.Statistic = .median,
     threshold: ThresholdPolicy = .relativePercentage(10),

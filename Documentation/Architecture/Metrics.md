@@ -58,10 +58,14 @@ The counting pass replaces the Swift runtime's instrumentation hook slots
 `_swift_release_n`) with counting functions that forward to the runtime's
 implementations, and sets
 `_swift_enableSwizzlingOfAllocationAndRefCountingFunctions_forInstrumentsOnly`
-so the runtime routes releases through the slots. The slots and the original
-implementations are resolved once, before the first installation, and never
-change; the counting functions read only trivial values, so counting cannot
-re-enter itself. The hooks count every thread of the process, which makes the
+so the runtime routes releases through the slots. The slots, the original
+implementations and the flag's original value are resolved once, before the
+first installation, and never change; the counting functions read only
+trivial values, so counting cannot re-enter itself. The runtime also sets the
+flag itself when an allocation finds a replaced slot, so a thread allocating
+as a counting pass ends can leave it set. Uninstalling restores the slots and
+then the flag, and the runner restores the flag again before each step, so
+no step is timed on the hook path. The hooks count every thread of the process, which makes the
 counts exact only in a process that measures nothing else. C and Objective-C
 `malloc` allocations are not counted. A runtime without the hook symbols leaves
 the counting metrics out.

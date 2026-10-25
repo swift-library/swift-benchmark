@@ -8,13 +8,22 @@ public enum Report {}
 extension Report {
   /// A summary statistic over one metric's sample values.
   public enum Statistic: String, Sendable, Codable, CaseIterable {
+    /// The smallest value.
     case min
+    /// The largest value.
     case max
+    /// The arithmetic mean.
     case mean
+    /// The 50th percentile.
     case median
+    /// The population standard deviation: the square root of the mean
+    /// squared distance from the mean.
     case standardDeviation
+    /// The 90th percentile.
     case p90
+    /// The 95th percentile.
     case p95
+    /// The 99th percentile.
     case p99
 
     /// Reads this statistic from `statistics`.
@@ -41,17 +50,31 @@ extension Report {
   }
 
   /// Summary statistics of one metric's sample values, in the metric's unit.
+  ///
+  /// A percentile interpolates linearly between the two sorted values nearest
+  /// to position `p × (count − 1)`, and the standard deviation is the
+  /// population standard deviation.
   public struct Statistics: Sendable, Equatable, Codable {
+    /// The number of values.
     public var count: Int
+    /// The smallest value.
     public var min: Double
+    /// The largest value.
     public var max: Double
+    /// The arithmetic mean.
     public var mean: Double
+    /// The 50th percentile.
     public var median: Double
+    /// The population standard deviation.
     public var standardDeviation: Double
+    /// The 90th percentile.
     public var p90: Double
+    /// The 95th percentile.
     public var p95: Double
+    /// The 99th percentile.
     public var p99: Double
 
+    /// Creates statistics from values computed elsewhere.
     public init(
       count: Int,
       min: Double,
@@ -74,6 +97,8 @@ extension Report {
       self.p99 = p99
     }
 
+    /// Computes the statistics of `values`. Every statistic is zero when
+    /// `values` is empty.
     public init(values: [Double]) {
       let values = values.sorted()
       self.count = values.count
@@ -146,8 +171,11 @@ extension Report {
 
   /// The samples of one benchmark case, grouped into Dimension or argument rows.
   public struct Measurement: Sendable, Equatable, Codable {
+    /// One row per Dimension size or argument row, or a single row for an
+    /// unparameterized case.
     public var rows: [Row]
 
+    /// Creates a measurement from its rows.
     public init(rows: [Row]) {
       self.rows = rows
     }
@@ -187,17 +215,25 @@ extension Report {
 extension Report.Measurement {
   /// The samples of one Dimension size or argument row, with their statistics.
   public struct Row: Sendable, Equatable, Codable {
+    /// The row's identifier: its values' descriptions for an argument row,
+    /// `scale-<size>` for a Dimension size, and `nil` for an unparameterized
+    /// case.
     public var id: String?
+    /// The row's Dimension size, if it has one.
     public var size: Benchmark.Scale?
+    /// The values of an argument row's arguments.
     public var arguments: [Benchmark.ArgumentValue]
     /// The metrics measured for this row, ordered by name.
     public var metrics: [Benchmark.Metric]
+    /// The row's samples, timed and counting alike.
     public var samples: [SampleReport]
     /// Statistics keyed by metric name.
     public var statistics: [String: Report.Statistics]
     /// Statistics per unit of ``size``, keyed by metric name; `nil` without a size.
     public var amortized: [String: Report.Statistics]?
 
+    /// Creates a row and computes its statistics, and its amortized
+    /// statistics when it has a size.
     public init(
       id: String? = nil,
       size: Benchmark.Scale?,

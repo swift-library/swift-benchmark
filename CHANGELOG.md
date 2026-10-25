@@ -5,9 +5,12 @@
 - **Breaking**: Requires Swift 6.3 or later. Deployment minimums are iOS 18
   and macOS 15 for all library and command-line products. Swift 6.0 through
   6.2 remain on 0.1.x.
-- **Breaking**: Every sample records several metrics: wall-clock time, CPU
-  time, Swift heap allocations and allocated bytes, retains and releases, and
-  peak memory, plus values a workload records with `Benchmark.record(_:for:)`.
+- **Breaking**: Benchmarks measure several metrics. Timed samples record
+  wall-clock and CPU time and values a workload records with
+  `Benchmark.record(_:for:)`; a separate counting pass records Swift heap
+  allocations, allocated bytes, retains and releases where the Swift runtime
+  exposes its instrumentation hooks; and a step measured in a process of its
+  own records its peak memory.
   `Sample`, measurement rows, statistics, baselines, budgets, verdict causes
   and Dimension curves are keyed by metric, and Report JSON no longer carries
   `schemaVersion`. Baselines written by 0.1.x cannot be read; record them
@@ -65,6 +68,15 @@
   resource bundles and link XCFramework binary targets and the C++ standard
   library. `SWIFT_BENCHMARK_DISCOVERY_BACKEND` and
   `SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH` are removed.
+- A release host is compiled with optimization, so generated testing bridges
+  run optimized inside measured batches, and the plugin no longer loads module
+  maps from inside XCFrameworks.
+- Traced commands no longer hang when xctrace or the benchmarks print more
+  than a pipe holds.
+- A configuration the host rejects, and a baseline or report file that cannot
+  be read, exit with the configuration status 2 instead of 3.
+- BenchmarkXCTest builds with swift-corelibs-xctest; `attachments(for:)`
+  needs Apple's XCTest.
 
 ## 0.1.2
 

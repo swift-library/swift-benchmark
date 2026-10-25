@@ -14,6 +14,7 @@ public struct ProcessCPUClock: BenchmarkClock {
   /// Creates a clock that reads process CPU time with `getrusage`.
   public init() {}
 
+  /// The CPU time the process's threads have used so far.
   public func now() -> BenchmarkInstant {
     let usage = ResourceUsage.current()
     return BenchmarkInstant(

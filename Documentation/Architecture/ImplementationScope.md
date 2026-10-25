@@ -45,7 +45,7 @@ map cleanly to the local framework:
 | Traits, tags, and scoping | Swift Testing | `BenchmarkTrait`, `BenchmarkSuiteTrait`, `BenchmarkCaseTrait`, `BenchmarkScoping`, skip traits, configuration traits, Dimension traits, and tag traits feed plan construction. | Trait merge, tag filter, skip, and planning-failure tests |
 | Runner plan | Swift Testing | `BenchmarkRunner.Plan.Step` and `.Action` support measure, skip, planning failure, effective configuration, source locations, tags, and Dimension expansion. | Plan tests and runner tests |
 | Runner policy | Benchmark requirements | Fixed iterations and automatic batching are the defaults; fixed batches and adaptive, minimum-duration, and maximum-duration policies are opt-in and validated before workload execution. | Runner policy, batching and invalid-configuration tests |
-| Metrics | Swift runtime instrumentation hooks, platform resource APIs | Every step records wall-clock and CPU time, Swift allocations, allocated bytes, retains and releases in a separate counting pass, peak memory in an isolated process, and custom metrics; see `Metrics.md`. | Measurement, precision and isolated-host allocation tests |
+| Metrics | Swift runtime instrumentation hooks, platform resource APIs | Steps record wall-clock and CPU time and custom metrics in timed samples; Swift allocations, allocated bytes, retains and releases in a separate counting pass where the runtime exposes its hooks; and peak memory in an isolated process; see `Metrics.md`. | Measurement, precision and isolated-host allocation tests |
 | Event stream | Swift Testing | `Benchmark.Event`, `.Kind`, `.Context`, `.Stream.Record`, console recorder, and JSON Lines recorder are implemented. | Event lifecycle and JSON Lines tests |
 | Report builder | Swift Testing recorder pattern, local Report | `ReportRecorder` / `ReportBuilder` consume Benchmark events and build the durable `ReportDocument`. | Event-to-report tests |
 | Package command | SwiftPM plugin workflow requirement | `swift package benchmark` supports no-`--host` list/run/check/baseline write/update/diff/trace for declarations in library and test targets, measuring each step in a host process of its own; `--host` remains an advanced override. | Package fixture tests |
@@ -112,7 +112,7 @@ Rejected:
 
 Current acceptance is proven by:
 
-- full `swift test` passing with 154 tests in 28 suites on 2026-10-26, on
+- full `swift test` passing with 162 tests in 29 suites on 2026-10-26, on
   macOS with Xcode 27.0, plus generic iOS builds of the library schemes;
 - macro expansion tests for benchmark declarations, traits, source locations,
   and Dimension lowering;

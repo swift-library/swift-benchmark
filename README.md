@@ -32,7 +32,7 @@
 
 ## Overview
 
-Every benchmark records wall-clock and CPU time, Swift allocations, retains and releases, and peak memory. Short workloads are timed in calibrated batches, and the package workflow measures each step in a process of its own. Choose the metric and statistic that define a regression and compare runs with a saved baseline: a p95 budget can fail even when the median passes, the report records a typed verdict for CI, and it warns when a comparison is unreliable, such as a debug build, a baseline from another machine, or samples too noisy for the threshold. The [usage manual](Documentation/UsageManual.md) covers measurement policies, instrumentation, and platform limits.
+Each benchmark step is timed for wall-clock and CPU time, then counted for Swift allocations, retains and releases where the Swift runtime exposes its instrumentation hooks. The package workflow measures each step in a process of its own, which also records the step's peak memory, and short workloads are timed in calibrated batches. Choose the metric and statistic that define a regression and compare runs with a saved baseline: a p95 budget can fail even when the median passes, the report records a typed verdict for CI, and it warns when a comparison is unreliable, such as a debug build, a baseline from another machine, or samples too noisy for the threshold. The [usage manual](Documentation/UsageManual.md) covers measurement policies, instrumentation, and platform limits.
 
 ## Quick look
 
