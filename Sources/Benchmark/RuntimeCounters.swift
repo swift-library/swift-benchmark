@@ -47,13 +47,29 @@ enum RuntimeCounters {
       releases: releaseCount.load(ordering: .relaxed)
     )
   }
+
+  /// Sets the runtime's switch for calling through the hook slots back to
+  /// its value before the first counting pass.
+  ///
+  /// A thread inside the runtime's allocation path when a counting pass ends
+  /// can set the switch again, which leaves every later retain and release
+  /// on the slower hook path. Callers restore it before timing a step, long
+  /// after any counting pass has ended.
+  static func restoreRuntimeSwitch() {
+    runtimeHookSlots?.restoreSwizzlingFlag()
+  }
+
+  /// Whether the runtime calls through the hook slots, or `nil` when it has
+  /// no such switch.
+  static var callsThroughHookSlots: Bool? {
+    runtimeHookSlots?.swizzlingFlag.map { $0.load(as: UInt8.self) != 0 }
+  }
 }
 
 private let allocationCount = Atomic<Int>(0)
 private let allocatedByteCount = Atomic<Int>(0)
 private let retainCount = Atomic<Int>(0)
 private let releaseCount = Atomic<Int>(0)
-private let previousSwizzlingFlag = Atomic<UInt8>(0)
 
 private typealias AllocObjectFunction =
   @convention(c) (UnsafeRawPointer?, Int, Int) -> UnsafeMutableRawPointer?
@@ -80,8 +96,12 @@ private struct RuntimeHookSlots: @unchecked Sendable {
   let release: UnsafeMutablePointer<ReleaseFunction>
   let retainN: UnsafeMutablePointer<RetainNFunction>
   let releaseN: UnsafeMutablePointer<ReleaseNFunction>
-  /// The runtime calls through the hook slots only while this flag is set.
+  /// The runtime calls through the hook slots only while this flag is set,
+  /// and sets it itself when an allocation finds a replaced slot. It is a
+  /// one-byte atomic the runtime reads with relaxed loads; a plain byte load
+  /// or store reads or writes it whole.
   let swizzlingFlag: UnsafeMutableRawPointer?
+  let originalSwizzlingFlag: UInt8?
   let originalAllocObject: AllocObjectFunction
   let originalRetain: RetainFunction
   let originalRelease: ReleaseFunction
@@ -104,6 +124,7 @@ private struct RuntimeHookSlots: @unchecked Sendable {
     self.releaseN = releaseN.assumingMemoryBound(to: ReleaseNFunction.self)
     self.swizzlingFlag = Self.symbol(
       "_swift_enableSwizzlingOfAllocationAndRefCountingFunctions_forInstrumentsOnly")
+    self.originalSwizzlingFlag = self.swizzlingFlag?.load(as: UInt8.self)
     self.originalAllocObject = self.allocObject.pointee
     self.originalRetain = self.retain.pointee
     self.originalRelease = self.release.pointee
@@ -117,22 +138,27 @@ private struct RuntimeHookSlots: @unchecked Sendable {
     release.pointee = countingRelease
     retainN.pointee = countingRetainN
     releaseN.pointee = countingReleaseN
-    if let swizzlingFlag {
-      previousSwizzlingFlag.store(swizzlingFlag.load(as: UInt8.self), ordering: .relaxed)
-      swizzlingFlag.storeBytes(of: 1, as: UInt8.self)
-    }
+    swizzlingFlag?.storeBytes(of: 1, as: UInt8.self)
   }
 
+  /// Restores the slots, then the flag, which an allocation finding a
+  /// replaced slot would set again.
   func uninstall() {
-    if let swizzlingFlag {
-      swizzlingFlag.storeBytes(
-        of: previousSwizzlingFlag.load(ordering: .relaxed), as: UInt8.self)
-    }
     allocObject.pointee = originalAllocObject
     retain.pointee = originalRetain
     release.pointee = originalRelease
     retainN.pointee = originalRetainN
     releaseN.pointee = originalReleaseN
+    restoreSwizzlingFlag()
+  }
+
+  func restoreSwizzlingFlag() {
+    guard let swizzlingFlag, let originalSwizzlingFlag,
+      swizzlingFlag.load(as: UInt8.self) != originalSwizzlingFlag
+    else {
+      return
+    }
+    swizzlingFlag.storeBytes(of: originalSwizzlingFlag, as: UInt8.self)
   }
 
   private static func symbol(_ name: String) -> UnsafeMutableRawPointer? {

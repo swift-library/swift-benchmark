@@ -94,7 +94,8 @@ public struct BenchmarkRunner: Sendable {
         eventRecorders: eventRecorders
       )
       let row = try await MeasurementGate.shared.withExclusiveAccess {
-        try await runRow(
+        RuntimeCounters.restoreRuntimeSwitch()
+        return try await runRow(
           step: step,
           suite: step.suite,
           policy: policy,
