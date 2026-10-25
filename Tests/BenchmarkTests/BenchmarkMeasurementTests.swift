@@ -68,7 +68,7 @@ struct BenchmarkMeasurementTests {
 
     let results = try await BenchmarkRunner(
       clock: ContinuousBenchmarkClock(),
-      cpuClock: FixedStepClock(step: 40),
+      cpuClock: StepClock(step: 40),
       countsAllocations: false
     ).run(suite)
 
@@ -350,24 +350,6 @@ private struct VirtualClock: BenchmarkClock {
 
   func now() -> BenchmarkInstant {
     BenchmarkInstant(nanoseconds: work.now())
-  }
-}
-
-/// A clock that advances by `step` on every read.
-private final class FixedStepClock: BenchmarkClock, @unchecked Sendable {
-  private let lock = NSLock()
-  private var value: UInt64 = 0
-  private let step: UInt64
-
-  init(step: UInt64) {
-    self.step = step
-  }
-
-  func now() -> BenchmarkInstant {
-    lock.withLock {
-      value += step
-      return BenchmarkInstant(nanoseconds: value)
-    }
   }
 }
 

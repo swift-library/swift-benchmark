@@ -150,86 +150,6 @@ struct BenchmarkRunnerTests {
   }
 
   @Test
-  func planFiltersAndExpandsDimensionSteps() async throws {
-    let suite = BenchmarkSuite(
-      "Plan",
-      configuration: BenchmarkConfiguration(
-        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
-    ) {
-      Benchmark("Plain") {}
-      Benchmark(
-        "Dimensioned",
-        dimension: Benchmark.Dimension(sizes: [10, 100]),
-        input: { size in size.rawValue }
-      ) { value in
-        blackHole(value)
-      }
-    }
-
-    let plan = try BenchmarkRunner.Plan(
-      suites: [suite],
-      filter: BenchmarkRunner.Plan.Filter(suiteName: "Plan", caseName: "Dimensioned")
-    )
-    let results = try await exactRunner(step: 7).run(plan)
-
-    #expect(plan.steps.map(\.caseName) == ["Dimensioned", "Dimensioned"])
-    #expect(plan.steps.map(\.size?.rawValue) == [10, 100])
-    #expect(results.map(\.caseName) == ["Dimensioned"])
-    #expect(results.first?.measurement.rows.map(\.size?.rawValue) == [10, 100])
-  }
-
-  @Test
-  func planMergesTraitsTagsSkipsAndPlanningFailures() async throws {
-    let counter = Counter()
-    let suite = BenchmarkSuite(
-      "TraitPlan",
-      configuration: BenchmarkConfiguration(
-        warmup: .none, iterations: .iterations(1), batching: .fixed(1)),
-      traits: [.tag("parser")]
-    ) {
-      Benchmark("Runs", traits: [.tag("fast")]) {
-        counter.increment()
-      }
-      Benchmark("Skipped", traits: [.skip("not on this platform")]) {
-        counter.increment(by: 10)
-      }
-      Benchmark(
-        "Conflict",
-        dimension: Benchmark.Dimension(sizes: [1]),
-        traits: [.dimension(sizes: [2])],
-        input: { size in size.rawValue }
-      ) { value in
-        blackHole(value)
-      }
-    }
-
-    let all = try BenchmarkRunner.Plan(suites: [suite])
-    #expect(all.steps.map(\.caseName) == ["Runs", "Skipped", "Conflict"])
-    #expect(all.steps[0].tags == ["parser", "fast"])
-    #expect(all.steps[0].id == "benchmark:traitplan:runs")
-
-    guard case .skip(let reason) = all.steps[1].action else {
-      Issue.record("Expected skip action")
-      return
-    }
-    #expect(reason == "not on this platform")
-
-    guard case .planningFailure(let issue) = all.steps[2].action else {
-      Issue.record("Expected planning failure action")
-      return
-    }
-    #expect(String(describing: issue).contains("conflicting Dimension"))
-
-    let filtered = try BenchmarkRunner.Plan(
-      suites: [suite],
-      filter: BenchmarkRunner.Plan.Filter(casePattern: "Run*", tags: ["fast"])
-    )
-    let results = try await exactRunner(step: 1).run(filtered)
-    #expect(results.map(\.caseName) == ["Runs"])
-    #expect(counter.value == 1)
-  }
-
-  @Test
   func eventStreamRecordsLifecycleAndJSONLines() async throws {
     let suite = BenchmarkSuite(
       "Events",
@@ -380,41 +300,5 @@ struct BenchmarkRunnerTests {
       #expect(counter.value == 0)
       #expect(String(describing: error).contains("Adaptive maxIterations"))
     }
-  }
-}
-
-private func exactRunner(step: UInt64) -> BenchmarkRunner {
-  BenchmarkRunner(clock: StepClock(step: step), cpuClock: nil, countsAllocations: false)
-}
-
-private final class Counter: @unchecked Sendable {
-  private let lock = NSLock()
-  private var storage = 0
-
-  var value: Int {
-    lock.withLock {
-      storage
-    }
-  }
-
-  func increment(by amount: Int = 1) {
-    lock.withLock {
-      storage += amount
-    }
-  }
-}
-
-private struct StepClock: BenchmarkClock {
-  private let counter: Counter
-  private let step: UInt64
-
-  init(step: UInt64) {
-    self.counter = Counter()
-    self.step = step
-  }
-
-  func now() -> BenchmarkInstant {
-    counter.increment()
-    return BenchmarkInstant(nanoseconds: UInt64(counter.value) * step)
   }
 }

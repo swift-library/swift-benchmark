@@ -108,6 +108,165 @@ struct ReportComparisonTests {
     #expect(eventRows.map(\.metrics) == directRows.map(\.metrics))
   }
 
+  @Test
+  func baselineAndBudgetStatisticsPreserveTypedVerdictCauses() throws {
+    let result = BenchmarkResult(
+      suiteName: "Parser",
+      caseName: "ParseDocument",
+      sourceLocation: BenchmarkSourceLocation(
+        fileID: "ParserBenchmarks/ParserBenchmarks.swift",
+        filePath: "/tmp/ParserBenchmarks.swift",
+        line: 42,
+        column: 5
+      ),
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(3), batching: .fixed(1)),
+      measurement: Measurement(samples: wallClockSamples([1_000, 2_000, 3_000]))
+    )
+    let baseline = BaselineDocument(cases: [
+      baselineCase("Parser", "ParseDocument", wallClock: [1_800])
+    ])
+
+    let document = ReportDocument(
+      metadata: .fixture(),
+      results: [result],
+      baseline: baseline,
+      comparison: ComparisonPolicy(
+        statistic: .p95,
+        threshold: .relativePercentage(10),
+        metricThresholds: [.wallClock: .absolute(1_000)],
+        budgets: [
+          BudgetPolicy(metric: .wallClock, statistic: .mean, limit: 2_500),
+          BudgetPolicy(metric: .wallClock, statistic: .p95, limit: 2_500),
+        ]
+      )
+    )
+    let report = try #require(document.suites.first?.cases.first)
+    let comparison = try #require(report.baselines.first)
+
+    #expect(comparison.metric == .wallClock)
+    #expect(comparison.statistic == .p95)
+    #expect(comparison.current == 2_900)
+    #expect(comparison.baseline == 1_800)
+    #expect(comparison.threshold == .absolute(1_000))
+    #expect(comparison.verdict == .failed)
+    #expect(report.budgets.map(\.verdict) == [.passed, .failed])
+    #expect(report.verdict == .failed)
+    #expect(report.verdictCauses.map(\.kind) == [.baselineRegression, .budgetExceeded])
+    #expect(report.verdictCauses.map(\.statistic) == [.p95, .p95])
+    #expect(document.summary.failedRegressionCount == 1)
+    #expect(document.summary.failedBudgetCount == 1)
+  }
+
+  @Test
+  func everySharedMetricIsComparedAndDirectionDecidesRegression() throws {
+    let throughput = Benchmark.Metric(
+      name: "throughput", unit: .count, direction: .higherIsBetter)
+    let allocations = Benchmark.Metric(name: "allocations", unit: .count)
+    let result = BenchmarkResult(
+      suiteName: "Parser",
+      caseName: "Tokenize",
+      configuration: .default,
+      measurement: Measurement(samples: [
+        Sample(iteration: 0, values: [.wallClock: 1_000, throughput: 80, allocations: 4])
+      ])
+    )
+    let baseline = BaselineDocument(cases: [
+      BaselineCase(
+        suiteName: "Parser",
+        caseName: "Tokenize",
+        measurement: Report.Measurement(
+          samples: [
+            SampleReport(
+              id: "sample:baseline.0", iterationID: "iteration:baseline.0", iteration: 0,
+              values: ["wallClock": 1_000, "throughput": 100])
+          ],
+          metrics: [.wallClock, throughput]
+        )
+      )
+    ])
+
+    let document = ReportDocument(metadata: .fixture(), results: [result], baseline: baseline)
+    let report = try #require(document.suites.first?.cases.first)
+
+    #expect(report.baselines.map(\.metric.name) == ["throughput", "wallClock"])
+    #expect(report.baselines.map(\.verdict) == [.failed, .passed])
+    #expect(report.baselines.first?.percentageDelta == -20)
+  }
+
+  @Test
+  func budgetOnUnmeasuredMetricIsNotCompared() throws {
+    let document = ReportDocument(
+      metadata: .fixture(),
+      results: [
+        BenchmarkResult(
+          suiteName: "Parser",
+          caseName: "Tokenize",
+          configuration: .default,
+          measurement: Measurement(samples: wallClockSamples([2_000]))
+        )
+      ],
+      comparison: ComparisonPolicy(budgets: [
+        BudgetPolicy(
+          metric: Benchmark.Metric(name: "allocations", unit: .count),
+          statistic: .median,
+          limit: 0
+        )
+      ])
+    )
+    let report = try #require(document.suites.first?.cases.first)
+
+    #expect(report.budgets.first?.verdict == .notCompared)
+    #expect(report.budgets.first?.actual == nil)
+    #expect(report.verdict == .notCompared)
+  }
+
+  @Test
+  func comparingExistingDocumentAppliesBaselineAndBudgetsWithoutChangingSamples() throws {
+    let original = ReportDocument(
+      metadata: .fixture(),
+      results: [
+        BenchmarkResult(
+          suiteName: "Parser",
+          caseName: "Tokenize",
+          configuration: .default,
+          measurement: Measurement(samples: wallClockSamples([2_000]))
+        )
+      ]
+    )
+    let baseline = BaselineDocument(cases: [
+      baselineCase("Parser", "Tokenize", wallClock: [1_000])
+    ])
+    let compared = original.comparing(
+      baseline: baseline,
+      comparison: ComparisonPolicy(budgets: [
+        BudgetPolicy(metric: .wallClock, statistic: .mean, limit: 1_500)
+      ])
+    )
+    let report = try #require(compared.suites.first?.cases.first)
+
+    #expect(report.samples.map { $0.value(for: .wallClock) } == [2_000])
+    #expect(report.baselines.first?.verdict == .failed)
+    #expect(report.budgets.first?.verdict == .failed)
+    #expect(report.verdictCauses.map(\.kind) == [.baselineRegression, .budgetExceeded])
+    #expect(compared.summary.failedRegressionCount == 1)
+    #expect(compared.summary.failedBudgetCount == 1)
+  }
+
+  @Test
+  func absoluteThresholdAllowsSmallRegression() throws {
+    let comparison = BaselineComparison(
+      metric: .wallClock,
+      statistic: .median,
+      current: 1_100,
+      baseline: 1_000,
+      threshold: .absolute(100)
+    )
+
+    #expect(comparison.verdict == .passed)
+    #expect(comparison.delta == 100)
+  }
+
   private var metadata: RunMetadata {
     RunMetadata(
       id: "run:comparison",

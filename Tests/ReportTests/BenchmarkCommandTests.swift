@@ -168,26 +168,6 @@ struct BenchmarkCommandTests {
   }
 }
 
-private struct StepClock: BenchmarkClock {
-  var step: UInt64
-  private let state = StepClockState()
-
-  func now() -> BenchmarkInstant {
-    state.next(step: step)
-  }
-}
-
-private final class StepClockState: @unchecked Sendable {
-  private var value: UInt64 = 0
-
-  func next(step: UInt64) -> BenchmarkInstant {
-    defer {
-      value += step
-    }
-    return BenchmarkInstant(nanoseconds: value)
-  }
-}
-
 private final class IdentityRecorder: Recorder, @unchecked Sendable {
   func beginSpan(_ name: StaticString, attributes: SpanAttributes) -> SpanToken {
     .empty

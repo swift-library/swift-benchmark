@@ -98,30 +98,3 @@ private struct FixedClock: BenchmarkClock {
     BenchmarkInstant(nanoseconds: 1)
   }
 }
-
-private struct StepClock: BenchmarkClock {
-  private let counter = StepCounter()
-  private let step: UInt64
-
-  init(step: UInt64) {
-    self.step = step
-  }
-
-  func now() -> BenchmarkInstant {
-    BenchmarkInstant(nanoseconds: UInt64(counter.next()) * step)
-  }
-}
-
-private final class StepCounter: @unchecked Sendable {
-  private let lock = NSLock()
-  private var value = 0
-
-  func next() -> Int {
-    lock.withLock {
-      defer {
-        value += 1
-      }
-      return value
-    }
-  }
-}
