@@ -13,6 +13,8 @@ public struct BenchmarkRunner: Sendable {
   /// covers the whole process lifetime.
   public let recordsPeakMemory: Bool
 
+  /// Creates a runner. The defaults measure wall-clock time, CPU time and
+  /// allocation counts, and leave out peak memory.
   public init(
     clock: any BenchmarkClock = ContinuousBenchmarkClock(),
     cpuClock: (any BenchmarkClock)? = ProcessCPUClock(),
@@ -91,13 +93,15 @@ public struct BenchmarkRunner: Sendable {
         context: Benchmark.Event.Context(step: step),
         eventRecorders: eventRecorders
       )
-      let row = try await runRow(
-        step: step,
-        suite: step.suite,
-        policy: policy,
-        observers: observers,
-        eventRecorders: eventRecorders
-      )
+      let row = try await MeasurementGate.shared.withExclusiveAccess {
+        try await runRow(
+          step: step,
+          suite: step.suite,
+          policy: policy,
+          observers: observers,
+          eventRecorders: eventRecorders
+        )
+      }
       await record(
         kind: .caseEnded,
         context: Benchmark.Event.Context(step: step),
@@ -168,6 +172,7 @@ public struct BenchmarkRunner: Sendable {
       )
     }
 
+    let footprintAtStart = recordsPeakMemory ? PhysicalFootprint.read() : nil
     var lastWarmupNanoseconds: UInt64?
     for iteration in 0..<policy.warmupCount {
       let context = executionContext(step: step, suite: suite, phase: .warmup(iteration: iteration))
@@ -179,8 +184,7 @@ public struct BenchmarkRunner: Sendable {
       )
       await notifyWillRun(context: context, observers: observers)
       do {
-        let interval = try await workload.callTimed(1, clock: clock)
-        lastWarmupNanoseconds = interval.start.duration(to: interval.end)
+        lastWarmupNanoseconds = try await workload.callTimed(1, clock: clock).nanoseconds
         await notifyDidRun(context: context, sample: nil, observers: observers)
         await record(
           kind: .warmupEnded,
@@ -288,8 +292,9 @@ public struct BenchmarkRunner: Sendable {
       }
     }
 
-    if recordsPeakMemory, let peak = PhysicalFootprint.peak() {
-      let sample = Sample(iteration: samples.count, values: [.peakMemory: Double(peak)])
+    if let start = footprintAtStart, let end = PhysicalFootprint.read(), end.peak > start.peak {
+      let sample = Sample(
+        iteration: samples.count, values: [.peakMemory: Double(end.peak - start.current)])
       samples.append(sample)
       await record(
         kind: .sampleRecorded,
@@ -319,16 +324,14 @@ public struct BenchmarkRunner: Sendable {
     batchSize: Int
   ) async throws -> Sample {
     let recorder = CustomMetricRecorder()
-    let cpuStart = cpuClock?.now()
     let interval = try await CustomMetricRecorder.$current.withValue(recorder) {
-      try await workload.callTimed(batchSize, clock: clock)
+      try await workload.callTimed(batchSize, clock: clock, cpuClock: cpuClock)
     }
-    let cpuEnd = cpuClock?.now()
     let calls = Double(batchSize)
     var values: [Benchmark.Metric: Double] = recorder.values().mapValues { $0 / calls }
-    values[.wallClock] = Double(interval.start.duration(to: interval.end)) / calls
-    if let cpuStart, let cpuEnd {
-      values[.cpuTime] = Double(cpuStart.duration(to: cpuEnd)) / calls
+    values[.wallClock] = Double(interval.nanoseconds) / calls
+    if let cpuNanoseconds = interval.cpuNanoseconds {
+      values[.cpuTime] = Double(cpuNanoseconds) / calls
     }
     return Sample(iteration: iteration, batchSize: batchSize, values: values)
   }
@@ -350,16 +353,19 @@ public struct BenchmarkRunner: Sendable {
       }
       var count = 1
       while count < maxBatchSize {
-        let interval = try await workload.callTimed(count, clock: clock)
-        let elapsed = interval.start.duration(to: interval.end)
+        let elapsed = try await workload.callTimed(count, clock: clock).nanoseconds
         if elapsed >= targetNanoseconds {
           break
         }
+        // Grow at least twofold and at most a hundredfold per round, aiming at
+        // the count that reaches the target. Computed in Double and clamped to
+        // the maximum before conversion, so large targets cannot overflow.
+        let current = Double(count)
         let estimate =
           elapsed == 0
-          ? count * 100
-          : Int((Double(count) * Double(targetNanoseconds) / Double(elapsed)).rounded(.up))
-        count = min(maxBatchSize, max(count * 2, min(estimate, count * 100)))
+          ? current * 100 : (current * Double(targetNanoseconds) / Double(elapsed)).rounded(.up)
+        let next = min(Double(maxBatchSize), max(current * 2, min(estimate, current * 100)))
+        count = Int(next)
       }
       return count
     }

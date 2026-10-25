@@ -10,6 +10,7 @@ import Report
   public struct BenchmarkTestingTrait: TestTrait, SuiteTrait {
     public var configuration: BenchmarkConfiguration?
     public var baseline: BaselineDocument?
+    /// The statistic, thresholds and budgets reports apply.
     public var comparison: ComparisonPolicy
 
     public init(

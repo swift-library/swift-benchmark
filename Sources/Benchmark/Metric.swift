@@ -6,8 +6,11 @@ extension Benchmark {
   ///
   /// Sample values are per single call of the workload, so a sample measured
   /// over a batch of calls reports the batch total divided by the batch size.
-  /// ``peakMemory`` is the exception and is recorded once per step. Metrics are
-  /// identified by ``name``; reports key values by that name.
+  /// ``peakMemory`` is the exception and is recorded once per step.
+  ///
+  /// A metric's identity is its ``name``: two metrics with the same name are
+  /// equal whatever their unit and direction, and reports key values by name.
+  /// The names of ``builtIn`` metrics are reserved for the runner.
   public struct Metric: Sendable, Hashable, Codable, CustomStringConvertible {
     /// The unit a metric's values are expressed in.
     public enum Unit: String, Sendable, Hashable, Codable {
@@ -22,10 +25,16 @@ extension Benchmark {
       case higherIsBetter
     }
 
+    /// The metric's identity, used as its key in reports.
     public var name: String
+    /// The unit of the metric's values.
     public var unit: Unit
+    /// Whether a lower or a higher value is an improvement; decides which
+    /// change a baseline comparison or budget treats as a regression.
     public var direction: Direction
 
+    /// Creates a metric. Custom metrics need a name that no ``builtIn``
+    /// metric uses.
     public init(name: String, unit: Unit, direction: Direction = .lowerIsBetter) {
       self.name = name
       self.unit = unit
@@ -34,6 +43,14 @@ extension Benchmark {
 
     public var description: String {
       name
+    }
+
+    public static func == (lhs: Metric, rhs: Metric) -> Bool {
+      lhs.name == rhs.name
+    }
+
+    public func hash(into hasher: inout Hasher) {
+      hasher.combine(name)
     }
 
     /// Elapsed wall-clock time per call.
@@ -58,9 +75,13 @@ extension Benchmark {
     /// Swift strong releases per call, counted with ``allocations``.
     public static let releases = Metric(name: "releases", unit: .count)
 
-    /// The highest physical memory footprint the process reached, recorded once
-    /// per step. It is recorded only when the process measures a single step,
-    /// because an earlier step's peak would otherwise be reported again.
+    /// How far the process's physical memory footprint rose above its level at
+    /// the start of the step, recorded once per step.
+    ///
+    /// Platforms report only the highest footprint over the process lifetime,
+    /// so the runner records this metric only when told it owns the process,
+    /// and leaves it out when the footprint never exceeded the peak it had
+    /// already reached before the step.
     public static let peakMemory = Metric(name: "peakMemory", unit: .bytes)
 
     /// The metrics the runner measures without user code.

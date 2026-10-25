@@ -87,13 +87,13 @@ public struct ReportBuilder: Sendable {
                     return lhs < rhs
                   }
                 }
-                .map { row, samples in
+                .map { row, rowAccumulator in
                   Report.Measurement.Row(
                     id: row.id,
                     size: row.scale,
                     arguments: row.arguments,
-                    samples: samples.sorted { $0.iteration < $1.iteration },
-                    metrics: accumulator.metrics
+                    samples: rowAccumulator.samples.sorted { $0.iteration < $1.iteration },
+                    metrics: rowAccumulator.metrics
                   )
                 }
             )
@@ -163,8 +163,6 @@ public struct ReportBuilder: Sendable {
       else {
         continue
       }
-      let knownMetrics = cases[key]?.metrics ?? []
-      cases[key]?.metrics = Report.mergedMetrics([knownMetrics, record.context.metrics])
       let sample = SampleReport(
         id: ReportIDFactory.sample(
           suiteName: suiteName,
@@ -189,7 +187,7 @@ public struct ReportBuilder: Sendable {
         arguments: record.context.arguments,
         scale: record.context.size
       )
-      cases[key]?.rows[row, default: []].append(sample)
+      cases[key]?.rows[row, default: RowAccumulator()].add(sample, metrics: record.context.metrics)
     }
     return cases.filter { !$0.value.rows.isEmpty }
   }
@@ -208,8 +206,7 @@ private struct CaseAccumulator {
   var configurationWarmup: String?
   var configurationIterations: String?
   var configurationBatching: String?
-  var metrics: [Benchmark.Metric] = []
-  var rows: [Benchmark.ArgumentRow: [SampleReport]] = [:]
+  var rows: [Benchmark.ArgumentRow: RowAccumulator] = [:]
 
   mutating func merge(context: Benchmark.Event.Context) {
     if tags.isEmpty, !context.tags.isEmpty {
@@ -227,5 +224,15 @@ private struct CaseAccumulator {
     if configurationBatching == nil {
       configurationBatching = context.configurationBatching
     }
+  }
+}
+
+private struct RowAccumulator {
+  var samples: [SampleReport] = []
+  var metrics: [Benchmark.Metric] = []
+
+  mutating func add(_ sample: SampleReport, metrics sampleMetrics: [Benchmark.Metric]) {
+    samples.append(sample)
+    metrics = Report.mergedMetrics([metrics, sampleMetrics])
   }
 }

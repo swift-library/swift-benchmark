@@ -121,27 +121,161 @@ struct BenchmarkMeasurementTests {
   }
 
   @Test
-  func peakMemoryIsRecordedOnlyWhenTheRunnerOwnsTheProcess() async throws {
+  func peakMemoryIsTheGrowthAboveTheStepsStartingFootprint() async throws {
+    let allocationBytes = 256 << 20
     let suite = BenchmarkSuite(
       "Peak",
       configuration: BenchmarkConfiguration(
         warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
-      Benchmark("Case") {}
+      Benchmark("Allocates") {
+        var buffer = [UInt8](repeating: 1, count: allocationBytes)
+        buffer[allocationBytes / 2] = 2
+        blackHole(buffer)
+      }
     }
 
-    let shared = try await BenchmarkRunner(cpuClock: nil, countsAllocations: false).run(suite)
+    // The allocator can keep freed memory in the process footprint, so the
+    // measured run must make the process's first allocation of this size.
     let owned = try await BenchmarkRunner(
       cpuClock: nil, countsAllocations: false, recordsPeakMemory: true
     ).run(suite)
+    let shared = try await BenchmarkRunner(cpuClock: nil, countsAllocations: false).run(suite)
 
     #expect(
       shared.first?.measurement.samples.contains { $0.value(for: .peakMemory) != nil } == false)
     #if canImport(Darwin) || os(Linux)
       let peak = owned.first?.measurement.samples.compactMap { $0.value(for: .peakMemory) }
       #expect(peak?.count == 1)
-      #expect((peak?.first ?? 0) > 0)
+      #expect((peak?.first ?? 0) >= Double(allocationBytes / 2))
     #endif
+  }
+
+  @Test
+  func cpuAndWallClocksAreReadAroundTheSameCalls() async throws {
+    let log = ReadLog()
+    let suite = BenchmarkSuite(
+      "Window",
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(2))
+    ) {
+      Benchmark("Case") {
+        log.append("call")
+      }
+    }
+
+    _ = try await BenchmarkRunner(
+      clock: LoggingClock(name: "wall", log: log),
+      cpuClock: LoggingClock(name: "cpu", log: log),
+      countsAllocations: false
+    ).run(suite)
+
+    #expect(log.entries == ["cpu", "wall", "call", "call", "wall", "cpu"])
+  }
+
+  @Test
+  func recordedValuesUseTheFirstDescriptorAndSkipBuiltInNames() async throws {
+    let first = Benchmark.Metric(name: "work", unit: .count)
+    let conflicting = Benchmark.Metric(name: "work", unit: .bytes)
+    let suite = BenchmarkSuite(
+      "Descriptors",
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
+    ) {
+      Benchmark("Case") {
+        Benchmark.record(1, for: first)
+        Benchmark.record(2, for: conflicting)
+        Benchmark.record(1_000_000, for: Benchmark.Metric(name: "wallClock", unit: .count))
+      }
+    }
+    let events = Benchmark.Event.InMemoryRecorder()
+
+    let results = try await BenchmarkRunner(
+      clock: VirtualWork(nanosecondsPerCall: 0).clock, cpuClock: nil, countsAllocations: false
+    ).run(suite, eventRecorders: [events])
+    let sample = try #require(results.first?.measurement.samples.first)
+
+    #expect(first == conflicting)
+    #expect(sample.value(for: first) == 3)
+    #expect(sample.value(for: .wallClock) == 0)
+    let context = await events.snapshot().first { $0.kind == .sampleRecorded }?.context
+    #expect(context?.values["work"] == 3)
+  }
+
+  @Test
+  func concurrentRunnersMeasureOneStepAtATime() async throws {
+    let tracker = ConcurrencyTracker()
+    func suite(_ name: String) -> BenchmarkSuite {
+      BenchmarkSuite(
+        name,
+        configuration: BenchmarkConfiguration(
+          warmup: .iterations(1), iterations: .iterations(3), batching: .fixed(5))
+      ) {
+        Benchmark("Case") {
+          tracker.enter()
+          blackHole((0..<200).reduce(0, +))
+          tracker.leave()
+        }
+      }
+    }
+
+    async let first = BenchmarkRunner(cpuClock: nil).run(suite("First"))
+    async let second = BenchmarkRunner(cpuClock: nil).run(suite("Second"))
+    _ = try await (first, second)
+
+    #expect(tracker.maximum == 1)
+  }
+
+  @Test
+  func calibrationClampsLargeTargetsToTheMaximumBatch() async throws {
+    let work = VirtualWork(nanosecondsPerCall: 1)
+    let suite = BenchmarkSuite(
+      "Clamp",
+      configuration: BenchmarkConfiguration(
+        warmup: .none,
+        iterations: .iterations(1),
+        batching: .automatic(targetNanoseconds: .max, maxBatchSize: 50)
+      )
+    ) {
+      Benchmark("Case") {
+        work.call()
+      }
+    }
+
+    let results = try await BenchmarkRunner(
+      clock: work.clock, cpuClock: nil, countsAllocations: false
+    ).run(suite)
+
+    #expect(results.first?.measurement.samples.map(\.batchSize) == [50])
+  }
+
+  @Test
+  func adaptiveIterationsCountTheWholeBatchTowardDurationLimits() async throws {
+    func run(_ iterations: IterationPolicy) async throws -> [Sample] {
+      let work = VirtualWork(nanosecondsPerCall: 100)
+      let suite = BenchmarkSuite(
+        "Adaptive",
+        configuration: BenchmarkConfiguration(
+          warmup: .none, iterations: iterations, batching: .fixed(10))
+      ) {
+        Benchmark("Case") {
+          work.call()
+        }
+      }
+      let results = try await BenchmarkRunner(
+        clock: work.clock, cpuClock: nil, countsAllocations: false
+      ).run(suite)
+      return results.first?.measurement.samples ?? []
+    }
+
+    let minimum = try await run(
+      .adaptive(minIterations: 1, maxIterations: 10, minDurationNanoseconds: 2_500))
+    let maximum = try await run(
+      .adaptive(minIterations: 2, maxIterations: 10, maxDurationNanoseconds: 1_500))
+
+    #expect(minimum.count == 3)
+    #expect(minimum.map { $0.value(for: .wallClock) } == [100, 100, 100])
+    #expect(maximum.count == 2)
   }
 
   @Test
@@ -234,5 +368,51 @@ private final class FixedStepClock: BenchmarkClock, @unchecked Sendable {
       value += step
       return BenchmarkInstant(nanoseconds: value)
     }
+  }
+}
+
+/// An ordered log that clocks and workloads append to.
+private final class ReadLog: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storage: [String] = []
+
+  var entries: [String] {
+    lock.withLock { storage }
+  }
+
+  func append(_ entry: String) {
+    lock.withLock { storage.append(entry) }
+  }
+}
+
+private struct LoggingClock: BenchmarkClock {
+  let name: String
+  let log: ReadLog
+
+  func now() -> BenchmarkInstant {
+    log.append(name)
+    return BenchmarkInstant(nanoseconds: 0)
+  }
+}
+
+/// Records the most workloads that ran at the same time.
+private final class ConcurrencyTracker: @unchecked Sendable {
+  private let lock = NSLock()
+  private var active = 0
+  private var peak = 0
+
+  var maximum: Int {
+    lock.withLock { peak }
+  }
+
+  func enter() {
+    lock.withLock {
+      active += 1
+      peak = max(peak, active)
+    }
+  }
+
+  func leave() {
+    lock.withLock { active -= 1 }
   }
 }

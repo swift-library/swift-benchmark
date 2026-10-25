@@ -54,6 +54,7 @@ extension Benchmark.Event {
     public var sourceLocation: BenchmarkSourceLocation?
     public var configurationWarmup: String?
     public var configurationIterations: String?
+    /// The case's batching policy, described as text.
     public var configurationBatching: String?
     public var message: String?
 

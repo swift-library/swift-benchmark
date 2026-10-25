@@ -77,7 +77,7 @@ public struct RunMetadata: Sendable, Equatable, Codable {
       generatedAt: generatedAt,
       buildConfiguration: buildConfiguration
         ?? ProcessInfo.processInfo.environment["SWIFT_BENCHMARK_BUILD_CONFIGURATION"]
-        ?? (_isDebugAssertConfiguration() ? "debug" : "release"),
+        ?? BuildConfigurationName.current,
       device: MachineModel.current
     )
   }
@@ -91,6 +91,18 @@ enum SwiftCompilerVersion {
       "6.4"
     #else
       "6.3"
+    #endif
+  }
+}
+
+enum BuildConfigurationName {
+  /// The SwiftPM configuration this library was compiled in; SwiftPM defines
+  /// `DEBUG` only for debug builds.
+  static var current: String {
+    #if DEBUG
+      "debug"
+    #else
+      "release"
     #endif
   }
 }
@@ -156,8 +168,10 @@ enum SystemArchitecture {
 public struct BenchmarkConfigurationReport: Sendable, Equatable, Codable {
   public var warmup: String
   public var iterations: String
+  /// The case's batching policy, described as text.
   public var batching: String
 
+  /// Records a case's configuration as text.
   public init(warmup: String, iterations: String, batching: String) {
     self.warmup = warmup
     self.iterations = iterations
@@ -172,6 +186,7 @@ public struct SampleReport: Sendable, Equatable, Codable {
   public var iteration: Int
   /// Calls the sample measured.
   public var batchSize: Int
+  /// Per-call values keyed by metric name.
   public var values: [String: Double]
 
   public init(
@@ -188,6 +203,7 @@ public struct SampleReport: Sendable, Equatable, Codable {
     self.values = values
   }
 
+  /// The per-call value of `metric`, or `nil` when the sample did not measure it.
   public func value(for metric: Benchmark.Metric) -> Double? {
     values[metric.name]
   }

@@ -20,12 +20,19 @@ public struct ReportVerdictCause: Sendable, Equatable, Codable {
   public var kind: Kind
   public var scope: ReportScope
   public var message: String
+  /// The metric the cause is about, if any.
   public var metric: Benchmark.Metric?
+  /// The statistic the cause is about, if any.
   public var statistic: Report.Statistic?
+  /// The Dimension size of the row the cause is about, if it has one.
+  public var size: Benchmark.Scale?
+  /// The argument row identifier of the row the cause is about, if it has one.
+  public var rowID: String?
   /// The measured value, in the metric's unit.
   public var actual: Double?
   /// The baseline value or budget limit, in the metric's unit.
   public var expected: Double?
+  /// `actual - expected`, in the metric's unit.
   public var delta: Double?
   public var percentageDelta: Double?
   public var diagnosticID: ReportID?
@@ -37,6 +44,8 @@ public struct ReportVerdictCause: Sendable, Equatable, Codable {
     message: String,
     metric: Benchmark.Metric? = nil,
     statistic: Report.Statistic? = nil,
+    size: Benchmark.Scale? = nil,
+    rowID: String? = nil,
     actual: Double? = nil,
     expected: Double? = nil,
     delta: Double? = nil,
@@ -49,6 +58,8 @@ public struct ReportVerdictCause: Sendable, Equatable, Codable {
     self.message = message
     self.metric = metric
     self.statistic = statistic
+    self.size = size
+    self.rowID = rowID
     self.actual = actual
     self.expected = expected
     self.delta = delta
@@ -193,6 +204,16 @@ public struct CaseReport: Sendable, Equatable, Codable {
     }
   }
 
+  private static func rowSuffix(size: Benchmark.Scale?, rowID: String?) -> String {
+    if let size {
+      return " at size \(size.rawValue)"
+    }
+    if let rowID {
+      return " for \(rowID)"
+    }
+    return ""
+  }
+
   private static func makeVerdictCauses(
     scope: ReportScope,
     status: ReportExecutionStatus,
@@ -216,9 +237,11 @@ public struct CaseReport: Sendable, Equatable, Codable {
           kind: .baselineRegression,
           scope: scope,
           message:
-            "Baseline regression for \(comparison.metric.name) \(comparison.statistic.rawValue).",
+            "Baseline regression for \(comparison.metric.name) \(comparison.statistic.rawValue)\(rowSuffix(size: comparison.size, rowID: comparison.rowID)).",
           metric: comparison.metric,
           statistic: comparison.statistic,
+          size: comparison.size,
+          rowID: comparison.rowID,
           actual: comparison.current,
           expected: comparison.baseline,
           delta: comparison.delta,
@@ -232,9 +255,11 @@ public struct CaseReport: Sendable, Equatable, Codable {
           kind: .budgetExceeded,
           scope: scope,
           message:
-            "Budget exceeded for \(budget.policy.metric.name) \(budget.policy.statistic.rawValue).",
+            "Budget exceeded for \(budget.policy.metric.name) \(budget.policy.statistic.rawValue)\(rowSuffix(size: budget.size, rowID: budget.rowID)).",
           metric: budget.policy.metric,
           statistic: budget.policy.statistic,
+          size: budget.size,
+          rowID: budget.rowID,
           actual: budget.actual,
           expected: budget.policy.limit,
           delta: budget.delta,
@@ -282,6 +307,7 @@ public struct ReportSummary: Sendable, Equatable, Codable {
   public var warningCount: Int
   public var verdict: ReportVerdict
 
+  /// Summarizes `suites` and the run's own warnings.
   public init(suites: [SuiteReport], runWarnings: [ReportWarning] = []) {
     let cases = suites.flatMap(\.cases)
     self.warningCount = runWarnings.count + cases.reduce(0) { $0 + $1.warnings.count }
@@ -313,6 +339,7 @@ public struct ReportDocument: Sendable, Equatable, Codable {
   public var warnings: [ReportWarning]
   public var summary: ReportSummary
 
+  /// Creates a document from finished suite reports and run warnings.
   public init(metadata: RunMetadata, suites: [SuiteReport], warnings: [ReportWarning] = []) {
     self.metadata = metadata
     self.suites = suites

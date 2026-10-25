@@ -6,8 +6,11 @@ public struct BenchmarkConfiguration: Sendable, Equatable {
 
   public var warmup: WarmupPolicy
   public var iterations: IterationPolicy
+  /// How many calls each sample measures.
   public var batching: BatchingPolicy
 
+  /// Creates a configuration; the defaults warm up once, measure ten samples
+  /// and batch automatically.
   public init(
     warmup: WarmupPolicy = .iterations(1),
     iterations: IterationPolicy = .iterations(10),
@@ -36,8 +39,10 @@ public struct BenchmarkConfiguration: Sendable, Equatable {
 public struct BenchmarkExecutionPolicy: Sendable, Equatable {
   public var warmupCount: Int
   public var iterations: IterationPlan
+  /// How many calls each sample measures.
   public var batching: BatchingPolicy
 
+  /// Creates a validated policy.
   public init(
     warmupCount: Int,
     iterations: IterationPlan,

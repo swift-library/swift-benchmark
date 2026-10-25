@@ -11,9 +11,10 @@ import Benchmark
 /// - `--budget <metric>:<statistic>:<value>` and
 ///   `--case-budget <suite>:<case>:<metric>:<statistic>:<value>`.
 ///
-/// Absolute values accept `ns`, `us`, `ms` and `s` for time, `B`, `KB`, `MB`,
-/// `GB`, `KiB`, `MiB` and `GiB` for bytes, and a plain number in the metric's
-/// base unit.
+/// Absolute values are plain numbers in the metric's unit. Built-in metrics
+/// also accept unit suffixes: `ns`, `us`, `ms` and `s` for time, and `B`,
+/// `KB`, `MB`, `GB`, `KiB`, `MiB` and `GiB` for bytes. Custom metrics accept no
+/// suffix, because their unit is known only from the measurement.
 package enum ComparisonArguments {
   package static func policy(
     statistic: String?,
@@ -28,7 +29,7 @@ package enum ComparisonArguments {
     for value in thresholds {
       if let separator = value.firstIndex(of: "=") {
         let amount = String(value[value.index(after: separator)...])
-        let metric = try parseMetric(String(value[..<separator]), amount: amount)
+        let metric = try parseMetric(String(value[..<separator]))
         policy.metricThresholds[metric] = try parseThreshold(
           amount, metric: metric, option: "--threshold")
       } else {
@@ -64,13 +65,13 @@ package enum ComparisonArguments {
     parts: [String],
     option: String
   ) throws -> BudgetPolicy {
-    let metric = try parseMetric(parts[0], amount: parts[2])
+    let metric = try parseMetric(parts[0])
     return BudgetPolicy(
       suiteName: suiteName,
       caseName: caseName,
       metric: metric,
       statistic: try parseStatistic(parts[1]),
-      limit: try parseAmount(parts[2], unit: metric.unit, option: option)
+      limit: try parseAmount(parts[2], metric: metric, option: option)
     )
   }
 
@@ -81,18 +82,15 @@ package enum ComparisonArguments {
     return statistic
   }
 
-  /// Resolves a built-in metric by name. Any other name is a custom metric
-  /// whose unit follows the unit suffix of `amount`, or `count` without one.
-  private static func parseMetric(_ value: String, amount: String) throws -> Benchmark.Metric {
+  /// Resolves a built-in metric by name. Any other name is a custom metric;
+  /// comparisons match it to the measured metric by name, so its unit here
+  /// is only a placeholder.
+  private static func parseMetric(_ value: String) throws -> Benchmark.Metric {
     guard !value.isEmpty else {
       throw ComparisonArgumentError.invalidMetric(value)
     }
-    if let metric = Benchmark.Metric.builtIn.first(where: { $0.name == value }) {
-      return metric
-    }
-    let suffix = String(amount.drop { $0.isNumber || $0 == "." || $0 == "-" || $0 == "+" })
-    let unit = unitScales.first { $0.value[suffix] != nil }?.key ?? .count
-    return Benchmark.Metric(name: value, unit: unit)
+    return Benchmark.Metric.builtIn.first { $0.name == value }
+      ?? Benchmark.Metric(name: value, unit: .count)
   }
 
   private static let unitScales: [Benchmark.Metric.Unit: [String: Double]] = [
@@ -117,12 +115,12 @@ package enum ComparisonArguments {
     guard let metric else {
       throw ComparisonArgumentError.absoluteThresholdNeedsMetric(value)
     }
-    return .absolute(try parseAmount(value, unit: metric.unit, option: option))
+    return .absolute(try parseAmount(value, metric: metric, option: option))
   }
 
   private static func parseAmount(
     _ value: String,
-    unit: Benchmark.Metric.Unit,
+    metric: Benchmark.Metric,
     option: String
   ) throws -> Double {
     let suffixStart =
@@ -134,8 +132,11 @@ package enum ComparisonArguments {
     guard !suffix.isEmpty else {
       return number
     }
-    guard let scale = unitScales[unit]?[suffix] else {
-      throw ComparisonArgumentError.unitMismatch(option, value, unit)
+    guard Benchmark.Metric.builtIn.contains(metric) else {
+      throw ComparisonArgumentError.unitForCustomMetric(option, value, metric.name)
+    }
+    guard let scale = unitScales[metric.unit]?[suffix] else {
+      throw ComparisonArgumentError.unitMismatch(option, value, metric.unit)
     }
     return number * scale
   }
@@ -148,6 +149,7 @@ package enum ComparisonArgumentError: Error, CustomStringConvertible, Equatable 
   case invalidBudget(String, String)
   case absoluteThresholdNeedsMetric(String)
   case unitMismatch(String, String, Benchmark.Metric.Unit)
+  case unitForCustomMetric(String, String, String)
 
   package var description: String {
     switch self {
@@ -166,6 +168,9 @@ package enum ComparisonArgumentError: Error, CustomStringConvertible, Equatable 
       return "An absolute threshold needs a metric, as in --threshold wallClock=\(value)."
     case .unitMismatch(let option, let value, let unit):
       return "\(option) value '\(value)' has a unit that does not apply to \(unit.rawValue)."
+    case .unitForCustomMetric(let option, let value, let name):
+      return
+        "\(option) value '\(value)' has a unit, but custom metric '\(name)' takes a plain number in its own unit."
     }
   }
 }

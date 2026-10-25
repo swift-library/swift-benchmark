@@ -230,6 +230,7 @@ public struct BenchmarkCase: Sendable {
     )
   }
 
+  /// Creates a benchmark with one argument row per element of `arguments`.
   public init<C: Collection>(
     _ name: String,
     arguments: C,
@@ -252,6 +253,7 @@ public struct BenchmarkCase: Sendable {
     )
   }
 
+  /// Creates a benchmark with one argument row per element of `arguments`.
   public init<C: Collection>(
     _ name: String,
     arguments: C,
@@ -274,6 +276,8 @@ public struct BenchmarkCase: Sendable {
     )
   }
 
+  /// Creates a benchmark with one argument row per pair of elements, varying
+  /// the second collection fastest.
   public init<C1: Collection, C2: Collection>(
     _ name: String,
     arguments collection1: C1,
@@ -297,6 +301,8 @@ public struct BenchmarkCase: Sendable {
     )
   }
 
+  /// Creates a benchmark with one argument row per pair of elements, varying
+  /// the second collection fastest.
   public init<C1: Collection, C2: Collection>(
     _ name: String,
     arguments collection1: C1,
@@ -320,6 +326,7 @@ public struct BenchmarkCase: Sendable {
     )
   }
 
+  /// Creates a benchmark with one argument row per pair of zipped elements.
   public init<C1: Sequence, C2: Sequence>(
     _ name: String,
     arguments zipped: Zip2Sequence<C1, C2>,
@@ -342,6 +349,7 @@ public struct BenchmarkCase: Sendable {
     )
   }
 
+  /// Creates a benchmark with one argument row per pair of zipped elements.
   public init<C1: Sequence, C2: Sequence>(
     _ name: String,
     arguments zipped: Zip2Sequence<C1, C2>,

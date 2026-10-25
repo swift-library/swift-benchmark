@@ -9,30 +9,44 @@ enum BenchmarkWorkload: Sendable {
   case synchronous(@Sendable () throws -> Void)
   case asynchronous(@Sendable () async throws -> Void)
 
-  func call() async throws {
-    switch self {
-    case .synchronous(let body):
-      try body()
-    case .asynchronous(let body):
-      try await body()
+  /// Readings taken immediately around one timed batch: the CPU clock outside
+  /// the wall clock, both around the same calls.
+  struct Interval: Sendable {
+    var start: BenchmarkInstant
+    var end: BenchmarkInstant
+    var cpuStart: BenchmarkInstant?
+    var cpuEnd: BenchmarkInstant?
+
+    var nanoseconds: UInt64 {
+      start.duration(to: end)
+    }
+
+    var cpuNanoseconds: UInt64? {
+      guard let cpuStart, let cpuEnd else {
+        return nil
+      }
+      return cpuStart.duration(to: cpuEnd)
     }
   }
 
-  /// Calls the body `count` times between two readings of `clock` and returns
-  /// the readings.
+  /// Calls the body `count` times between readings of `clock` and, when
+  /// given, `cpuClock`.
   func callTimed(
     _ count: Int,
-    clock: any BenchmarkClock
-  ) async throws -> (start: BenchmarkInstant, end: BenchmarkInstant) {
+    clock: any BenchmarkClock,
+    cpuClock: (any BenchmarkClock)? = nil
+  ) async throws -> Interval {
     switch self {
     case .synchronous(let body):
-      return try Self.callSynchronously(body, count: count, clock: clock)
+      return try Self.callSynchronously(body, count: count, clock: clock, cpuClock: cpuClock)
     case .asynchronous(let body):
+      let cpuStart = cpuClock?.now()
       let start = clock.now()
       for _ in 0..<count {
         try await body()
       }
-      return (start, clock.now())
+      let end = clock.now()
+      return Interval(start: start, end: end, cpuStart: cpuStart, cpuEnd: cpuClock?.now())
     }
   }
 
@@ -53,12 +67,15 @@ enum BenchmarkWorkload: Sendable {
   private static func callSynchronously(
     _ body: @Sendable () throws -> Void,
     count: Int,
-    clock: any BenchmarkClock
-  ) throws -> (start: BenchmarkInstant, end: BenchmarkInstant) {
+    clock: any BenchmarkClock,
+    cpuClock: (any BenchmarkClock)?
+  ) throws -> Interval {
+    let cpuStart = cpuClock?.now()
     let start = clock.now()
     for _ in 0..<count {
       try body()
     }
-    return (start, clock.now())
+    let end = clock.now()
+    return Interval(start: start, end: end, cpuStart: cpuStart, cpuEnd: cpuClock?.now())
   }
 }

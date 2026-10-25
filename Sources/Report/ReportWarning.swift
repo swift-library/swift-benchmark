@@ -6,6 +6,7 @@ import Benchmark
 /// A condition that makes a report's comparisons less trustworthy without
 /// failing them.
 public struct ReportWarning: Sendable, Equatable, Codable {
+  /// The condition a warning reports.
   public enum Kind: String, Sendable, Codable {
     /// The baseline was recorded under different run conditions.
     case runConditionMismatch
@@ -18,11 +19,16 @@ public struct ReportWarning: Sendable, Equatable, Codable {
     case fewSamples
   }
 
+  /// The condition reported.
   public var kind: Kind
+  /// The run or case the warning is about.
   public var scope: ReportScope
+  /// A sentence describing the condition for people.
   public var message: String
+  /// The metric the warning is about, if any.
   public var metric: Benchmark.Metric?
 
+  /// Creates a warning about `scope`, optionally about one metric.
   public init(kind: Kind, scope: ReportScope, message: String, metric: Benchmark.Metric? = nil) {
     self.kind = kind
     self.scope = scope
@@ -66,32 +72,31 @@ extension ReportWarning {
     return warnings
   }
 
-  /// Warnings for one compared case: too few timed samples, and comparisons
-  /// whose noise reaches their threshold.
-  static func comparisonWarnings(
+  /// Warnings for one compared row: too few timed samples, and comparisons
+  /// whose noise in this row or the same baseline row reaches their threshold.
+  static func rowWarnings(
     scope: ReportScope,
-    measurement: Report.Measurement,
-    baseline: Report.Measurement?,
+    row: Report.Measurement.Row,
+    baselineRow: Report.Measurement.Row?,
     comparisons: [BaselineComparison]
   ) -> [ReportWarning] {
+    let prefix = row.label.map { "\($0): " } ?? ""
     var warnings: [ReportWarning] = []
-    if let wallClock = measurement.statistics(for: .wallClock),
-      wallClock.count < minimumTimedSamples
-    {
+    if let wallClock = row.statistics(for: .wallClock), wallClock.count < minimumTimedSamples {
       warnings.append(
         ReportWarning(
           kind: .fewSamples,
           scope: scope,
           message:
-            "Only \(wallClock.count) timed sample(s); use at least \(minimumTimedSamples) for a stable comparison.",
+            "\(prefix)only \(wallClock.count) timed sample(s); use at least \(minimumTimedSamples) for a stable comparison.",
           metric: .wallClock
         )
       )
     }
     for comparison in comparisons {
       let spreads = [
-        measurement.statistics(for: comparison.metric),
-        baseline?.statistics(for: comparison.metric),
+        row.statistics(for: comparison.metric),
+        baselineRow?.statistics(for: comparison.metric),
       ]
       .compactMap { $0 }
       .map { spread($0, threshold: comparison.threshold) }
@@ -103,7 +108,7 @@ extension ReportWarning {
           kind: .noisyComparison,
           scope: scope,
           message:
-            "\(comparison.metric.name) varies by \(describe(worst, threshold: comparison.threshold)), as much as its threshold allows; the verdict may change between runs.",
+            "\(prefix)\(comparison.metric.name) varies by \(describe(worst, threshold: comparison.threshold)), as much as its threshold allows; the verdict may change between runs.",
           metric: comparison.metric
         )
       )

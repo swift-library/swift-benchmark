@@ -17,6 +17,7 @@ extension Report {
     case p95
     case p99
 
+    /// Reads this statistic from `statistics`.
     public func value(from statistics: Statistics) -> Double {
       switch self {
       case .min:
@@ -105,6 +106,8 @@ extension Report {
       self.p99 = Self.percentile(0.99, values: values)
     }
 
+    /// The statistics divided by `size`, for per-unit comparisons across
+    /// Dimension sizes.
     public func amortized(by size: Benchmark.Scale) -> Statistics {
       let divisor = Double(size.rawValue)
       guard divisor != 0 else {
@@ -149,10 +152,12 @@ extension Report {
       self.rows = rows
     }
 
+    /// Creates a measurement with one row and no Dimension size.
     public init(samples: [SampleReport], metrics: [Benchmark.Metric]) {
       self.init(rows: [Row(size: nil, samples: samples, metrics: metrics)])
     }
 
+    /// Every row's samples, timed and counting alike.
     public var samples: [SampleReport] {
       rows.flatMap(\.samples)
     }
@@ -180,6 +185,7 @@ extension Report {
 }
 
 extension Report.Measurement {
+  /// The samples of one Dimension size or argument row, with their statistics.
   public struct Row: Sendable, Equatable, Codable {
     public var id: String?
     public var size: Benchmark.Scale?
@@ -216,6 +222,7 @@ extension Report.Measurement {
       self.amortized = size.map { size in statistics.mapValues { $0.amortized(by: size) } }
     }
 
+    /// The row's statistics for `metric`, or `nil` when no sample measured it.
     public func statistics(for metric: Benchmark.Metric) -> Report.Statistics? {
       statistics[metric.name]
     }
@@ -261,7 +268,9 @@ extension Report {
   public struct DimensionCurve: Sendable, Equatable, Codable {
     public var id: ReportID
     public var scope: ReportScope
+    /// The metric the curve plots.
     public var metric: Benchmark.Metric
+    /// The statistic the curve plots at each size.
     public var statistic: Statistic
     public var points: [Point]
 
