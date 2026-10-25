@@ -38,21 +38,6 @@
             "iterations": "iterations(2)",
             "warmup": "none"
           },
-          "diagnostics": [
-            {
-              "id": "metric:provider-cpu",
-              "name": "provider.cpu",
-              "scope": {
-                "caseID": "case:parser.parsedocument",
-                "runID": "run:fixture",
-                "suiteID": "suite:parser"
-              },
-              "state": {
-                "kind": "failed",
-                "reason": "provider crashed"
-              }
-            }
-          ],
           "dimensionCurves": [],
           "id": "case:parser.parsedocument",
           "measurement": {
@@ -143,16 +128,6 @@
                 "suiteID": "suite:parser"
               },
               "statistic": "p95"
-            },
-            {
-              "diagnosticID": "metric:provider-cpu",
-              "kind": "diagnosticFailed",
-              "message": "provider crashed",
-              "scope": {
-                "caseID": "case:parser.parsedocument",
-                "runID": "run:fixture",
-                "suiteID": "suite:parser"
-              }
             }
           ]
         }
@@ -168,10 +143,8 @@
   "summary": {
     "caseCount": 1,
     "failedBudgetCount": 1,
-    "failedDiagnosticCount": 1,
     "failedRegressionCount": 0,
     "suiteCount": 1,
-    "unavailableDiagnosticCount": 0,
     "verdict": "failed",
     "warningCount": 0
   },

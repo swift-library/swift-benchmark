@@ -6,7 +6,8 @@ enum CLIExitCode: Int32 {
   case invalidConfiguration = 2
   case executionFailure = 3
   case regressionFailure = 20
-  case requiredDiagnosticUnavailable = 30
+  /// A required trace was missing, or recording one failed.
+  case traceUnavailable = 30
 }
 
 enum CLIError: Error, CustomStringConvertible {

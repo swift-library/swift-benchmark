@@ -5,17 +5,17 @@ import Benchmark
 import Foundation
 
 /// One planned step, as a host lists it.
-public struct BenchmarkListEntry: Sendable, Equatable, Codable {
+package struct BenchmarkListEntry: Sendable, Equatable, Codable {
   /// The step's stable identifier, which `measure --step` selects.
-  public var id: String
-  public var suite: String
-  public var caseName: String
-  public var tags: [String]
-  public var arguments: [Benchmark.ArgumentValue]
-  public var dimensionSizes: [Int]
+  package var id: String
+  package var suite: String
+  package var caseName: String
+  package var tags: [String]
+  package var arguments: [Benchmark.ArgumentValue]
+  package var dimensionSizes: [Int]
 
   /// Creates an entry.
-  public init(
+  package init(
     id: String,
     suite: String,
     caseName: String,
@@ -61,13 +61,18 @@ package struct HostMeasurement: Sendable, Codable {
   }
 }
 
-/// The executable side of the package workflow. The CLI runs a host built
-/// from the package's benchmark declarations: `list` to plan, then `measure`
-/// once per step so that each step has a process of its own. Comparison,
-/// gating and rendering stay in the CLI.
+/// The executable the package workflow measures in.
+///
+/// The command plugin generates a host for the package's declarations. To
+/// measure declarations that only an executable target can reach, call
+/// ``run(discoveries:arguments:metadata:)`` from that executable's `main`
+/// and pass the executable to the CLI with `--host`. The CLI asks the host
+/// for its plan, then measures each step in a host process of its own;
+/// comparison, gating and rendering stay in the CLI.
 public enum BenchmarkHost {
-  /// Runs the host command in `arguments`. Errors are written to standard
-  /// error and exit the process with status 1.
+  /// Answers the CLI's request in `arguments` for the benchmarks that
+  /// `discoveries` declare. Errors are written to standard error and exit
+  /// the process with status 1.
   public static func run(
     discoveries: [any _BenchmarkDiscovery.Type],
     arguments: [String] = Array(CommandLine.arguments.dropFirst()),
@@ -162,7 +167,7 @@ public enum BenchmarkHost {
   }
 }
 
-public enum BenchmarkHostError: Error, CustomStringConvertible {
+package enum BenchmarkHostError: Error, CustomStringConvertible {
   case unknownCommand(String)
   case unexpectedArgument(String)
   case missingValue(String)
@@ -170,7 +175,7 @@ public enum BenchmarkHostError: Error, CustomStringConvertible {
   case unknownStep(String)
   case noBenchmarksSelected
 
-  public var description: String {
+  package var description: String {
     switch self {
     case .unknownCommand(let command):
       return "Unknown benchmark host command '\(command)'; use list or measure."

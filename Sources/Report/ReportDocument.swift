@@ -14,7 +14,6 @@ public struct ReportVerdictCause: Sendable, Equatable, Codable {
     case executionFailed
     case baselineRegression
     case budgetExceeded
-    case diagnosticFailed
   }
 
   public var kind: Kind
@@ -35,7 +34,6 @@ public struct ReportVerdictCause: Sendable, Equatable, Codable {
   /// `actual - expected`, in the metric's unit.
   public var delta: Double?
   public var percentageDelta: Double?
-  public var diagnosticID: ReportID?
   public var budget: BudgetPolicy?
 
   public init(
@@ -50,7 +48,6 @@ public struct ReportVerdictCause: Sendable, Equatable, Codable {
     expected: Double? = nil,
     delta: Double? = nil,
     percentageDelta: Double? = nil,
-    diagnosticID: ReportID? = nil,
     budget: BudgetPolicy? = nil
   ) {
     self.kind = kind
@@ -64,7 +61,6 @@ public struct ReportVerdictCause: Sendable, Equatable, Codable {
     self.expected = expected
     self.delta = delta
     self.percentageDelta = percentageDelta
-    self.diagnosticID = diagnosticID
     self.budget = budget
   }
 }
@@ -83,7 +79,6 @@ public struct CaseReport: Sendable, Equatable, Codable {
   public var dimensionCurves: [Report.DimensionCurve]
   public var attribution: TimelineAttribution?
   public var attributions: [TimelineAttribution]
-  public var diagnostics: [DiagnosticMetric]
   public var attachments: [DiagnosticAttachment]
   public var status: ReportExecutionStatus
   public var verdict: ReportVerdict
@@ -108,7 +103,6 @@ public struct CaseReport: Sendable, Equatable, Codable {
     dimensionCurves: [Report.DimensionCurve] = [],
     attribution: TimelineAttribution? = nil,
     attributions: [TimelineAttribution]? = nil,
-    diagnostics: [DiagnosticMetric] = [],
     attachments: [DiagnosticAttachment] = [],
     status: ReportExecutionStatus = .passed,
     verdictCauses: [ReportVerdictCause]? = nil,
@@ -126,7 +120,6 @@ public struct CaseReport: Sendable, Equatable, Codable {
     self.dimensionCurves = dimensionCurves
     self.attributions = attributions ?? attribution.map { [$0] } ?? []
     self.attribution = attribution ?? self.attributions.first
-    self.diagnostics = diagnostics
     self.attachments = attachments
     self.status = status
     self.warnings = warnings
@@ -136,8 +129,7 @@ public struct CaseReport: Sendable, Equatable, Codable {
         scope: scope,
         status: status,
         baselines: baselines,
-        budgets: budgets,
-        diagnostics: diagnostics
+        budgets: budgets
       )
     if !self.verdictCauses.isEmpty {
       self.verdict = .failed
@@ -161,7 +153,6 @@ public struct CaseReport: Sendable, Equatable, Codable {
     case dimensionCurves
     case attribution
     case attributions
-    case diagnostics
     case attachments
     case status
     case verdict
@@ -189,8 +180,6 @@ public struct CaseReport: Sendable, Equatable, Codable {
       attribution: try container.decodeIfPresent(TimelineAttribution.self, forKey: .attribution),
       attributions: try container.decodeIfPresent(
         [TimelineAttribution].self, forKey: .attributions),
-      diagnostics: try container.decodeIfPresent([DiagnosticMetric].self, forKey: .diagnostics)
-        ?? [],
       attachments: try container.decodeIfPresent(
         [DiagnosticAttachment].self, forKey: .attachments) ?? [],
       status: try container.decodeIfPresent(ReportExecutionStatus.self, forKey: .status)
@@ -218,8 +207,7 @@ public struct CaseReport: Sendable, Equatable, Codable {
     scope: ReportScope,
     status: ReportExecutionStatus,
     baselines: [BaselineComparison],
-    budgets: [BudgetComparison],
-    diagnostics: [DiagnosticMetric]
+    budgets: [BudgetComparison]
   ) -> [ReportVerdictCause] {
     var causes: [ReportVerdictCause] = []
     if status == .failed {
@@ -267,16 +255,6 @@ public struct CaseReport: Sendable, Equatable, Codable {
         )
       )
     }
-    for diagnostic in diagnostics where diagnostic.state.kind == .failed {
-      causes.append(
-        ReportVerdictCause(
-          kind: .diagnosticFailed,
-          scope: diagnostic.scope,
-          message: diagnostic.state.reason ?? "Diagnostic '\(diagnostic.name)' failed.",
-          diagnosticID: diagnostic.id
-        )
-      )
-    }
     return causes
   }
 }
@@ -301,8 +279,6 @@ public struct ReportSummary: Sendable, Equatable, Codable {
   /// Cases with at least one failed baseline comparison.
   public var failedRegressionCount: Int
   public var failedBudgetCount: Int
-  public var unavailableDiagnosticCount: Int
-  public var failedDiagnosticCount: Int
   /// Run warnings plus every case's warnings.
   public var warningCount: Int
   public var verdict: ReportVerdict
@@ -320,15 +296,7 @@ public struct ReportSummary: Sendable, Equatable, Codable {
     self.failedBudgetCount = cases.reduce(0) { partial, report in
       partial + report.budgets.filter { $0.verdict == .failed }.count
     }
-    self.unavailableDiagnosticCount = cases.reduce(0) { partial, report in
-      partial + report.diagnostics.filter { $0.state.kind == .unavailable }.count
-    }
-    self.failedDiagnosticCount = cases.reduce(0) { partial, report in
-      partial + report.diagnostics.filter { $0.state.kind == .failed }.count
-    }
-    self.verdict =
-      failedRegressionCount == 0 && failedBudgetCount == 0 && failedDiagnosticCount == 0
-      ? .passed : .failed
+    self.verdict = failedRegressionCount == 0 && failedBudgetCount == 0 ? .passed : .failed
   }
 }
 
@@ -353,7 +321,6 @@ public struct ReportDocument: Sendable, Equatable, Codable {
     baseline: BaselineDocument? = nil,
     comparison: ComparisonPolicy = .default,
     attributions: [TimelineAttribution] = [],
-    diagnostics: [DiagnosticMetric] = [],
     attachments: [DiagnosticAttachment] = []
   ) {
     let groupedResults = Dictionary(grouping: results, by: \.suiteName)
@@ -394,7 +361,6 @@ public struct ReportDocument: Sendable, Equatable, Codable {
             sourceLocation: sourceLocation
           ),
           attributions: attributions.filter { $0.scope.caseID == caseID },
-          diagnostics: diagnostics.filter { $0.scope.caseID == caseID },
           attachments: attachments.filter { $0.scope.caseID == caseID },
           warnings: compared.warnings
         )
@@ -445,7 +411,6 @@ public struct ReportDocument: Sendable, Equatable, Codable {
           dimensionCurves: report.dimensionCurves,
           attribution: report.attribution,
           attributions: report.attributions,
-          diagnostics: report.diagnostics,
           attachments: report.attachments,
           status: report.status,
           warnings: recompared ? compared.warnings : report.warnings

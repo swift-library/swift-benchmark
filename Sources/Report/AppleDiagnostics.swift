@@ -3,14 +3,14 @@
 
 import Foundation
 
-public struct TraceArtifact: Sendable, Equatable {
-  public var tracePath: String
-  public var exportedXMLPath: String?
-  public var tableOfContentsPath: String?
-  public var command: [String]
-  public var metadata: [String: String]
+package struct TraceArtifact: Sendable, Equatable {
+  package var tracePath: String
+  package var exportedXMLPath: String?
+  package var tableOfContentsPath: String?
+  package var command: [String]
+  package var metadata: [String: String]
 
-  public init(
+  package init(
     tracePath: String,
     exportedXMLPath: String? = nil,
     tableOfContentsPath: String? = nil,
@@ -25,12 +25,12 @@ public struct TraceArtifact: Sendable, Equatable {
   }
 }
 
-public struct TraceArtifactExporter: TraceExporter {
-  public var artifact: TraceArtifact
-  public var requirement: DiagnosticRequirement
+package struct TraceArtifactExporter: TraceExporter {
+  package var artifact: TraceArtifact
+  package var requirement: DiagnosticRequirement
   private var fileExists: @Sendable (String) -> Bool
 
-  public init(
+  package init(
     artifact: TraceArtifact,
     requirement: DiagnosticRequirement = .optional,
     fileExists: @escaping @Sendable (String) -> Bool = {
@@ -42,7 +42,7 @@ public struct TraceArtifactExporter: TraceExporter {
     self.fileExists = fileExists
   }
 
-  public func attachments(for scope: ReportScope) async -> [DiagnosticAttachment] {
+  package func attachments(for scope: ReportScope) async -> [DiagnosticAttachment] {
     guard fileExists(artifact.tracePath) else {
       return []
     }
@@ -113,12 +113,12 @@ public struct TraceArtifactExporter: TraceExporter {
   }
 }
 
-public struct XctraceCommandResult: Sendable, Equatable {
-  public var terminationStatus: Int32
-  public var standardOutput: String
-  public var standardError: String
+package struct XctraceCommandResult: Sendable, Equatable {
+  package var terminationStatus: Int32
+  package var standardOutput: String
+  package var standardError: String
 
-  public init(
+  package init(
     terminationStatus: Int32,
     standardOutput: String = "",
     standardError: String = ""
@@ -129,10 +129,10 @@ public struct XctraceCommandResult: Sendable, Equatable {
   }
 }
 
-public enum XctraceRecorderError: Error, CustomStringConvertible {
+package enum XctraceRecorderError: Error, CustomStringConvertible {
   case commandFailed(arguments: [String], result: XctraceCommandResult)
 
-  public var description: String {
+  package var description: String {
     switch self {
     case .commandFailed(let arguments, let result):
       return
@@ -141,11 +141,11 @@ public enum XctraceRecorderError: Error, CustomStringConvertible {
   }
 }
 
-public struct XctraceRecorder: Sendable {
-  public var xcrunPath: String
-  public var runner: @Sendable ([String]) async -> XctraceCommandResult
+package struct XctraceRecorder: Sendable {
+  package var xcrunPath: String
+  package var runner: @Sendable ([String]) async -> XctraceCommandResult
 
-  public init(
+  package init(
     xcrunPath: String = "/usr/bin/xcrun",
     runner: (@Sendable ([String]) async -> XctraceCommandResult)? = nil
   ) {
@@ -156,7 +156,7 @@ public struct XctraceRecorder: Sendable {
       }
   }
 
-  public func record(
+  package func record(
     executablePath: String,
     executableArguments: [String] = [],
     outputTracePath: String,

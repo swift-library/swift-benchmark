@@ -66,7 +66,6 @@ enum HostCommands {
         measurements: measurements,
         baseline: baseline,
         comparison: comparison,
-        metricProviders: options.metricProviders(),
         traceExporters: traceExporters
       )
     else {

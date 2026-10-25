@@ -4,8 +4,8 @@
 import Benchmark
 import Foundation
 
-public enum JSONReportRenderer {
-  public static func render(_ document: ReportDocument) throws -> String {
+package enum JSONReportRenderer {
+  package static func render(_ document: ReportDocument) throws -> String {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     let data = try encoder.encode(document)
@@ -13,8 +13,8 @@ public enum JSONReportRenderer {
   }
 }
 
-public enum ConsoleReportRenderer {
-  public static func render(_ document: ReportDocument) -> String {
+package enum ConsoleReportRenderer {
+  package static func render(_ document: ReportDocument) -> String {
     var lines: [String] = []
     lines.append("Benchmark Report \(document.metadata.id.rawValue)")
     lines.append("Verdict: \(document.summary.verdict.rawValue)")
@@ -73,8 +73,8 @@ func formatNanoseconds(_ value: Double) -> String {
   return String(format: "%.0f ns", value)
 }
 
-public enum SpeedscopeReportRenderer {
-  public static func render(_ document: ReportDocument) throws -> String {
+package enum SpeedscopeReportRenderer {
+  package static func render(_ document: ReportDocument) throws -> String {
     var builder = SpeedscopeBuilder()
     let file = builder.makeFile(document)
     let encoder = JSONEncoder()

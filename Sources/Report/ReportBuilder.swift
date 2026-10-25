@@ -29,7 +29,6 @@ public actor ReportRecorder: BenchmarkEventRecorder {
     baseline: BaselineDocument? = nil,
     comparison: ComparisonPolicy = .default,
     attributions: [TimelineAttribution] = [],
-    diagnostics: [DiagnosticMetric] = [],
     attachments: [DiagnosticAttachment] = []
   ) -> ReportDocument {
     ReportBuilder(records: records).document(
@@ -37,7 +36,6 @@ public actor ReportRecorder: BenchmarkEventRecorder {
       baseline: baseline,
       comparison: comparison,
       attributions: attributions,
-      diagnostics: diagnostics,
       attachments: attachments
     )
   }
@@ -55,7 +53,6 @@ public struct ReportBuilder: Sendable {
     baseline: BaselineDocument? = nil,
     comparison: ComparisonPolicy = .default,
     attributions: [TimelineAttribution] = [],
-    diagnostics: [DiagnosticMetric] = [],
     attachments: [DiagnosticAttachment] = []
   ) -> ReportDocument {
     let cases = caseAccumulators()
@@ -126,7 +123,6 @@ public struct ReportBuilder: Sendable {
                 sourceLocation: sourceLocation
               ),
               attributions: attributions.filter { $0.scope.caseID == caseID },
-              diagnostics: diagnostics.filter { $0.scope.caseID == caseID },
               attachments: attachments.filter { $0.scope.caseID == caseID },
               warnings: compared.warnings
             )

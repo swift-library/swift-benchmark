@@ -20,50 +20,18 @@ struct BenchmarkCommandTests {
         blackHole(1)
       }
     }
-    let output = try await BenchmarkCommand(
+    let document = try await BenchmarkCommand(
       runner: BenchmarkRunner(clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
     )
-    .run(
-      suites: [suite],
-      metadata: .fixture(),
-      format: .json
+    .report(
+      plan: BenchmarkRunner.Plan(suites: [suite]),
+      metadata: .fixture()
     )
-    let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
     let report = try #require(document.suites.first?.cases.first)
 
     #expect(report.name == "Measured")
     #expect(report.samples.map { $0.value(for: .wallClock) } == [100, 100])
     #expect(document.summary.caseCount == 1)
-  }
-
-  @Test
-  func commandCollectsOptionalDiagnosticsIntoReport() async throws {
-    let suite = BenchmarkSuite(
-      "Command",
-      configuration: BenchmarkConfiguration(
-        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
-    ) {
-      Benchmark("Measured") {
-        blackHole(1)
-      }
-    }
-    let output = try await BenchmarkCommand(
-      runner: BenchmarkRunner(clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
-    )
-    .run(
-      suites: [suite],
-      metadata: .fixture(),
-      metricProviders: [
-        UnavailableMetricProvider(metricName: "metrickit.cpu", reason: "MetricKit unavailable")
-      ],
-      format: .json
-    )
-    let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
-    let report = try #require(document.suites.first?.cases.first)
-
-    #expect(report.diagnostics.map(\.name) == ["metrickit.cpu"])
-    #expect(report.diagnostics.first?.state.kind == .unavailable)
-    #expect(document.summary.unavailableDiagnosticCount == 1)
   }
 
   @Test
@@ -77,16 +45,14 @@ struct BenchmarkCommandTests {
         blackHole(1)
       }
     }
-    let output = try await BenchmarkCommand(
+    let document = try await BenchmarkCommand(
       runner: BenchmarkRunner(clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
     )
-    .run(
-      suites: [suite],
+    .report(
+      plan: BenchmarkRunner.Plan(suites: [suite]),
       metadata: .fixture(),
-      timelineCapture: .benchmarkIterations,
-      format: .json
+      timelineCapture: .benchmarkIterations
     )
-    let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
     let report = try #require(document.suites.first?.cases.first)
 
     #expect(report.attributions.count == 2)
@@ -117,16 +83,14 @@ struct BenchmarkCommandTests {
         }
       }
     }
-    let output = try await BenchmarkCommand(
+    let document = try await BenchmarkCommand(
       runner: BenchmarkRunner(clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
     )
-    .run(
-      suites: [suite],
+    .report(
+      plan: BenchmarkRunner.Plan(suites: [suite]),
       metadata: .fixture(),
-      timelineCapture: .benchmarkIterations,
-      format: .json
+      timelineCapture: .benchmarkIterations
     )
-    let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
     let report = try #require(document.suites.first?.cases.first)
     let attribution = try #require(report.attributions.first)
 
@@ -158,50 +122,15 @@ struct BenchmarkCommandTests {
         _ = try await BenchmarkCommand(
           runner: BenchmarkRunner(
             clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
-        ).run(
-          suites: [suite],
+        ).report(
+          plan: BenchmarkRunner.Plan(suites: [suite]),
           metadata: .fixture(),
-          timelineCapture: .benchmarkIterations,
-          format: .json
+          timelineCapture: .benchmarkIterations
         )
         Issue.record("Expected throwing benchmark to fail")
       } catch {
         #expect((Instruments.current as? IdentityRecorder) === previous)
       }
-    }
-  }
-
-  @Test
-  func commandFailsWhenRequiredDiagnosticIsUnavailable() async throws {
-    let suite = BenchmarkSuite(
-      "Command",
-      configuration: BenchmarkConfiguration(
-        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
-    ) {
-      Benchmark("Measured") {
-        blackHole(1)
-      }
-    }
-
-    do {
-      _ = try await BenchmarkCommand(
-        runner: BenchmarkRunner(
-          clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
-      ).run(
-        suites: [suite],
-        metadata: .fixture(),
-        metricProviders: [
-          UnavailableMetricProvider(
-            metricName: "metrickit.cpu",
-            reason: "MetricKit unavailable",
-            requirement: .required
-          )
-        ],
-        format: .json
-      )
-      Issue.record("Expected required unavailable diagnostic to fail")
-    } catch let error as BenchmarkCommandError {
-      #expect(error.description.contains("metrickit.cpu"))
     }
   }
 
@@ -221,8 +150,8 @@ struct BenchmarkCommandTests {
       _ = try await BenchmarkCommand(
         runner: BenchmarkRunner(
           clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
-      ).run(
-        suites: [suite],
+      ).report(
+        plan: BenchmarkRunner.Plan(suites: [suite]),
         metadata: .fixture(),
         traceExporters: [
           TraceArtifactExporter(
@@ -230,8 +159,7 @@ struct BenchmarkCommandTests {
             requirement: .required,
             fileExists: { _ in false }
           )
-        ],
-        format: .json
+        ]
       )
       Issue.record("Expected required missing trace artifact to fail")
     } catch let error as BenchmarkCommandError {

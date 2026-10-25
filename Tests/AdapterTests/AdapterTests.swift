@@ -21,9 +21,7 @@ struct AdapterTests {
       }
     }
     let adapter = BenchmarkTestingAdapter(
-      command: BenchmarkCommand(
-        runner: BenchmarkRunner(clock: StepClock(step: 10), cpuClock: nil, countsAllocations: false)
-      ))
+      runner: BenchmarkRunner(clock: StepClock(step: 10), cpuClock: nil, countsAllocations: false))
 
     let document = try await adapter.report(
       suites: [suite], metadata: .local(id: "run:adapter", packageIdentity: "swift-benchmark"))
@@ -73,10 +71,10 @@ struct AdapterTests {
         )
       )
     ])
-    let command = BenchmarkCommand(
-      runner: BenchmarkRunner(clock: StepClock(step: 10), cpuClock: nil, countsAllocations: false))
-    let testingAdapter = BenchmarkTestingAdapter(command: command)
-    let xctestAdapter = BenchmarkXCTestAdapter(command: command)
+    let runner = BenchmarkRunner(
+      clock: StepClock(step: 10), cpuClock: nil, countsAllocations: false)
+    let testingAdapter = BenchmarkTestingAdapter(runner: runner)
+    let xctestAdapter = BenchmarkXCTestAdapter(runner: runner)
 
     let document = try await testingAdapter.report(
       suites: [suite],
@@ -104,26 +102,13 @@ struct AdapterTests {
   }
 
   @Test
-  func swiftTestingBenchmarkTraitCarriesReportPolicy() {
-    let testTrait: any TestTrait = .benchmark(
-      comparison: ComparisonPolicy(
-        statistic: .p95,
-        budgets: [BudgetPolicy(metric: .wallClock, statistic: .p95, limit: 100)]
-      )
-    )
-    let suiteTrait: any SuiteTrait = .benchmark(
-      comparison: ComparisonPolicy(
-        metricThresholds: [.wallClock: .absolute(50)],
-        budgets: [BudgetPolicy(metric: .wallClock, statistic: .mean, limit: 200)]
-      )
-    )
+  func swiftTestingBenchmarkTraitCarriesItsConfiguration() {
+    let configuration = BenchmarkConfiguration(warmup: .none, iterations: .iterations(3))
+    let testTrait: any TestTrait = .benchmark(configuration: configuration)
+    let suiteTrait: any SuiteTrait = .benchmark()
 
-    #expect((testTrait as? BenchmarkTestingTrait)?.comparison.statistic == .p95)
-    #expect((testTrait as? BenchmarkTestingTrait)?.comparison.budgets.first?.statistic == .p95)
-    #expect(
-      (suiteTrait as? BenchmarkTestingTrait)?.comparison.threshold(for: .wallClock)
-        == .absolute(50))
-    #expect((suiteTrait as? BenchmarkTestingTrait)?.comparison.budgets.first?.limit == 200)
+    #expect((testTrait as? BenchmarkTestingTrait)?.configuration == configuration)
+    #expect((suiteTrait as? BenchmarkTestingTrait)?.configuration == nil)
   }
 }
 

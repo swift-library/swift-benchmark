@@ -10,7 +10,7 @@ import Testing
 @Suite("Report Document")
 struct ReportDocumentTests {
   @Test
-  func reportDocumentCorrelatesBenchmarkBaselineDiagnosticsAndTimeline() throws {
+  func reportDocumentCorrelatesBenchmarkBaselineAndTimeline() throws {
     let result = BenchmarkResult(
       suiteName: "Parser",
       caseName: "ParseDocument",
@@ -28,14 +28,6 @@ struct ReportDocumentTests {
       caseName: "ParseDocument",
       iteration: 1
     )
-    let caseID = ReportID(rawValue: "case:parser.parsedocument")
-    let scope = ReportScope(runID: metadata.id, suiteID: "suite:parser", caseID: caseID)
-    let diagnostic = DiagnosticMetric(
-      id: "metric:memory",
-      scope: scope,
-      name: "memory.peak",
-      state: .unavailable("memory metrics are unavailable on this platform")
-    )
     let baseline = BaselineDocument(cases: [
       baselineCase("Parser", "ParseDocument", wallClock: [1_000])
     ])
@@ -45,8 +37,7 @@ struct ReportDocumentTests {
       results: [result],
       baseline: baseline,
       comparison: ComparisonPolicy(statistic: .mean, threshold: .relativePercentage(50)),
-      attributions: [attribution],
-      diagnostics: [diagnostic]
+      attributions: [attribution]
     )
 
     let report = try #require(document.suites.first?.cases.first)
@@ -58,8 +49,6 @@ struct ReportDocumentTests {
     #expect(report.verdict == .failed)
     #expect(report.attribution?.spans.map(\.name) == ["ParseAST"])
     #expect(report.attribution?.events.map(\.name) == ["CacheMiss"])
-    #expect(report.diagnostics.first?.state.kind == .unavailable)
-    #expect(report.diagnostics.first?.state.value == nil)
   }
 
   @Test
@@ -126,7 +115,7 @@ struct ReportDocumentTests {
     #expect(roundTripped == decoded)
     #expect(roundTripped.summary.verdict == .failed)
     #expect(report.tags == [])
-    #expect(report.verdictCauses.map(\.kind) == [.budgetExceeded, .diagnosticFailed])
+    #expect(report.verdictCauses.map(\.kind) == [.budgetExceeded])
     #expect(report.verdictCauses.first?.metric == .wallClock)
     #expect(report.sourceLocation?.line == 42)
     #expect(report.samples.map { $0.value(for: .wallClock) } == [1_000, 2_000])

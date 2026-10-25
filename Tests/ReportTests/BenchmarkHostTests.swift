@@ -127,7 +127,7 @@ struct BenchmarkHostTests {
   }
 
   @Test
-  func reportsAttachDiagnosticsAndTracesToEveryCase() async throws {
+  func reportsAttachTracesToEveryCase() async throws {
     let tracePath = FileManager.default.temporaryDirectory
       .appendingPathComponent("benchmark-host-\(UUID().uuidString).trace")
       .path
@@ -140,9 +140,6 @@ struct BenchmarkHostTests {
     let document = try #require(
       try await BenchmarkCommand.document(
         measurements: [measurement],
-        metricProviders: [
-          UnavailableMetricProvider(metricName: "diagnostic.example", reason: "Not collected")
-        ],
         traceExporters: [
           TraceArtifactExporter(
             artifact: TraceArtifact(
@@ -156,7 +153,6 @@ struct BenchmarkHostTests {
     let report = try #require(document.suites.first?.cases.first)
     let attachment = try #require(report.attachments.first)
 
-    #expect(report.diagnostics.map(\.name) == ["diagnostic.example"])
     #expect(attachment.kind == .trace)
     #expect(attachment.location == tracePath)
     #expect(attachment.metadata["tool"] == "xctrace")

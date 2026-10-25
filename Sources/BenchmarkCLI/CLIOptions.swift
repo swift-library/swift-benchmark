@@ -23,7 +23,6 @@ struct CLIOptions {
     Set(selectionOptions + configurationOptions).union([
       "--host", "--swift-version", "--input", "--output", "--format", "--baseline",
       "--statistic", "--threshold", "--budget", "--case-budget",
-      "--optional-diagnostic", "--required-diagnostic",
       "--trace", "--required-trace", "--trace-tool", "--trace-template", "--trace-command",
       "--xctrace-output", "--xctrace-template", "--xcrun",
     ])
@@ -98,19 +97,6 @@ struct CLIOptions {
       budgets: values(for: "--budget"),
       caseBudgets: values(for: "--case-budget")
     )
-  }
-
-  func metricProviders() -> [any MetricProvider] {
-    values(for: "--optional-diagnostic").map {
-      UnavailableMetricProvider(metricName: $0, reason: "Diagnostic unavailable from CLI request")
-    }
-      + values(for: "--required-diagnostic").map {
-        UnavailableMetricProvider(
-          metricName: $0,
-          reason: "Required diagnostic unavailable from CLI request",
-          requirement: .required
-        )
-      }
   }
 
   /// Exporters that attach the traces named by `--trace` and

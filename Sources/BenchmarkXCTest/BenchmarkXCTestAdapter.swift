@@ -10,26 +10,28 @@ import Report
 #endif
 
 public struct BenchmarkXCTestAdapter: Sendable {
-  public var command: BenchmarkCommand
+  /// The runner that measures the suites.
+  public var runner: BenchmarkRunner
 
-  public init(command: BenchmarkCommand = BenchmarkCommand()) {
-    self.command = command
+  /// Creates an adapter that measures with `runner`.
+  public init(runner: BenchmarkRunner = BenchmarkRunner()) {
+    self.runner = runner
   }
 
+  /// Measures `suites` in this process and reports them, compared with
+  /// `baseline` when one is given.
   public func report(
     suites: [BenchmarkSuite],
     metadata: RunMetadata,
     baseline: BaselineDocument? = nil,
     comparison: ComparisonPolicy = .default
   ) async throws -> ReportDocument {
-    let output = try await command.run(
-      suites: suites,
+    try await BenchmarkCommand(runner: runner).report(
+      plan: BenchmarkRunner.Plan(suites: suites),
       metadata: metadata,
       baseline: baseline,
-      comparison: comparison,
-      format: .json
+      comparison: comparison
     )
-    return try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
   }
 
   public func failureSummary(for document: ReportDocument) -> String? {
@@ -37,7 +39,7 @@ public struct BenchmarkXCTestAdapter: Sendable {
       return nil
     }
     return
-      "Benchmark report \(document.metadata.id.rawValue) failed with \(document.summary.failedRegressionCount) regression(s), \(document.summary.failedBudgetCount) budget failure(s), and \(document.summary.failedDiagnosticCount) failed diagnostic(s)."
+      "Benchmark report \(document.metadata.id.rawValue) failed with \(document.summary.failedRegressionCount) regression(s) and \(document.summary.failedBudgetCount) budget failure(s)."
   }
 
   public func failureContexts(for document: ReportDocument) -> [BenchmarkXCTestFailureContext] {

@@ -27,9 +27,9 @@ struct BenchmarkCLI {
     } catch let error as BaselineReadError {
       fail(error.description, .invalidConfiguration)
     } catch let error as BenchmarkCommandError {
-      fail(error.description, .requiredDiagnosticUnavailable)
+      fail(error.description, .traceUnavailable)
     } catch let error as XctraceRecorderError {
-      fail(error.description, .requiredDiagnosticUnavailable)
+      fail(error.description, .traceUnavailable)
     } catch {
       fail("\(error)", .executionFailure)
     }
@@ -99,8 +99,6 @@ struct BenchmarkCLI {
       --min-duration-ns <n>
       --max-duration-ns <n>
       --timeline
-      --optional-diagnostic <name>
-      --required-diagnostic <name>
       --trace <path>
       --required-trace <path>
       --trace-tool <name>
