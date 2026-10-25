@@ -84,7 +84,10 @@ public struct BenchmarkXCTestAdapter: Sendable {
       }
       XCTFail(summary, file: file, line: line)
     }
+  #endif
 
+  // swift-corelibs-xctest has no XCTAttachment.
+  #if canImport(XCTest) && canImport(Darwin)
     public func attachments(for document: ReportDocument) throws -> [XCTAttachment] {
       try reportAttachmentPayloads(for: document).map { payload in
         let attachment = XCTAttachment(string: payload.content)
