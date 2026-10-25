@@ -170,6 +170,22 @@ struct BenchmarkHostTests {
     }
   }
 
+  @Test
+  func anIsolatedMeasurementMeasuresExactlyOneStep() async throws {
+    let plan = try await hostPlan(["list", "--case", "Sized"])
+    let sized = plan.steps.map(\.id)
+
+    #expect(sized.count == 2)
+    await #expect(throws: BenchmarkHostError.self) {
+      try await hostMeasurement(
+        ["measure", "--isolated", "--warmup", "0", "--iterations", "1"]
+          + sized.flatMap { ["--step", $0] })
+    }
+    let isolated = try await hostMeasurement(
+      ["measure", "--isolated", "--warmup", "0", "--iterations", "1", "--step", sized[0]])
+    #expect(isolated.records.contains { $0.kind == .sampleRecorded })
+  }
+
   private func hostPlan(_ arguments: [String]) async throws -> HostPlan {
     try JSONDecoder().decode(
       HostPlan.self,

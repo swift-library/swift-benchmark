@@ -75,7 +75,7 @@ public struct ReportBuilder: Sendable {
                 .sorted { lhs, rhs in
                   switch (lhs.key.scale, rhs.key.scale) {
                   case (nil, nil):
-                    return (lhs.key.id ?? "") < (rhs.key.id ?? "")
+                    return lhs.value.order < rhs.value.order
                   case (nil, _):
                     return true
                   case (_, nil):
@@ -183,7 +183,9 @@ public struct ReportBuilder: Sendable {
         arguments: record.context.arguments,
         scale: record.context.size
       )
-      cases[key]?.rows[row, default: RowAccumulator()].add(sample, metrics: record.context.metrics)
+      let order = cases[key]?.rows.count ?? 0
+      cases[key]?.rows[row, default: RowAccumulator(order: order)]
+        .add(sample, metrics: record.context.metrics)
     }
     return cases.filter { !$0.value.rows.isEmpty }
   }
@@ -224,6 +226,9 @@ private struct CaseAccumulator {
 }
 
 private struct RowAccumulator {
+  /// The position of the row's first sample among the case's rows, which
+  /// orders rows without a size as the run measured them.
+  var order: Int
   var samples: [SampleReport] = []
   var metrics: [Benchmark.Metric] = []
 

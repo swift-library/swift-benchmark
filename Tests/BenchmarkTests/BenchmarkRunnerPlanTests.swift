@@ -37,6 +37,46 @@ struct BenchmarkRunnerPlanTests {
   }
 
   @Test
+  func stepIdentifiersKeepDistinctNamesDistinct() throws {
+    let suites = ["Sort Array", "Sort-Array", "sort array"].map { name in
+      BenchmarkSuite(name) {
+        Benchmark("Case A") {}
+        Benchmark("Case-A") {}
+        Benchmark("case:a") {}
+      }
+    }
+
+    let steps = try BenchmarkRunner.Plan(suites: suites).steps
+
+    #expect(steps.count == 9)
+    #expect(Set(steps.map(\.id)).count == 9)
+    #expect(steps[2].id == "benchmark:Sort%20Array:case%3Aa")
+  }
+
+  @Test
+  func argumentRowIdentifiersDoNotDependOnCollectionOrder() throws {
+    func stepIDs<C: Collection & Sendable>(_ arguments: C) throws -> [String: String]
+    where C.Element: Sendable {
+      let suite = BenchmarkSuite("Rows") {
+        Benchmark("Case", arguments: arguments) { value in blackHole(value) }
+      }
+      return Dictionary(
+        uniqueKeysWithValues: try BenchmarkRunner.Plan(suites: [suite]).steps.map { step in
+          (step.arguments.map(\.label).joined(), step.id)
+        })
+    }
+
+    #expect(try stepIDs(["b", "a:c"]) == stepIDs(["a:c", "b"]))
+    #expect(try stepIDs(["b", "a:c"])["a:c"] == "benchmark:Rows:Case:a%3Ac")
+    let repeated = try BenchmarkRunner.Plan(suites: [
+      BenchmarkSuite("Rows") {
+        Benchmark("Case", arguments: ["x", "x"]) { value in blackHole(value) }
+      }
+    ]).steps
+    #expect(repeated.map(\.id) == ["benchmark:Rows:Case:x", "benchmark:Rows:Case:x#2"])
+  }
+
+  @Test
   func planMergesTraitsTagsSkipsAndPlanningFailures() async throws {
     let counter = Counter()
     let suite = BenchmarkSuite(
@@ -64,7 +104,7 @@ struct BenchmarkRunnerPlanTests {
     let all = try BenchmarkRunner.Plan(suites: [suite])
     #expect(all.steps.map(\.caseName) == ["Runs", "Skipped", "Conflict"])
     #expect(all.steps[0].tags == ["parser", "fast"])
-    #expect(all.steps[0].id == "benchmark:traitplan:runs")
+    #expect(all.steps[0].id == "benchmark:TraitPlan:Runs")
 
     guard case .skip(let reason) = all.steps[1].action else {
       Issue.record("Expected skip action")

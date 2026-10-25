@@ -109,6 +109,26 @@ struct ReportComparisonTests {
   }
 
   @Test
+  func eventBuiltArgumentRowsKeepTheOrderTheyWereMeasuredIn() async throws {
+    let names = (0..<12).map { "row \(11 - $0)" }
+    let suite = BenchmarkSuite(
+      "Rows",
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
+    ) {
+      Benchmark("Parse", arguments: names) { name in blackHole(name) }
+    }
+    let recorder = ReportRecorder()
+
+    _ = try await BenchmarkRunner(cpuClock: nil, countsAllocations: false)
+      .run(suite, eventRecorders: [recorder])
+    let rows = try #require(
+      await recorder.document(metadata: metadata).suites.first?.cases.first?.measurement.rows)
+
+    #expect(rows.map { $0.arguments.map(\.label).joined() } == names)
+  }
+
+  @Test
   func baselineAndBudgetStatisticsPreserveTypedVerdictCauses() throws {
     let result = BenchmarkResult(
       suiteName: "Parser",

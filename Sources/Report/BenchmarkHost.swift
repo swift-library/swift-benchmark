@@ -132,6 +132,9 @@ public enum BenchmarkHost {
       }
       return (try encoder.encode(HostPlan(metadata: metadata, steps: steps)), options.outputPath)
     case "measure":
+      if options.isolated, plan.steps.count != 1 {
+        throw BenchmarkHostError.isolatedSelection(plan.steps.map(\.id))
+      }
       let measurement = try await measure(
         plan,
         metadata: metadata,
@@ -173,6 +176,8 @@ package enum BenchmarkHostError: Error, CustomStringConvertible {
   case missingValue(String)
   case invalidNumber(String, String)
   case unknownStep(String)
+  /// `--isolated` selected these steps instead of exactly one.
+  case isolatedSelection([String])
   case noBenchmarksSelected
 
   package var description: String {
@@ -187,6 +192,9 @@ package enum BenchmarkHostError: Error, CustomStringConvertible {
       return "Invalid number '\(value)' for \(option)."
     case .unknownStep(let id):
       return "No planned step has the identifier '\(id)'."
+    case .isolatedSelection(let ids):
+      return
+        "--isolated measures exactly one step, but the selection has \(ids.count): \(ids.joined(separator: ", "))."
     case .noBenchmarksSelected:
       return "No benchmarks matched the requested filters."
     }

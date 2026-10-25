@@ -44,6 +44,11 @@
   and `BenchmarkHost.run(discoveries:arguments:metadata:)`. `BenchmarkHost.run`
   no longer throws. The benchmark command, report renderers and formats, the
   host protocol, xctrace recording and trace exporters are no longer public.
+- **Breaking**: Step, row and report identifiers keep suite and case names as
+  written, with punctuation percent-encoded, so names that differ only in case
+  or punctuation stay distinct. An argument row is identified by its values'
+  descriptions instead of its position, so reordering arguments keeps baseline
+  rows matched.
 - **Breaking**: `Benchmark.Event.Kind` drops the discovery, suite,
   diagnostic, attachment and run-ended kinds, which no run emitted.
 - **Breaking**: The BenchmarkTesting `.benchmark` trait takes only a

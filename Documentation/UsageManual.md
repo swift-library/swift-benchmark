@@ -173,7 +173,10 @@ swift package --configuration release --allow-writing-to-directory .build benchm
 
 Every metric that both the run and the baseline measured is compared, row by
 row: each argument row or Dimension size is compared with the same row of the
-baseline. A metric regresses when it moves past the threshold in its worse
+baseline. An argument row is identified by the descriptions of its values, not
+by its position, so reordering arguments keeps rows matched; give argument
+values distinct descriptions, because rows whose values describe the same are
+numbered in order. A metric regresses when it moves past the threshold in its worse
 direction, which is up for times, counts and bytes, and down for a custom
 metric declared `.higherIsBetter`.
 

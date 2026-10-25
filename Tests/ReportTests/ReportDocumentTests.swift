@@ -180,6 +180,6 @@ struct ReportDocumentTests {
     #expect(object["$schema"] as? String == "https://www.speedscope.app/file-format-schema.json")
     #expect(frames.map { $0["name"] as? String } == ["ParseAST"])
     #expect(
-      profiles.first?["name"] as? String == "Parser.ParseDocument sample:parser.parsedocument.1")
+      profiles.first?["name"] as? String == "Parser.ParseDocument sample:Parser.ParseDocument.1")
   }
 }

@@ -179,14 +179,25 @@ extension BenchmarkCase {
 
 extension BenchmarkCase {
   /// Builds one argument row per element of `argumentLists`, in order.
+  ///
+  /// A row's identifier is its values' descriptions, so it does not depend on
+  /// the order a collection such as a `Set` lists them in, which differs
+  /// between processes. Rows whose values have the same descriptions are
+  /// numbered in order: `#2`, `#3`, and so on.
   fileprivate static func rows(
     _ argumentLists: [[any Sendable]],
     workload: @escaping @Sendable ([any Sendable]) -> BenchmarkWorkload
   ) -> [BenchmarkCaseRow] {
-    argumentLists.enumerated().map { index, values in
-      BenchmarkCaseRow(
+    var occurrences: [String: Int] = [:]
+    return argumentLists.map { values in
+      let description = values.map { String(describing: $0) }
+        .map(BenchmarkIdentifier.component)
+        .joined(separator: ",")
+      let occurrence = occurrences[description, default: 0] + 1
+      occurrences[description] = occurrence
+      return BenchmarkCaseRow(
         metadata: Benchmark.ArgumentRow(
-          id: argumentRowID(index: index, values: values.map { $0 as Any }),
+          id: occurrence == 1 ? description : "\(description)#\(occurrence)",
           arguments: values.map { Benchmark.ArgumentValue($0) }
         ),
         makeOperation: { workload(values) }
@@ -203,28 +214,4 @@ extension BenchmarkCase {
     collection1.flatMap { value1 in collection2.map { value2 in [value1, value2] } }
   }
 
-  fileprivate static func argumentRowID(index: Int, values: [Any]) -> String {
-    let labels = values.map { stableIDComponent(String(describing: $0)) }
-      .filter { !$0.isEmpty }
-      .joined(separator: "-")
-    let suffix = labels.isEmpty ? "arguments" : labels
-    return "arguments-\(index)-\(suffix)"
-  }
-
-  fileprivate static func stableIDComponent(_ value: String) -> String {
-    let normalized =
-      value
-      .lowercased()
-      .map { character in
-        character.isLetter || character.isNumber ? character : "-"
-      }
-      .reduce(into: "") { partial, character in
-        if character == "-", partial.last == "-" {
-          return
-        }
-        partial.append(character)
-      }
-      .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-    return normalized
-  }
 }

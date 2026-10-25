@@ -12,15 +12,13 @@ extension BenchmarkRunner.Plan {
     public var action: Action
     var caseRow: BenchmarkCaseRow?
 
+    /// Identifies the step in its plan. Steps with different suite names,
+    /// case names or rows have different identifiers, and a plan built from
+    /// the same declarations in another process gives the step the same one.
     public var id: String {
-      [
-        "benchmark",
-        stableIDComponent(suiteName),
-        stableIDComponent(caseName),
-        rowID,
-      ]
-      .compactMap { $0 }
-      .joined(separator: ":")
+      let suite = BenchmarkIdentifier.component(suiteName)
+      let names = "benchmark:\(suite):\(BenchmarkIdentifier.component(caseName))"
+      return rowID.map { "\(names):\($0)" } ?? names
     }
 
     public var suiteName: String {
@@ -81,23 +79,6 @@ extension BenchmarkRunner.Plan {
       self.tags = tags
       self.action = action
       self.caseRow = caseRow
-    }
-
-    private func stableIDComponent(_ value: String) -> String {
-      let normalized =
-        value
-        .lowercased()
-        .map { character in
-          character.isLetter || character.isNumber ? character : "-"
-        }
-        .reduce(into: "") { partial, character in
-          if character == "-", partial.last == "-" {
-            return
-          }
-          partial.append(character)
-        }
-        .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-      return normalized.isEmpty ? "unnamed" : normalized
     }
   }
 

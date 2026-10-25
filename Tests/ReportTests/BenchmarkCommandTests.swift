@@ -58,8 +58,8 @@ struct BenchmarkCommandTests {
     #expect(report.attributions.count == 2)
     #expect(
       report.attributions.map { $0.scope.sampleID?.rawValue } == [
-        "sample:command.measured.0",
-        "sample:command.measured.1",
+        "sample:Command.Measured.0",
+        "sample:Command.Measured.1",
       ])
     #expect(
       report.attributions.allSatisfy { attribution in

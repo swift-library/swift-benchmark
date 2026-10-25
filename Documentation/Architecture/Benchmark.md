@@ -62,7 +62,12 @@ non-official evidence is not architecture truth.
 - `BenchmarkRunner.Plan`, `.Step`, `.Action` and `.Filter`: the filtered,
   configured, validated executable graph; one step per case, argument row or
   Dimension size; what to do for a step (measure, skip, or record a planning
-  failure); and suite/case/tag selection. Each step has a stable identifier.
+  failure); and suite/case/tag selection. Each step has an identifier built
+  from its suite name, case name and row, with punctuation percent-encoded, so
+  distinct names give distinct identifiers. An argument row is identified by
+  its values' descriptions, which keeps the identifier the same in every
+  process, whatever order a collection lists its elements in. The package
+  workflow selects a step by this identifier in each host process.
 - `BenchmarkConfiguration`: warmup, iteration and batching policies for a suite
   or case.
 - `WarmupPolicy`, `IterationPolicy` and `BatchingPolicy`.
