@@ -43,6 +43,26 @@ struct DiscoveryPlannerTests {
   }
 
   @Test
+  func librarySuitesMayDeclarePrivateBenchmarks() throws {
+    let fixture = try DiscoveryFixture()
+    let library = try fixture.target(
+      "FixtureLibrary", kind: "library",
+      files: [
+        "LibraryBenchmarks.swift": """
+        import Benchmark
+
+        @BenchmarkSuite("Parser")
+        struct ParserBenchmarks {
+          @Benchmark("Noop")
+          private func noop() {}
+        }
+        """
+      ])
+
+    #expect(try fixture.plan(library).nativeDiscoveries.map(\.typeName) == ["ParserBenchmarks"])
+  }
+
+  @Test
   func commentsAndStringLiteralsDeclareNothing() throws {
     let fixture = try DiscoveryFixture()
     let library = try fixture.target(

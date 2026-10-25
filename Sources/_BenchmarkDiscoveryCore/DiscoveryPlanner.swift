@@ -22,9 +22,11 @@ struct BenchmarkDiscoveryPlanner {
 
     for target in manifest.targets where !target.isMacro && !target.isSnippet {
       let scan = try SourceScanner(target: target).scan()
-      diagnostics.append(contentsOf: scan.diagnostics)
 
       if target.isTest {
+        // Only the bridge calls declarations from generated source; a
+        // library's `@BenchmarkSuite` calls its own members.
+        diagnostics.append(contentsOf: scan.diagnostics)
         if !scan.suites.isEmpty {
           testingBridges.append(try writeTestingBridge(for: target, suites: scan.suites))
         } else if !scan.nativeDeclarations.isEmpty {
