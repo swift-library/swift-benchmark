@@ -12,13 +12,11 @@ extension Benchmark {
 }
 
 extension Benchmark.Event {
+  /// What happened: a run's plan starts and ends around its steps, and each
+  /// step's case and row bracket its warmup, iterations and samples.
   public enum Kind: String, Sendable, Codable, Equatable, CaseIterable {
-    case discoveryStarted
-    case discoveryEnded
     case planStarted
     case planEnded
-    case suiteStarted
-    case suiteEnded
     case caseStarted
     case caseEnded
     case dimensionRowStarted
@@ -30,9 +28,6 @@ extension Benchmark.Event {
     case sampleRecorded
     case skipped
     case issueRecorded
-    case diagnosticRecorded
-    case attachmentRecorded
-    case runEnded
   }
 
   public struct Context: Sendable, Codable, Equatable {
