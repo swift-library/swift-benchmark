@@ -11,7 +11,8 @@ Record runtime spans and events in Swift code.
 
 Instruments owns runtime recording and instrumentation macros. Apple
 platforms can record through the Signpost backend, and unsupported platforms
-use portable fallback behavior.
+use portable fallback behavior. The macros come with the package's `Macros`
+trait, enabled by default; the recorder API works without it.
 
 See the [package usage guide](https://github.com/swift-library/swift-benchmark/blob/master/Documentation/UsageManual.md)
 for installation and complete examples.

@@ -27,10 +27,9 @@ Use this map to answer:
   budget, diff, check, and output contracts.
 - `Dimension.md`: Dimension-first measurement and Apple-aligned input-size
   semantics.
-- `Memory.md`: resident memory, allocation providers, leak/resource
-  regression, and unavailable states.
-- `AppleDiagnostics.md`: current `xcrun xctrace` report attachments and future
-  MetricKit production diagnostics.
+- `Metrics.md`: built-in and custom metrics, timing and counting, peak memory,
+  batching, and platform availability.
+- `AppleDiagnostics.md`: `xcrun xctrace` recording and trace attachments.
 - `WorkflowAdapters.md`: SwiftPM command, CLI/plugin, Swift Testing adapter,
   and XCTest adapter workflows.
 - `ProductDomains.md`: product ownership boundaries across all categories.
@@ -50,21 +49,21 @@ The target system should read as one connected capability graph:
   -> Benchmark.Event.Stream
   -> ReportRecorder / ReportBuilder
   -> ReportDocument
-  -> baseline / budget / diff / check
-  -> Dimension curves / Memory / diagnostics / timeline attribution
+  -> baseline / budget / diff / check / warnings
+  -> Dimension curves / timeline attribution / trace attachments
   -> CLI / plugin / Swift Testing / XCTest / agent outputs
 ```
 
 Swift Testing alignment is the default for declaration, traits, discovery,
 plan, runner, event, context, recorder, source-location, issue, and attachment
 design. Benchmark-specific capabilities extend that skeleton for measurement,
-raw samples, Dimension rows and curves, memory/allocation, attribution,
-diagnostics, baselines, budgets, and diff workflows.
+metrics, batching, raw samples, Dimension rows and curves, attribution,
+baselines, budgets, warnings, and diff workflows.
 
 Current source implements the nodes in the graph for the accepted scope:
 declaration macros, traits/tags, discovery, runner plans, event streams,
-Report construction, package command workflow, adapters, memory and allocation
-measurements, and trace diagnostics. `ImplementationScope.md` owns the
+Report construction, package command workflow with per-step host processes,
+adapters, metrics, and trace attachments. `ImplementationScope.md` owns the
 implemented capability matrix and future-boundary notes.
 
 ## Classification Rules
@@ -78,8 +77,8 @@ implemented capability matrix and future-boundary notes.
   live in `Instruments.md`.
 - Report schema, baseline, budget, diff, output contract, and durable report
   rules live in `ReportDocument.md` and `Report.md`.
-- Dimension, Memory/allocation, and Apple-only diagnostics live in their own
-  topic documents.
+- Dimension, metrics, and Apple-only diagnostics live in their own topic
+  documents.
 - Official source alignment and local decisions live in architecture docs.
 - Durable implementation facts move back into README and architecture docs.
 
@@ -91,13 +90,15 @@ boundaries.
 
 1. Declaration UX, discovery, traits, tags, and runner plan.
 2. Package workflow over discovered declarations, including generated hosts for
-   library targets.
-3. Runner policy depth: fixed default plus adaptive/min/max-duration opt-in.
+   library and test targets and one host process per step.
+3. Runner policy depth: fixed iterations and automatic batching by default,
+   plus fixed batches and adaptive/min/max-duration opt-in.
 4. Report collection, event stream, document schema, baseline, budget, and CI
    verdicts.
 5. Dimension-first measurement and Report Dimension curves.
 6. Testing/XCTest adapter UX and failure/artifact projection over
    `ReportDocument`.
-7. Memory/allocation providers and resource-regression checks.
-8. Apple diagnostics and `xctrace` trace artifacts.
+7. Metrics: wall-clock and CPU time, Swift allocation and reference counting,
+   peak memory, and custom metrics.
+8. Apple diagnostics: `xctrace` recording and trace attachments.
 9. Full-system fixture acceptance.

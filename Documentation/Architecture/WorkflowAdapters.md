@@ -3,7 +3,7 @@
 ## Scope / Purpose
 
 This document owns user/tool workflow entry points over Benchmark and Report:
-SwiftPM command workflow, CLI behavior, Swift Testing adapters, and XCTest
+the SwiftPM command workflow, CLI behavior, and the Swift Testing and XCTest
 adapters.
 
 Adapters consume the same model:
@@ -18,182 +18,142 @@ BenchmarkDiscovery
 They do not replace the Benchmark runner and do not create a second report
 truth.
 
-## Current Implementation Status
-
-Current source implements both host-backed and no-`--host` package workflows.
-`BenchmarkCLI` forwards list/run/check/trace to `BenchmarkHost`, and the
-SwiftPM `BenchmarkPlugin` follows the official plugin-tool pattern:
-`BenchmarkPlugin -> BenchmarkDiscoveryTool -> _BenchmarkDiscoveryCore`.
-The plugin passes SwiftPM target metadata to the discovery tool; the tool emits
-one discovery plan covering production `@BenchmarkSuite` declarations in
-library targets plus supported test-target `@Suite(.benchmark...)` /
-`@Test(.benchmark...)` bridge declarations. The default discovery backend is
-the self-contained scanner in `_BenchmarkDiscoveryCore`, so default
-`swift package benchmark` does not build or link a SwiftSyntax discovery tool.
-An opt-in SwiftSyntax backend exists as implementation tooling through an
-external `BenchmarkSyntaxDiscoveryTool -> _BenchmarkSyntaxDiscoveryCore` path.
-It must be explicitly selected by environment and does not change the public
-Benchmark/Report model. The plugin builds the package, compiles the generated
-host from the selected discovery plan, and delegates to the same CLI semantics.
-Baseline write/update, diff, render, tag filters,
-warmup/iteration/adaptive overrides, diagnostics, trace attachments,
-`xctrace record` provenance, quiet output, and CI exit codes are wired through
-the shared Report model. Explicit `--host` remains an advanced/debug override.
-Generated host compilation supplies Swift module search paths and C modulemap
-include paths discovered from SwiftPM checkout roots. The active build/scratch
-root takes precedence, and package `.build` checkout roots are fallback
-behavior for default or older local layouts.
-Source-root lookup is limited to Clang targets and ignores hidden build trees.
-Explicit header modulemaps and SwiftPM-generated modulemaps for those Clang
-targets both contribute import paths.
-The host compiler's module cache belongs to the plugin work directory, which is
-writable within the command-plugin sandbox.
-Testing bridge hosts also use the selected SDK's test framework and support
-library paths, including XCTest dependencies retained by compiled test modules.
-Generated host linkage includes only discovered benchmark targets and their
-recursive dependencies. Consolidated object files in an Xcode products
-directory are filtered by that graph; unrelated libraries from another package
-target or an earlier build must not enter the benchmark host.
-The plugin builds discovered package/test targets with the same SwiftPM
-configuration as the plugin tool path, so `swift package --configuration
-release benchmark ...` can discover and link release object files from a clean
-`.build` without requiring a separate prebuild step.
-
 ## SwiftPM Package Workflow
 
-Implemented production benchmark workflow:
+`swift package benchmark` is the primary benchmark entry point: `list`, `run`,
+`check`, `trace`, `baseline write/update/check`, `diff` and `render`. It
+preserves what a plain Swift Testing `@Test` body does not provide: warmup,
+batching, measured iterations, adaptive policies, samples of every metric,
+argument/scale rows, per-step process isolation, `ReportDocument`,
+baseline/budget verdicts and warnings, CI exit codes, timeline attribution and
+xctrace artifacts. It supports Apple platforms.
 
-- `swift package benchmark list`,
-- `swift package benchmark run`,
-- `swift package benchmark check`,
-- `swift package benchmark baseline write/update`,
-- `swift package benchmark diff`,
-- `swift package benchmark trace`.
+The plugin follows the official plugin-tool pattern:
+`BenchmarkPlugin -> BenchmarkDiscoveryTool -> _BenchmarkDiscoveryCore`.
 
-This is the primary production benchmark entry point. It preserves Benchmark
-semantics that a plain Swift Testing `@Test` body does not provide by itself:
-warmup, measured iterations, adaptive/min/max-duration policies, samples,
-argument/scale rows, `ReportDocument`, baseline/budget verdicts, CI exit codes,
-Memory and allocation measurements, timeline attribution, and xctrace
-artifacts.
+1. The plugin passes SwiftPM target metadata to the discovery tool.
+2. The tool parses each target's Swift sources with SwiftSyntax and writes one
+   discovery plan: native `@BenchmarkSuite` types in library targets, and a
+   generated BenchmarkTesting bridge for enrolled test-target declarations,
+   plus the host's `main.swift`.
+3. The plugin builds the package in the configuration of its tool path, so
+   `swift package --configuration release benchmark ...` links release object
+   files without a separate prebuild.
+4. The plugin compiles the host with the `swiftc` of the toolchain SwiftPM runs
+   and runs the CLI with the host and that compiler's version.
 
 Package workflow rules:
 
-- discover package code declarations through `BenchmarkDiscoveryTool` and a
-  single internal discovery plan,
-- keep the stable self-contained scanner as the default discovery backend,
-- allow `SWIFT_BENCHMARK_DISCOVERY_BACKEND=swiftsyntax` to route to an external
-  SwiftSyntax discovery tool specified by `SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH`,
-- reference native macro-generated `_BenchmarkDiscovery` records for
-  production `@BenchmarkSuite` declarations,
-- bridge supported test-target `@Suite(.benchmark...)`,
-  `@Test(.benchmark...)`, `@Test(arguments:)`, and suite-local
-  `@Benchmark(arguments:)` declarations into generated `_BenchmarkDiscovery`
-  records,
-- build `BenchmarkRunner.Plan` before execution,
-- consume `ReportDocument` for baseline/check/diff,
-- keep code declarations as truth,
-- do not require manifest/config files for discovery,
-- do not require public provider boilerplate,
-- do not rely on target naming conventions.
+- code declarations are the truth: no manifest or config files, provider
+  boilerplate or target naming conventions,
+- native `@BenchmarkSuite` declarations are referenced through their
+  macro-generated `_BenchmarkDiscovery` types,
+- supported test-target `@Suite(.benchmark...)`, `@Test(.benchmark...)`,
+  `@Test(arguments:)` and suite-local `@Benchmark` declarations, including
+  members of extensions of their types, are bridged into generated
+  `_BenchmarkDiscovery` records; unsupported ones are diagnosed with their
+  source location instead of being skipped,
+- declarations only an executable target can reach use `--host`.
 
-## CLI / Plugin
+## Generated Host
 
-The SwiftPM plugin delegates behavior to the CLI. The plugin must stay a thin
-SwiftPM orchestration layer: it may collect target metadata, call executable
-tools through `context.tool(named:)`, compile generated host sources, and
-propagate tool exit status, but it must not parse benchmark declarations or
-generate bridge sources itself. It must not depend on the SwiftSyntax discovery
-tool because that would force default command-plugin execution to build the
-SwiftSyntax backend before environment routing can run. CLI and plugin must
-share:
+The host is a plugin implementation detail:
 
-- filters,
-- warmup/iteration overrides,
-- runner policy flags,
-- Dimension flags where applicable,
-- baseline/budget flags,
-- diagnostics flags,
-- trace flags,
-- output paths,
-- quiet/progress separation,
-- documented exit codes.
+- It lives in the plugin's work directory, the one place the command-plugin
+  sandbox lets the plugin write; the module cache lives there too.
+- The build's resource bundles are linked next to it, where `Bundle.module`
+  looks for them.
+- It links only the discovered targets and their recursive dependencies.
+  Consolidated object files in a products directory are filtered by that graph.
+- XCFramework binary targets contribute the macOS slice for the machine's
+  architecture: headers on the include path and their library or framework.
+  Targets with C++ or Objective-C++ sources add the C++ standard library.
+- C and Objective-C module maps come from SwiftPM checkout roots, with the
+  active scratch root first, and from the discovered targets' Clang dependency
+  roots. The plugin does not scan every generated `module.modulemap`, because
+  SwiftPM also generates them for Swift targets and duplicates would conflict.
+- Testing bridge hosts link the toolchain's Swift Testing runtime, or the SDK
+  platform's `Testing.framework`, and XCTest, which compiled test modules may
+  reference; each test target's entry point is localized so the host's own
+  `main` wins.
 
-Exit codes distinguish:
+## CLI
 
-- success,
-- invalid configuration,
-- execution failure,
-- regression failure,
-- required diagnostic unavailable.
+The plugin delegates behavior to the CLI and stays thin: it collects target
+metadata, runs tools through `context.tool(named:)`, compiles the generated
+host and propagates exit status, but it does not parse declarations or generate
+bridge sources itself.
 
-Success, no regression, and improvement all use exit code `0`.
+The CLI drives a host through a package-internal protocol. `list` returns the
+host's plan and run metadata. `run`, `check` and `trace` then run
+`measure --step <id> --isolated` once per step, each in a host process of its
+own; with `--xctrace-output`, one `measure` under xctrace measures every
+selected step. Hosts write their output to a file the CLI names, and their
+standard output goes to the CLI's standard error. The CLI concatenates the
+steps' event records, builds the report, applies the baseline, budgets and
+warnings, attaches traces and renders. `check` refuses a debug host before
+measuring unless given `--allow-debug`.
 
-`check` measures the selected plan once; the rendered report and the exit
-status come from that same `ReportDocument`. A host whose check fails prints
-the report and exits with the regression-failure status, and the CLI forwards
-that report with its regression-failure exit code.
+Options cover filters, warmup/iteration/batching overrides, adaptive policies,
+comparison and budgets, trace attachments and xctrace recording, output paths,
+quiet output and the host compiler's version. Unknown options are rejected.
 
-Generated host compilation is a plugin implementation detail. When the plugin
-invokes `swiftc` directly, it must provide only the search paths needed to
-match the package build. C modulemap include paths come from SwiftPM checkout
-roots and from the discovered benchmark target's recursive source-module
-dependency roots, so edited/path dependencies keep working. The plugin must not
-scan every generated `.build/**/include/module.modulemap`, because those
-directories can contain SwiftPM-generated module maps for Swift targets and can
-create duplicate module definitions.
+Exit codes:
+
+| Status | Meaning |
+| --- | --- |
+| `0` | Success, including improvements |
+| `2` | Invalid configuration, such as an unknown option, an unreadable baseline or a refused debug build |
+| `3` | A host failed |
+| `20` | A regression or budget failure in `check`, `compare --fail-on-regression` or `baseline check` |
+| `30` | A required trace is missing or recording one failed |
+
+`check` measures the selected plan once; the printed report and the exit status
+come from the same `ReportDocument`.
 
 ## Swift Testing Adapter
 
-Swift Testing adapters provide native UX:
+Swift Testing suites and tests enroll with the BenchmarkTesting trait:
 
 ```swift
-@Suite(.benchmark(.iterations(100), .baseline("baseline.json")))
+@Suite(.benchmark(configuration: .init(warmup: .iterations(2), iterations: .iterations(20))))
 struct ParserPerformanceTests {
-  @Test(.benchmark(.time(max: .milliseconds(30))))
-  func parseSmallDocument() throws {
-    try parser.parse(input)
+  @Test func parseSmallDocument() throws {
+    try blackHole(parser.parse(input))
   }
 }
 ```
 
 Adapter rules:
 
-- `@Suite(.benchmark...)` provides suite-level benchmark traits.
-- `@Test(.benchmark...)` provides case-level benchmark traits.
-- Suite traits merge into contained tests.
-- Test traits override, refine, or add to suite defaults.
-- Execution still goes through `BenchmarkRunner.Plan` / `BenchmarkRunner`;
-  Swift Testing lifecycle is an adapter sink, not the benchmark runner.
-- In package workflow, supported test-target declarations are discovered by a
-  generated BenchmarkTesting bridge. `private`/`fileprivate` tests and
-  `@Test(arguments:)` are diagnosed instead of silently skipped.
-- A plain Swift Testing `@Test` body must not be treated as a complete
-  benchmark run, because it would lose warmup, multi-iteration samples,
-  Dimension rows, Report comparison, and diagnostics semantics.
-- Verdicts project to Swift Testing `Issue.record`.
-- Attachments project to Swift Testing attachment sinks where available.
+- `@Suite(.benchmark...)` enrolls contained and nested tests;
+  `@Test(.benchmark...)` enrolls one test, and its configuration overrides the
+  suite's.
+- The package workflow reads the trait from source; `swift test` runs enrolled
+  tests once, as tests.
+- Execution goes through `BenchmarkRunner.Plan` / `BenchmarkRunner`; the Swift
+  Testing lifecycle is an adapter sink, not the benchmark runner.
+- `BenchmarkTestingAdapter` measures suites in process with a given runner and
+  projects verdict causes to `Issue.record`.
 - `ReportDocument` remains the truth.
 
 ## XCTest Adapter
 
-XCTest support remains useful for projects, CI systems, and Apple tooling that
-still consume XCTest artifacts.
-
-Adapter rules:
-
-- run Benchmark/Report as a consumer,
-- attach structured JSON reports/artifacts,
-- fail with suite/case/verdict context,
-- preserve source location where possible,
-- do not replace Benchmark runner behavior.
+XCTest support serves projects, CI systems and Apple tooling that consume
+XCTest artifacts. `BenchmarkXCTestAdapter` measures suites in process like the
+Swift Testing adapter, attaches the structured JSON report, fails with
+suite/case/verdict context, and preserves source locations where possible. It
+does not replace Benchmark runner behavior.
 
 ## Acceptance Checks
 
-- Fixture package tests for list/run/check/baseline/update/diff/trace.
-- CLI/plugin behavior parity tests.
-- Filter and output-path tests.
-- Exit-code tests.
-- Swift Testing suite/test trait fixtures.
-- Swift Testing issue/source-location tests.
-- XCTest artifact/failure tests.
+- Package workflow for list/run/check/baseline/diff/trace in debug and release
+  (`PluginWorkflowTests`).
+- Hosts for packages with resources, binary targets, and C, Objective-C and C++
+  targets, without extra sandbox permission (`PluginWorkflowTests`).
+- One host process per step, one traced process for xctrace, and the debug
+  gate before measuring (`CLIWorkflowTests`).
+- Discovery of native, bridged, same-line and extension declarations and their
+  diagnostics (`DiscoveryPlannerTests`, `TestingBridgeTests`).
+- Exit codes and report forwarding (`CLIWorkflowTests`, `PluginWorkflowTests`).
+- Swift Testing and XCTest adapter verdicts and attachments (`AdapterTests`).

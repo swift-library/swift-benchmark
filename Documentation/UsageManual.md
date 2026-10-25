@@ -6,8 +6,8 @@ This manual is the complete user-facing guide for using `swift-benchmark`.
 The recommended default is Tests-first authoring: put benchmark workloads in
 your test target with Swift Testing syntax, then run them separately through
 `swift package benchmark`. That keeps fixtures, imports, and package layout
-familiar while the benchmark command owns warmup, measured iterations, reports,
-baselines, diagnostics, and CI exit codes.
+familiar while the benchmark command owns warmup, batching, measured samples,
+metrics, reports, baselines, and CI exit codes.
 
 ## Installation
 
@@ -42,11 +42,42 @@ Only add products to a target that uses them directly:
 
 - `BenchmarkTesting` belongs in test targets that use
   `@Suite(.benchmark...)` or `@Test(.benchmark...)`.
-- `Benchmark` belongs where benchmark declarations or `blackHole` are used.
-- `Instruments` belongs where `#span`, `#event`, `@Span`,
-  `@Instrumented`, or `@InstrumentedMembers` are used.
-- `Report` belongs where code reads or writes `ReportDocument`,
-  baselines, budgets, diagnostics, or host workflows.
+- `Benchmark` belongs where benchmark declarations, `blackHole`, or
+  `Benchmark.record(_:for:)` are used.
+- `Instruments` belongs where `#span`, `#event`, `@Span`, `@Instrumented`,
+  `@InstrumentedMembers`, or the runtime recorder API are used.
+- `Report` belongs where code reads or writes `ReportDocument`, baselines, or
+  budgets, and in an executable passed to the CLI with `--host`.
+
+### Instruments Without swift-syntax
+
+The Instruments macros are compiled by a macro target that builds swift-syntax.
+The package's `Macros` trait, enabled by default, declares them. Production
+code that only needs the runtime API can drop the trait:
+
+```swift
+.package(
+  url: "https://github.com/swift-library/swift-benchmark.git",
+  .upToNextMinor(from: "0.1.2"),
+  traits: []
+),
+```
+
+Without `Macros`, Instruments offers the recorder API alone:
+
+```swift
+import Instruments
+
+let index = Instruments.current.span("BuildIndex") {
+  buildIndex()
+}
+Instruments.current.event("CacheMiss")
+```
+
+SwiftPM merges each package's traits across the whole dependency graph. If any
+package in the graph depends on swift-benchmark with its default traits, the
+macros and swift-syntax are built for everyone; dropping the trait saves the
+build only when no package in the graph enables it.
 
 ## Recommended Workflow
 
@@ -75,8 +106,9 @@ struct ParserPerformanceTests {
 }
 ```
 
-`@Suite(.benchmark...)` gives every supported test in that suite a benchmark
-configuration. A single test can opt in from a normal suite:
+`@Suite(.benchmark...)` enrolls every supported test in that suite, and nested
+suites inherit it. A single test can opt in from a normal suite, and its
+configuration overrides the suite's:
 
 ```swift
 @Suite("Parser")
@@ -92,67 +124,36 @@ struct ParserTests {
 }
 ```
 
-Plain `swift test` remains a correctness workflow. `swift package benchmark`
-is the performance runner: it discovers benchmark-marked tests, generates the
-bridge, and runs them through `BenchmarkRunner` and `ReportDocument`.
+Plain `swift test` remains a correctness workflow and runs each test once.
+`swift package benchmark` is the performance runner: it discovers
+benchmark-enrolled tests, generates a bridge that declares them as benchmarks,
+and measures them through `BenchmarkRunner`.
 
 ### 2. Discover And Run
 
 ```bash
 swift package benchmark list
-swift package benchmark run --format console
-swift package --allow-writing-to-directory .build benchmark run --tag parser --format json --output .build/benchmark-report.json
+swift package --configuration release benchmark run --format console
+swift package --configuration release --allow-writing-to-directory .build benchmark run --tag parser --format json --output .build/benchmark-report.json
 ```
 
 Use tags for local focus and CI selection:
 
 ```bash
 swift package benchmark list --tag parser --format json
-swift package --allow-writing-to-directory .build benchmark run --tag parser --quiet --format json --output .build/parser-report.json
+swift package --configuration release --allow-writing-to-directory .build benchmark run --tag parser --quiet --format json --output .build/parser-report.json
 ```
 
-### Discovery Backend Selection
-
-The default package workflow uses the stable discovery backend:
-
-```bash
-swift package benchmark list
-swift package benchmark run
-```
-
-This path is the production default. It does not build or link the SwiftSyntax
-discovery backend and does not require extra SwiftPM flags.
-
-For maintainer A/B validation, build the isolated SwiftSyntax discovery tool and
-select it explicitly:
-
-```bash
-BIN=$(swift build --disable-experimental-prebuilts --target BenchmarkSyntaxDiscoveryTool --show-bin-path)
-
-SWIFT_BENCHMARK_DISCOVERY_BACKEND=swiftsyntax \
-SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH="$BIN/BenchmarkSyntaxDiscoveryTool" \
-swift package --disable-experimental-prebuilts benchmark list
-```
-
-Supported backend modes:
-
-- `stable` or unset: run the production self-contained scanner.
-- `swiftsyntax`: require `SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH` and fail
-  loudly if the tool cannot run.
-- `auto`: try the syntax tool when a path is provided, warn on failure, then
-  fall back to the stable scanner.
-
-Both backends emit the same internal discovery plan shape and feed the same
-generated host, `BenchmarkRunner`, and `ReportDocument` pipeline. The
-SwiftSyntax path exists to validate AST-based source discovery without making
-ordinary users depend on SwiftPM's current source-built SwiftSyntax plugin path.
+The plugin parses the package's Swift sources with SwiftSyntax to find
+declarations; it does not run the tests to discover them. Each listed step is
+one case, or one argument row or Dimension size of a case.
 
 ### 3. Gate CI With Baselines
 
 Create or refresh a baseline from a known-good report:
 
 ```bash
-swift package --allow-writing-to-directory .build benchmark run --tag parser --format json --output .build/parser-report.json
+swift package --configuration release --allow-writing-to-directory .build benchmark run --tag parser --format json --output .build/parser-report.json
 swift package --allow-writing-to-directory Benchmarks benchmark baseline write \
   --input .build/parser-report.json \
   --output Benchmarks/parser-baseline.json
@@ -161,42 +162,163 @@ swift package --allow-writing-to-directory Benchmarks benchmark baseline write \
 Check future runs against that baseline:
 
 ```bash
-swift package --allow-writing-to-directory .build benchmark check \
+swift package --configuration release --allow-writing-to-directory .build benchmark check \
   --tag parser \
   --baseline Benchmarks/parser-baseline.json \
-  --baseline-metric p95 \
-  --threshold-percent 10 \
+  --statistic p95 \
+  --threshold 10% \
   --format json \
   --output .build/parser-check.json
 ```
 
-`check` exits nonzero for invalid configuration, benchmark execution failure,
-regression failure, budget failure, or required diagnostic failure. Exit code
-`0` covers success, no regression, and improvement.
+Every metric that both the run and the baseline measured is compared, row by
+row: each argument row or Dimension size is compared with the same row of the
+baseline. A metric regresses when it moves past the threshold in its worse
+direction, which is up for times, counts and bytes, and down for a custom
+metric declared `.higherIsBetter`.
+
+`check` exits `0` when nothing regressed or exceeded a budget, `20` for a
+regression or budget failure, `2` for invalid configuration, `3` when a host
+fails, and `30` when a required trace is missing or recording one fails. It
+refuses to judge a debug build, because debug times and counts do not
+represent release performance; pass `--allow-debug` to check one anyway.
 
 ### 4. Gate CI With Budgets
 
-Use a single-run budget when no saved baseline is desired:
+Use a budget when no saved baseline is desired:
 
 ```bash
-swift package --allow-writing-to-directory .build benchmark run \
+swift package --configuration release --allow-writing-to-directory .build benchmark run \
   --tag parser \
-  --budget p95:5000000 \
+  --budget wallClock:p95:5ms \
+  --budget allocations:median:10 \
   --format json \
   --output .build/parser-budget-report.json
 ```
 
-Case-specific budgets use `suite:case:metric:nanoseconds`:
+Case-specific budgets use `suite:case:metric:statistic:amount`:
 
 ```bash
-swift package benchmark check \
+swift package --configuration release benchmark check \
   --tag parser \
   --baseline Benchmarks/parser-baseline.json \
-  --case-budget "ParserPerformance:Parse document:p95:5000000" \
+  --case-budget "ParserPerformance:Parse document:wallClock:p95:5ms" \
   --format json
 ```
 
-Supported metric selectors include `mean`, `median`, `p90`, `p95`, and `p99`.
+A budget is an upper limit for metrics where lower is better and a lower limit
+for metrics where higher is better.
+
+### Comparison Options
+
+- `--statistic min|max|mean|median|standardDeviation|p90|p95|p99` chooses the
+  statistic baseline comparisons use; the default is `median`.
+- `--threshold <n>%` sets the relative threshold for every metric; the default
+  is `10%`. `--threshold <metric>=<n>%` or `--threshold <metric>=<amount>`
+  overrides it for one metric, with an absolute amount in the metric's unit.
+- `--budget <metric>:<statistic>:<amount>` and
+  `--case-budget <suite>:<case>:<metric>:<statistic>:<amount>` add budgets.
+
+Amounts are plain numbers in the metric's unit. Built-in metrics also accept
+`ns`, `us`, `ms` and `s` for times and `B`, `KB`, `MB`, `GB`, `KiB`, `MiB` and
+`GiB` for bytes. Custom metrics take plain numbers only.
+
+### Warnings
+
+Reports carry warnings that do not change verdicts but say when a comparison
+deserves less trust:
+
+- the run measured a debug build;
+- the baseline was recorded under different conditions: platform, OS version,
+  architecture, device model, Swift version or build configuration;
+- a compared row has fewer than five timed samples;
+- a compared metric varies, in this run or in the baseline, as much as its
+  threshold allows: its coefficient of variation reaches a relative threshold,
+  or its standard deviation reaches an absolute one.
+
+The console format prints warnings after the results, and JSON lists them in
+`warnings` for the run and for each case.
+
+## Metrics
+
+Every step records these metrics, reported per call of the workload:
+
+| Metric | Unit | Measured |
+| --- | --- | --- |
+| `wallClock` | nanoseconds | Elapsed time of each timed sample |
+| `cpuTime` | nanoseconds | User plus system CPU time of the process during each timed sample |
+| `allocations` | count | Swift heap allocations, in a counting pass after the timed samples |
+| `allocatedBytes` | bytes | Bytes those allocations requested |
+| `retains` | count | Swift strong retains in the counting pass |
+| `releases` | count | Swift strong releases in the counting pass |
+| `peakMemory` | bytes | How far the process's memory footprint rose above its level at the start of the step; one value per step |
+
+Timing and counting are separate: the timed samples run without the counting
+hooks, so hooks cannot slow the times, and a counting pass then runs one more
+batch with the hooks installed. The counts come from the Swift runtime's
+instrumentation hooks and include every thread of the process.
+
+`peakMemory` needs a process that measures nothing else, because platforms
+report only the highest footprint over the process lifetime. The package
+workflow runs every step in a host process of its own and records it there; a
+step whose footprint never exceeds the peak the process reached before the step
+records no value. Runners created in your own code leave it out unless created
+with `recordsPeakMemory: true`.
+
+On Linux, wall-clock and CPU time are always available; metrics the platform
+or runtime cannot provide are left out of the samples rather than reported as
+zero.
+
+### Custom Metrics
+
+A workload can record its own values. Each sample sums a metric's recorded
+values and divides by the number of calls:
+
+```swift
+import Benchmark
+
+extension Benchmark.Metric {
+  static let parsedBytes = Benchmark.Metric(name: "parsedBytes", unit: .bytes)
+  static let throughput = Benchmark.Metric(
+    name: "documentsPerSecond", unit: .count, direction: .higherIsBetter)
+}
+
+@Benchmark("Parse document")
+func parseDocument() throws {
+  let result = try parse(input)
+  Benchmark.record(Double(result.byteCount), for: .parsedBytes)
+}
+```
+
+A metric is identified by its name. Names of built-in metrics are reserved, and
+the first descriptor recorded for a name decides its unit and direction.
+Custom metrics appear in statistics, baselines, budgets and thresholds like
+built-in ones.
+
+## Batching And Iterations
+
+A sample can time several consecutive calls. By default batching is automatic:
+before the timed samples, the runner grows the call count until one batch lasts
+1 ms, up to 1,000,000 calls, and reports each sample's values divided by its
+batch size. Workloads that take a microsecond or less are therefore timed over
+windows long enough for clock resolution not to matter, while slow workloads
+run one call per sample.
+
+```swift
+BenchmarkConfiguration(
+  warmup: .iterations(2),
+  iterations: .iterations(20),
+  batching: .automatic(targetNanoseconds: 2_000_000, maxBatchSize: 100_000)
+)
+
+BenchmarkConfiguration(iterations: .iterations(20), batching: .fixed(1))
+```
+
+The default configuration warms up once, measures ten samples and batches
+automatically. `--batch-size <n>` fixes the batch size for a run, and
+`--warmup`, `--iterations`, `--adaptive`, `--min-iterations`,
+`--max-iterations`, `--min-duration-ns` and `--max-duration-ns` override the
+other policies. Adaptive duration limits count the whole time of each batch.
 
 ## Native Benchmark Declarations
 
@@ -237,7 +359,7 @@ workflow support.
 
 Use `arguments` when a benchmark should produce one row per input. Integer
 arguments, and `RawRepresentable` arguments backed by an integer raw value,
-also produce a `Benchmark.Scale` key for curves and amortized metrics:
+also produce a `Benchmark.Scale` key for curves and amortized values:
 
 ```swift
 @BenchmarkSuite("Parser")
@@ -264,19 +386,19 @@ struct ParserBenchmarks {
 
 Each argument value becomes one `Benchmark.Measurement.Row`. Ordinary
 benchmarks produce one row with `size == nil`. Argument setup runs outside the
-measured iterations; measured samples capture only the workload for that row.
+measured samples; measured samples capture only the workload for that row.
 String/file/object arguments produce rows without numeric curves.
 
 Report projects measurement rows into:
 
-- row metrics such as mean, median, p90, p95, and p99,
-- baseline and budget verdicts for selected metrics,
-- `Report.DimensionCurve` records,
-- `amortized` values where selected metric is divided by
-  `Benchmark.Scale.rawValue`.
+- statistics for each metric: count, min, max, mean, median, standard
+  deviation, p90, p95 and p99;
+- baseline and budget verdicts for each row;
+- `Report.DimensionCurve` records;
+- `amortized` values, a statistic divided by `Benchmark.Scale.rawValue`.
 
-The older `.dimension(sizes:)` spelling remains a compatibility authoring path
-for native benchmarks and lowers to `Benchmark.Scale` rows.
+The `.dimension(sizes:)` trait is another way to declare scale rows for native
+benchmarks; it lowers to the same `Benchmark.Scale` rows.
 
 ## ReportDocument
 
@@ -294,27 +416,29 @@ for native benchmarks and lowers to `Benchmark.Scale` rows.
 
 `ReportDocument` can contain:
 
-- run metadata,
-- suite/case identities and tags,
-- source locations,
-- raw samples,
-- `Report.Measurement` rows and derived metrics,
-- baseline comparisons,
-- budget comparisons,
-- structured verdict causes,
-- Dimension curves,
-- timeline attribution,
-- diagnostics,
+- run metadata: platform, OS version, architecture, device model, Swift
+  version, build configuration and package identity;
+- suite/case identities and tags;
+- source locations;
+- raw samples with their batch sizes and per-call values;
+- `Report.Measurement` rows with per-metric statistics;
+- baseline and budget comparisons per row and metric;
+- structured verdict causes;
+- warnings;
+- Dimension curves;
+- timeline attribution;
 - attachments such as trace artifacts.
 
 JSON is the stable exchange format:
 
 ```bash
-swift package --allow-writing-to-directory .build benchmark run --tag parser --format json --output .build/report.json
+swift package --configuration release --allow-writing-to-directory .build benchmark run --tag parser --format json --output .build/report.json
 swift package benchmark render --input .build/report.json --format console
-swift package --allow-writing-to-directory .build benchmark render --input .build/report.json --format markdown --output .build/report.md
 swift package --allow-writing-to-directory .build benchmark render --input .build/report.json --format speedscope --output .build/report.speedscope.json
 ```
+
+A baseline written by an older release fails to load with an error that asks
+you to record it again.
 
 HTML, dashboards, and richer presentations should consume `ReportDocument`
 JSON. Swift library code owns data shape and report contracts, not hardcoded
@@ -327,15 +451,24 @@ The SwiftPM plugin is the normal package workflow:
 ```bash
 swift package benchmark --version
 swift package benchmark list [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json]
-swift package benchmark run [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json|markdown|speedscope] [--output <path>]
-swift package benchmark check --baseline <baseline.json> [--baseline-metric mean|median|p90|p95|p99] [--threshold-percent <n>|--threshold-ns <n>]
+swift package benchmark run [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json|speedscope] [--output <path>]
+swift package benchmark check [--baseline <baseline.json>] [--statistic <name>] [--threshold <value>] [--budget <budget>] [--allow-debug]
 swift package benchmark trace [same options as run] [--xctrace-output <path>] [--xctrace-template <name>]
 swift package benchmark baseline write --input <report.json> --output <baseline.json>
 swift package benchmark baseline update --input <report.json> --output <baseline.json>
 swift package benchmark baseline check --input <report.json> --baseline <baseline.json>
 swift package benchmark diff --input <report.json> --baseline <baseline.json> --format json
-swift package benchmark render --input <report.json> --format console|json|markdown|speedscope
+swift package benchmark render --input <report.json> --format console|json|speedscope
 ```
+
+Unknown options are rejected.
+
+`run`, `check` and `trace` ask the host for its plan, then measure each step in
+a host process of its own. Steps cannot disturb each other through memory,
+caches or runtime state, and each step records its peak memory. With
+`--xctrace-output`, one process measures every selected step so that xctrace
+records a single trace. In per-step runs, whatever benchmarks print goes to
+standard error, so standard output carries only the report.
 
 SwiftPM runs command plugins in a sandbox. Commands that write a file with
 `--output`, or write a baseline, need write access to that directory, granted
@@ -355,14 +488,25 @@ swift package --configuration release --allow-writing-to-directory .build benchm
 swift package --configuration release benchmark check --baseline Benchmarks/baseline.json
 ```
 
-Advanced/debug host-backed CLI usage is available through the executable:
+The plugin compiles the host with the toolchain SwiftPM runs, and records that
+compiler's version in the report's run metadata. Hosts find the package's
+resource bundles, link XCFramework binary targets, link the C++ standard
+library when a C++ target is involved, and import C and Objective-C modules
+found through module maps, including with an external `--scratch-path`. The
+package workflow supports Apple platforms.
+
+Advanced host-backed CLI usage is available through the executable:
 
 ```bash
 swift run swift-benchmark-cli run \
-  --host .build/debug/ParserBenchmarkHost \
+  --host .build/release/ParserBenchmarkHost \
+  --swift-version "$(swiftc --version 2>&1 | head -1)" \
   --case "Parse document" \
   --format json
 ```
+
+`--swift-version` records the compiler that built the host; without it, run
+metadata names the Swift release only.
 
 `swift-benchmark-cli --version`, `swift run BenchmarkCLI --version`, and the
 plugin version command report the same repository release version.
@@ -372,12 +516,7 @@ host generation. `BenchmarkPlugin` is orchestration; `BenchmarkDiscoveryTool`
 and `_BenchmarkDiscoveryCore` own package discovery and generated bridge/host
 sources.
 
-During generated host compilation, the package plugin adds import search paths
-for C module maps found in the active SwiftPM checkout root. This supports
-packages whose benchmarked library depends on C or Objective-C modulemap-backed
-targets, including workflows that use an external `--scratch-path`.
-
-## Diagnostics And Traces
+## Timeline And Traces
 
 Timeline attribution captures the Benchmark/Instruments execution path:
 
@@ -409,26 +548,24 @@ The resulting `ReportDocument` contains the measured sample, the
 `BenchmarkIteration` root span, child business spans/events, and span timing
 summaries. This does not read OSLog or Console output. Report JSON is the
 structured drill-down truth; Signpost/xctrace remains the Apple platform asset
-for deeper Instruments analysis.
+for deeper Instruments analysis. `trace` captures the timeline without
+`--timeline`.
 
-Attach an existing Instruments trace:
+Attach an existing Instruments trace to every case, optionally describing how
+it was recorded:
 
 ```bash
 swift package --allow-writing-to-directory .build benchmark run \
   --tag parser \
   --trace .build/parser.trace \
+  --trace-tool xctrace \
+  --trace-template "Time Profiler" \
   --format json \
   --output .build/report-with-trace.json
 ```
 
-Require a trace attachment and fail when it is unavailable:
-
-```bash
-swift package benchmark run \
-  --tag parser \
-  --required-trace .build/parser.trace \
-  --format json
-```
+`--required-trace <path>` fails the run when the trace does not exist.
+`--trace-command <command>` records the command that produced it.
 
 Record a trace through `xcrun xctrace`:
 
@@ -443,29 +580,6 @@ swift package --allow-writing-to-directory .build benchmark trace \
 
 The report stores trace attachment provenance and command metadata. It does
 not parse private `.trace` internals as a stable API.
-
-MetricKit is future optional production diagnostics. It is not part of the
-current benchmark acceptance path and should not be treated as a deterministic
-per-iteration metric source.
-
-## Memory And Allocation Measurements
-
-On Darwin, `ResidentMemoryMetricProvider` reports current resident bytes and
-the process-lifetime maximum resident size from one Mach snapshot.
-
-Memory and allocation measurements are Report-scoped. Current built-in
-concepts include:
-
-- Darwin resident memory sampling where available,
-- manual memory/allocation snapshots,
-- allocation regression summaries,
-- provider/profiler extension points,
-- file descriptor and resource leak checks,
-- explicit diagnostic states: measured, not configured, unavailable, and
-  failed.
-
-Unsupported platform metrics report structured `unavailable` states instead of
-fake zero values. Required diagnostics can fail a run.
 
 ## Instruments Runtime
 
@@ -515,14 +629,22 @@ to eligible initializers declared directly in the annotated type or extension.
 Signpost is the Apple backend behind the Instruments recorder model, not a
 public product domain.
 
+The macros expand to the recorder API, which works without them:
+`Instruments.current.span(_:attributes:_:)` and
+`Instruments.current.event(_:attributes:)`. See
+[Instruments Without swift-syntax](#instruments-without-swift-syntax).
+
 ## Swift Testing Bridge Boundaries
 
 Supported:
 
-- `@Suite(.benchmark...)` applies benchmark configuration to supported tests in
-  that suite.
-- `@Test(.benchmark...)` opts a single test into benchmark discovery or
-  refines suite defaults.
+- `@Suite(.benchmark...)` enrolls the supported tests in that suite and in
+  suites nested inside it.
+- `@Test(.benchmark...)` enrolls a single test or refines suite defaults.
+- `.benchmark(configuration:)` sets the configuration; its argument must be an
+  expression the generated bridge can evaluate, because the plugin reads it
+  from source.
+- Tests declared in an extension of an enrolled suite belong to that suite.
 - `@Test(arguments:)` and `@Benchmark(arguments:)` produce benchmark rows when
   the declaration is benchmark-enrolled.
 - Swift Testing tags flow into benchmark plan filtering and report metadata.
@@ -531,35 +653,56 @@ Supported:
 
 Diagnosed boundaries:
 
-- `private` and `fileprivate` benchmark-marked tests are not supported in the
-  pure generated bridge path. Use `internal`, or use native
-  `@BenchmarkSuite` / `@Benchmark` in the same source scope.
+- `private` and `fileprivate` benchmark-marked tests, and tests in private
+  types, are not supported in the generated bridge. Use `internal`, or use
+  native `@BenchmarkSuite` / `@Benchmark` in the same source scope.
+- Benchmark-marked tests in an extension of a type declared in another target
+  are diagnosed.
+- Instance tests in enum or actor suites are diagnosed; make them `static`.
 - Unsupported argument shapes fail with explicit diagnostics.
 - Unsupported declarations fail with explicit diagnostics rather than being
   silently skipped.
 - Ordinary `@Test` declarations without `.benchmark` are ignored by the
   benchmark command.
 
-`BenchmarkTestingAdapter` can project `ReportDocument` verdicts into Swift
-Testing issues when public Testing APIs are available. The adapter is a sink;
-Benchmark core remains independent from the Testing runtime.
+`BenchmarkTestingAdapter` measures suites in the current process and projects
+`ReportDocument` verdicts into Swift Testing issues:
+
+```swift
+@Test func parserStaysWithinBudget() async throws {
+  let adapter = BenchmarkTestingAdapter()
+  let document = try await adapter.report(
+    suites: [parserSuite],
+    metadata: .local(id: "run:parser"),
+    comparison: ComparisonPolicy(budgets: [
+      BudgetPolicy(metric: .wallClock, statistic: .p95, limit: 5_000_000)
+    ])
+  )
+  adapter.recordIssues(for: document)
+}
+```
+
+The adapter is a sink; Benchmark core remains independent from the Testing
+runtime. In-process runs share the test process with other tests, so they
+leave out peak memory and their allocation counts include other tests' work.
 
 ## XCTest And Advanced Hosts
 
-`BenchmarkXCTestAdapter` is for existing XCTest workflows. It can attach
-structured report JSON and project verdict causes through XCTest failures and
-attachments. XCTest remains an adapter sink; Benchmark and Report remain the
-truth.
+`BenchmarkXCTestAdapter` is for existing XCTest workflows. It measures suites
+like `BenchmarkTestingAdapter`, attaches structured report JSON, and projects
+verdict causes through XCTest failures and attachments. XCTest remains an
+adapter sink; Benchmark and Report remain the truth.
 
-Manual hosts are advanced/debug flows:
+Manual hosts are advanced flows for declarations only an executable target can
+reach:
 
 ```swift
 import Report
 
 @main
 struct ParserBenchmarkHost {
-  static func main() async throws {
-    try await BenchmarkHost.run(discoveries: [ParserBenchmarks.self])
+  static func main() async {
+    await BenchmarkHost.run(discoveries: [ParserBenchmarks.self])
   }
 }
 ```
@@ -571,21 +714,27 @@ swift run swift-benchmark-cli run \
   --format json
 ```
 
-Ordinary package workflows should not require this host for library-target
-`@BenchmarkSuite` declarations or supported test-target BenchmarkTesting
-declarations.
+The CLI drives the host through its own protocol; run the host through the CLI
+rather than directly. Ordinary package workflows do not need this host for
+library-target `@BenchmarkSuite` declarations or supported test-target
+BenchmarkTesting declarations.
 
 ## Best Practices
 
 - Prefer Tests-first authoring for application and library teams.
+- Measure and check release builds; keep debug runs for local exploration.
 - Keep benchmark bodies deterministic and explicit about setup.
 - Use `blackHole` for values that would otherwise be optimized away.
 - Use tags to separate fast local benchmarks from slower CI or release gates.
+- Keep automatic batching unless a workload must run once per sample.
 - Use fixed iterations by default; opt into adaptive or duration policies only
-  when the workload needs it.
+  when the workload needs it, and keep at least five samples for comparisons.
+- Pick the metric and statistic that define a regression for your workload,
+  such as p95 wall-clock time or median allocations.
 - Use `arguments` for input rows; integer arguments produce `Benchmark.Scale`
   curves.
-- Store baselines under a reviewed path such as `Benchmarks/*.json`.
+- Store baselines under a reviewed path such as `Benchmarks/*.json`, recorded
+  on the machine that runs the check.
 - Treat `ReportDocument` JSON as the contract for agents, dashboards, and
   downstream renderers.
 - Keep instrumentation explicit with `#span`, `@Span`, or `@Instrumented`; the
@@ -608,7 +757,11 @@ declarations.
 - If generated host compilation fails with a missing C module, confirm the
   dependency is resolved through SwiftPM checkouts and rerun with a clean
   scratch path.
-- If an Apple diagnostic is required but unavailable, the command should fail
-  with a diagnostic-unavailable error instead of producing fake data.
+- If `check` refuses a debug build, add `--configuration release` before
+  `benchmark`, or pass `--allow-debug` to judge the debug build anyway.
+- If a baseline fails to load after upgrading, record it again with
+  `baseline write`.
+- If a report warns about noise, raise the iteration count, lengthen the
+  batching target, or loosen that metric's threshold.
 - If a report renderer is not enough, consume `ReportDocument` JSON and build a
   separate renderer/template outside the core Swift library.

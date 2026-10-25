@@ -20,7 +20,7 @@ Programmatic `Benchmark(... arguments:)`, Swift Testing bridge
 `@Test(arguments:)`, and native `.dimension(sizes:)` compatibility paths
 produce one measurement row per input. Numeric arguments infer
 `Benchmark.Scale`; non-numeric arguments produce rows without curves. Report
-preserves rows/samples, derives row metrics, and emits `Report.DimensionCurve`
+preserves rows/samples, derives per-metric statistics, and emits `Report.DimensionCurve`
 records with amortized values for rows that have a scale.
 
 ## User Model
@@ -63,12 +63,12 @@ Target names:
 - `Benchmark.Measurement.Row`: one measured row with optional scale, arguments,
   and raw samples.
 - `Report.Measurement`: Codable report projection of Benchmark measurement.
-- `Report.Measurement.Row.metrics`: derived row metrics such as mean, median,
-  p95, and p99.
-- `Report.Measurement.Metric`: selector vocabulary for baseline, budget, diff,
-  and curve generation.
-- `Report.DimensionCurve`: derived structured curve record over measurement
-  rows and a selected metric.
+- `Report.Measurement.Row` statistics: count, min, max, mean, median,
+  standard deviation, p90, p95 and p99 of each metric.
+- `Report.Statistic`: selector vocabulary for baseline, budget, diff, and curve
+  generation.
+- `Report.DimensionCurve`: derived structured curve record of one statistic of
+  one metric over measurement rows.
 
 Avoid legacy input-size-derived and summary-derived names as durable architecture
 names for the Dimension-first model.

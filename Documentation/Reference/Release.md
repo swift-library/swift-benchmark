@@ -22,12 +22,21 @@ restate those rules.
 Compatibility includes public Swift APIs and macros, discovery and plugin
 behavior, CLI options and exit codes, Report JSON, and compiler/platform requirements.
 
-Core APIs compile for the declared Apple platforms. Xctrace orchestration uses
-a desktop host; other platforms receive a command-unavailable result from the
-default process runner. Portable recording and diagnostic fallbacks retain
-their documented behavior.
+Core APIs compile for the declared Apple platforms and on Linux. Xctrace
+orchestration uses a desktop host; other platforms receive a
+command-unavailable result from the default process runner. Portable recording
+fallbacks retain their documented behavior, and metrics a platform cannot
+measure are absent from samples rather than zero.
 
 ## Dependencies and Verified Combinations
+
+| Releases | Swift | Platforms |
+| --- | --- | --- |
+| 0.1.x | Swift tools 6.0 or later | iOS 18, macOS 15 or later |
+| Unreleased | Swift 6.3 or later | iOS 18, macOS 15 or later |
+
+Toolchains older than a release's minimum use the newest release that supports
+them.
 
 The package requires Swift 6.3, iOS 18 or macOS 15, including its command-line
 products. The maintained system window covers iOS 18/26/27 and macOS 15/26/27.

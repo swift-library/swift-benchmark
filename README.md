@@ -32,7 +32,7 @@
 
 ## Overview
 
-Choose the metric that defines a regression and compare runs with a saved baseline. A p95 budget can fail even when the mean passes, and the report records a typed verdict for CI; the [usage manual](Documentation/UsageManual.md) covers measurement policies, instrumentation, and platform limits.
+Every benchmark records wall-clock and CPU time, Swift allocations, retains and releases, and peak memory. Short workloads are timed in calibrated batches, and the package workflow measures each step in a process of its own. Choose the metric and statistic that define a regression and compare runs with a saved baseline: a p95 budget can fail even when the median passes, the report records a typed verdict for CI, and it warns when a comparison is unreliable, such as a debug build, a baseline from another machine, or samples too noisy for the threshold. The [usage manual](Documentation/UsageManual.md) covers measurement policies, instrumentation, and platform limits.
 
 ## Quick look
 
@@ -82,19 +82,25 @@ targets: [
 The package also provides the `swift package benchmark` command plugin. It is
 available in any package that depends on swift-benchmark.
 
+The Instruments macros build swift-syntax. A target that only calls the
+runtime API, such as `Instruments.current.span(_:attributes:_:)`, can depend on
+the package with `traits: []` to leave the macros and swift-syntax out. SwiftPM
+merges traits across the dependency graph, so this takes effect only when no
+package in the graph depends on swift-benchmark with its default traits.
+
 > [!NOTE]
 > swift-benchmark is pre-1.0. Minor releases may include source-breaking
 > changes, so depend on it with `.upToNextMinor(from:)`.
 
 ## Usage
 
-Run `swift package benchmark list` to discover declarations, then `swift package --configuration release benchmark run` to measure them. Use `benchmark check` with a saved JSON baseline and the metric or budget that matters to your application.
+Run `swift package benchmark list` to discover declarations, then `swift package --configuration release benchmark run` to measure them. Use `benchmark check` with a saved JSON baseline and the metric or budget that matters to your application; it refuses to judge a debug build unless you pass `--allow-debug`.
 
-The [usage manual](Documentation/UsageManual.md) covers native and Swift Testing declarations, products, command options, baselines, diagnostics, and Instruments integration.
+The [usage manual](Documentation/UsageManual.md) covers native and Swift Testing declarations, metrics, products, command options, baselines, trace attachments, and Instruments integration.
 
 ## Requirements
 
-- Swift 6.3 or later
+- Swift 6.3 or later; Swift 6.0 through 6.2 use 0.1.x
 - iOS 18 or later, macOS 15 or later
 
 Each release supports the three most recent major versions of each declared
@@ -109,7 +115,7 @@ describes compatibility and maintenance. `swift-benchmark-cli --version` and
   the public API reference and module overview.
 
 - [Usage manual](Documentation/UsageManual.md): every API, command, CI workflow,
-  diagnostic, and adapter, with troubleshooting.
+  metric, and adapter, with troubleshooting.
 - [Product domains](Documentation/Architecture/ProductDomains.md): how
   Instruments, Benchmark, Report, and the adapters fit together.
 - [Architecture](Documentation/Architecture/README.md): design notes for each

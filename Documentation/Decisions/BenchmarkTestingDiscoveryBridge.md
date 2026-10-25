@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-Date: 2026-05-13
+Date: 2026-05-13; revised 2026-10-26
 
 ## Context
 
@@ -10,7 +10,7 @@ Date: 2026-05-13
 `@Suite(.benchmark...)` and `@Test(.benchmark...)`. Those declarations must run
 through `BenchmarkRunner`, not the Swift Testing runner, so Benchmark keeps
 warmup, iterations, samples, argument/scale rows, ReportDocument output,
-diagnostics, and CI verdict semantics.
+metrics, and CI verdict semantics.
 
 Swift Testing's own `@Test` macro emits records into `__swift5_tests`, but that
 record/accessor path is owned by Swift Testing. The generated thunks and
@@ -21,7 +21,7 @@ record/accessor path is owned by Swift Testing. The generated thunks and
 - Do not reuse Swift Testing `__swift5_tests`, `Test.all`, or internal record
   ABI as the Benchmark execution bridge.
 - Implement pure `@Suite(.benchmark...)` / `@Test(.benchmark...)` package
-  support with source scanning and generated `_BenchmarkDiscovery` bridge code.
+  support with source parsing and generated `_BenchmarkDiscovery` bridge code.
 - Follow the official SwiftPM plugin tool pattern:
   `BenchmarkPlugin -> BenchmarkDiscoveryTool -> _BenchmarkDiscoveryCore`.
   `BenchmarkPlugin` is a thin orchestrator that passes SwiftPM target metadata
@@ -32,10 +32,8 @@ record/accessor path is owned by Swift Testing. The generated thunks and
   generation. `BenchmarkCLI` owns benchmark/report workflows only and does not
   expose hidden discovery commands.
 - The plugin target itself does not depend on SwiftSyntax, SwiftParser,
-  Benchmark, Report, or local library targets. A SwiftSyntax/SwiftParser
-  scanner remains the preferred semantic direction if the source-built tool path
-  validates under SwiftPM command-plugin execution. The accepted topology is
-  still the official SwiftPM tool pattern:
+  Benchmark, Report, or local library targets; the discovery tool's core does.
+  The topology is the official SwiftPM tool pattern:
   `plugin -> executableTarget tool -> core target`.
 - A 2026-05-14 hard-gate investigation found that the topology itself is valid:
   minimal packages using `plugin -> executableTarget tool -> core target`, with
@@ -87,39 +85,26 @@ record/accessor path is owned by Swift Testing. The generated thunks and
     the `SwiftParser` import failure; the next failure is a separate generated
     bridge compile/link issue around Swift Testing modules, not the SwiftSyntax
     hard gate.
-- The accepted production decision is still not to require users or CI to pass
-  `--disable-experimental-prebuilts`, and not to ship a half-migrated
-  SwiftSyntax scanner that only works under special flags. Until SwiftPM's
-  default host-tool path handles this dual SwiftSyntax graph reliably, or the
-  discovery tool is repackaged as a binary/prebuilt/separate toolchain artifact
-  that avoids source-building SwiftSyntax in the client graph, the package
-  workflow uses the self-contained scanner behind `_BenchmarkDiscoveryCore`.
-- The accepted A/B implementation keeps the self-contained scanner as the
-  default production backend and adds an opt-in SwiftSyntax backend that is
-  target/tool isolated:
+- Revised 2026-10-26: package discovery uses SwiftSyntax alone; the
+  self-contained line scanner, the backend switch and its environment variables
+  are removed.
 
   ```text
   BenchmarkPlugin
     -> BenchmarkDiscoveryTool
-        -> _BenchmarkDiscoveryCore
-
-  opt-in only:
-  BenchmarkDiscoveryTool
-    -> external BenchmarkSyntaxDiscoveryTool
-        -> _BenchmarkSyntaxDiscoveryCore
+        -> _BenchmarkDiscoveryCore -> SwiftParser / SwiftSyntax
   ```
 
-  `BenchmarkPlugin` does not depend on `BenchmarkSyntaxDiscoveryTool`; otherwise
-  default `swift package benchmark` would still build the SwiftSyntax tool
-  before environment routing can run. The SwiftSyntax backend is enabled only
-  with `SWIFT_BENCHMARK_DISCOVERY_BACKEND=swiftsyntax` and an absolute
-  `SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH`. Callers must pass
-  `--disable-experimental-prebuilts` at the `swift package` layer when building
-  and invoking that backend.
-- `BenchmarkDiscoveryTool` also supports `SWIFT_BENCHMARK_DISCOVERY_BACKEND=auto`
-  for developer probing. In `auto`, a failing SwiftSyntax backend may fall back
-  to the stable scanner with a warning. Explicit `swiftsyntax` mode fails
-  loudly and never silently degrades.
+  Evidence: with Swift 6.4 (Xcode 27), the dual SwiftSyntax graph above builds
+  and runs through `context.tool(named:)` without
+  `--disable-experimental-prebuilts`, in this package's workflow fixtures and in
+  a client that also uses the macro-driven library products. The line scanner
+  missed `@Test(...)` attributes written on the function's line, which the
+  SwiftSyntax scanner finds; a scanner that reads the syntax tree also parses
+  display names, traits and extensions exactly. Swift 6.3 (Xcode 26.6) is
+  verified by CI. If CI reproduces `no such module 'SwiftParser'` there, the
+  fallback is SwiftSyntax by default with a self-contained scanner for that
+  toolchain, recorded here with the evidence.
 - The generated host may need Swift Testing runtime link/import arguments. Two
   layouts are accepted: toolchain `usr/lib/swift/macosx/testing` and Xcode
   `MacOSX.platform/Developer/Library/Frameworks/Testing.framework`. Missing
