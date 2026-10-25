@@ -141,12 +141,14 @@ public struct IterationPlan: Sendable, Equatable {
     guard samples.count >= minIterations else {
       return true
     }
-    let elapsed = samples.reduce(UInt64(0)) { $0 + $1.durationNanoseconds }
-    if let maxDurationNanoseconds, elapsed >= maxDurationNanoseconds {
+    let elapsed = samples.reduce(0.0) { total, sample in
+      total + (sample.value(for: .wallClock) ?? 0) * Double(sample.batchSize)
+    }
+    if let maxDurationNanoseconds, elapsed >= Double(maxDurationNanoseconds) {
       return false
     }
     if let minDurationNanoseconds {
-      return elapsed < minDurationNanoseconds
+      return elapsed < Double(minDurationNanoseconds)
     }
     return kind == .adaptive
   }

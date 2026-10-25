@@ -22,6 +22,12 @@ struct BenchmarkCLI {
         fputs("swift-benchmark-cli: \(error.description)\n", stderr)
       }
       Foundation.exit(error.exitCode.rawValue)
+    } catch let error as ComparisonArgumentError {
+      fputs("swift-benchmark-cli: \(error.description)\n", stderr)
+      Foundation.exit(CLIExitCode.invalidConfiguration.rawValue)
+    } catch let error as BaselineReadError {
+      fputs("swift-benchmark-cli: \(error.description)\n", stderr)
+      Foundation.exit(CLIExitCode.invalidConfiguration.rawValue)
     } catch let error as BenchmarkCommandError {
       fputs("swift-benchmark-cli: \(error.description)\n", stderr)
       Foundation.exit(CLIExitCode.requiredDiagnosticUnavailable.rawValue)
@@ -74,21 +80,23 @@ struct BenchmarkCLI {
 
     Commands:
       list --host <path> [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json]
-      run --host <path> [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json|markdown|speedscope] [--output <path>]
+      run --host <path> [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json|speedscope] [--output <path>]
       check --host <path> --baseline <baseline.json> [--suite <name>] [--case <name>] [--tag <tag>]
       trace --host <path> [same options as run]
-      render --input <report.json> [--format console|json|markdown|speedscope] [--output <path>]
-      compare|diff --input <report.json> --baseline <baseline.json> [--baseline-metric mean|median|p90|p95|p99] [--threshold-percent <n>|--threshold-ns <n>] [--fail-on-regression]
+      render --input <report.json> [--format console|json|speedscope] [--output <path>]
+      compare|diff --input <report.json> --baseline <baseline.json> [--statistic <name>] [--threshold [<metric>=]<value>] [--fail-on-regression]
       baseline write --input <report.json> --output <baseline.json>
       baseline update --input <report.json> --output <baseline.json>
-      baseline check --input <report.json> --baseline <baseline.json> [--baseline-metric mean|median|p90|p95|p99]
+      baseline check --input <report.json> --baseline <baseline.json> [--statistic <name>] [--threshold [<metric>=]<value>]
       help
 
     Options:
       --version
       --host <path>
-      --budget <metric>:<nanoseconds>
-      --case-budget <suite>:<case>:<metric>:<nanoseconds>
+      --statistic min|max|mean|median|standardDeviation|p90|p95|p99   (default median)
+      --threshold <n>% | <metric>=<n>%|<amount>   (default 10%)
+      --budget <metric>:<statistic>:<amount>
+      --case-budget <suite>:<case>:<metric>:<statistic>:<amount>
       --tag <tag>
       --warmup <n>
       --iterations <n>
@@ -191,10 +199,8 @@ struct BenchmarkCLI {
     let input = try options.requiredValue(for: "--input")
     let baselinePath = try options.requiredValue(for: "--baseline")
     let document = try readReport(input).comparing(
-      baseline: readBaseline(baselinePath),
-      baselineMetric: try options.metric(default: .mean),
-      threshold: try options.threshold(default: .relativePercentage(10)),
-      budgets: try options.budgets()
+      baseline: BaselineDocument.read(path: baselinePath),
+      comparison: try options.comparison()
     )
     let output = try options.format(default: .console).render(document)
     let emitted = try writeOrReturn(output, options: options)
@@ -233,11 +239,6 @@ struct BenchmarkCLI {
 
   private static func decodeReport(_ json: String) throws -> ReportDocument {
     try JSONDecoder().decode(ReportDocument.self, from: Data(json.utf8))
-  }
-
-  private static func readBaseline(_ path: String) throws -> BaselineDocument {
-    let data = try Data(contentsOf: URL(fileURLWithPath: path))
-    return try JSONDecoder().decode(BaselineDocument.self, from: data)
   }
 
   private static func writeBaseline(_ baseline: BaselineDocument, to path: String) throws {
@@ -418,30 +419,13 @@ struct CLIOptions {
     return count == 0 ? .none : .iterations(count)
   }
 
-  func metric(default defaultMetric: Report.Measurement.Metric) throws -> Report.Measurement.Metric
-  {
-    guard let value = value(for: "--baseline-metric") ?? value(for: "--metric") else {
-      return defaultMetric
-    }
-    guard let metric = Report.Measurement.Metric(rawValue: value) else {
-      throw CLIError.invalidMetric(value)
-    }
-    return metric
-  }
-
-  func threshold(default defaultPolicy: ThresholdPolicy) throws -> ThresholdPolicy {
-    if let absolute = try doubleValue(for: "--threshold-ns") {
-      return .absoluteNanoseconds(absolute)
-    }
-    if let relative = try doubleValue(for: "--threshold-percent") {
-      return .relativePercentage(relative)
-    }
-    return defaultPolicy
-  }
-
-  func budgets() throws -> [BudgetPolicy] {
-    try values(for: "--budget").map(parseBudget)
-      + values(for: "--case-budget").map(parseCaseBudget)
+  func comparison() throws -> ComparisonPolicy {
+    try ComparisonArguments.policy(
+      statistic: value(for: "--statistic"),
+      thresholds: values(for: "--threshold"),
+      budgets: values(for: "--budget"),
+      caseBudgets: values(for: "--case-budget")
+    )
   }
 
   func metricProviders() -> [any MetricProvider] {
@@ -462,37 +446,6 @@ struct CLIOptions {
       + values(for: "--required-trace").map {
         traceExporter(path: $0, runID: runID, required: true)
       }
-  }
-
-  private func parseBudget(_ value: String) throws -> BudgetPolicy {
-    let parts = value.split(separator: ":").map(String.init)
-    guard parts.count == 2 else {
-      throw CLIError.invalidBudget(value)
-    }
-    return BudgetPolicy(
-      metric: try parseMetric(parts[0]),
-      limitNanoseconds: try parseDouble(parts[1], option: "--budget")
-    )
-  }
-
-  private func parseCaseBudget(_ value: String) throws -> BudgetPolicy {
-    let parts = value.split(separator: ":").map(String.init)
-    guard parts.count == 4 else {
-      throw CLIError.invalidBudget(value)
-    }
-    return BudgetPolicy(
-      suiteName: parts[0],
-      caseName: parts[1],
-      metric: try parseMetric(parts[2]),
-      limitNanoseconds: try parseDouble(parts[3], option: "--case-budget")
-    )
-  }
-
-  private func parseMetric(_ value: String) throws -> Report.Measurement.Metric {
-    guard let metric = Report.Measurement.Metric(rawValue: value) else {
-      throw CLIError.invalidMetric(value)
-    }
-    return metric
   }
 
   private func parseDouble(_ value: String, option: String) throws -> Double {
@@ -550,8 +503,6 @@ enum CLIError: Error, CustomStringConvertible {
   case invalidFormat(String)
   case invalidInteger(String, String)
   case invalidNumber(String, String)
-  case invalidMetric(String)
-  case invalidBudget(String)
   case noBenchmarksSelected
   case hostFailure(status: Int32, stderr: String)
   case regressionFailure(output: String)
@@ -587,15 +538,11 @@ enum CLIError: Error, CustomStringConvertible {
     case .missingOption(let option):
       return "Missing required option \(option)."
     case .invalidFormat(let format):
-      return "Invalid format '\(format)'. Use console, json, markdown, or speedscope."
+      return "Invalid format '\(format)'. Use console, json, or speedscope."
     case .invalidInteger(let option, let value):
       return "Invalid integer '\(value)' for \(option)."
     case .invalidNumber(let option, let value):
       return "Invalid number '\(value)' for \(option)."
-    case .invalidMetric(let metric):
-      return "Invalid metric '\(metric)'."
-    case .invalidBudget(let budget):
-      return "Invalid budget '\(budget)'. Use metric:nanoseconds or suite:case:metric:nanoseconds."
     case .noBenchmarksSelected:
       return "No benchmarks matched the requested filters."
     case .hostFailure(let status, let stderr):

@@ -45,7 +45,7 @@ struct BenchmarkCommandTests {
     let report = try #require(document.suites.first?.cases.first)
 
     #expect(report.name == "Measured")
-    #expect(report.samples.map(\.durationNanoseconds) == [100, 100])
+    #expect(report.samples.map { $0.value(for: .wallClock) } == [100, 100])
     #expect(document.summary.caseCount == 1)
   }
 
@@ -343,7 +343,17 @@ struct BenchmarkCommandTests {
     }
     let baseline = BaselineDocument(cases: [
       BaselineCase(
-        suiteName: "HostCheck", caseName: "Slow first invocation", meanNanoseconds: 1_000_000)
+        suiteName: "HostCheck",
+        caseName: "Slow first invocation",
+        measurement: Report.Measurement(
+          samples: [
+            SampleReport(
+              id: "sample:hostcheck.0", iterationID: "iteration:hostcheck.0", iteration: 0,
+              values: ["wallClock": 1_000_000])
+          ],
+          metrics: [.wallClock]
+        )
+      )
     ])
     try JSONEncoder().encode(baseline).write(to: URL(fileURLWithPath: baselinePath))
     HostCheckWorkload.shared.reset()
@@ -355,8 +365,8 @@ struct BenchmarkCommandTests {
           "check",
           "--baseline",
           baselinePath,
-          "--threshold-ns",
-          "10000000",
+          "--threshold",
+          "wallClock=10ms",
           "--warmup",
           "0",
           "--iterations",

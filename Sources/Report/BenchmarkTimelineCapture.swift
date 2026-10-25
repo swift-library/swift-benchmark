@@ -35,17 +35,14 @@ public final class BenchmarkTimelineObserver: BenchmarkExecutionObserver, @unche
     }
   }
 
-  public func benchmarkDidRun(
-    context: BenchmarkExecutionContext,
-    durationNanoseconds: UInt64?
-  ) async {
+  public func benchmarkDidRun(context: BenchmarkExecutionContext, sample: Sample?) async {
     guard case .measurement(let iteration) = context.phase else {
       return
     }
     var attributes = correlationAttributes(context: context, iteration: iteration)
-    if let durationNanoseconds {
+    if let sample, let wallClock = sample.value(for: .wallClock) {
       attributes.values[TimelineCorrelationKeys.durationNanoseconds] = .int(
-        Int(durationNanoseconds))
+        Int(wallClock * Double(sample.batchSize)))
     }
     endSpan(for: context, eventName: "BenchmarkIterationMeasured", eventAttributes: attributes)
   }

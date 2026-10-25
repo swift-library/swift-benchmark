@@ -57,7 +57,7 @@ struct PackageWorkflowTests {
     let reportPath = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()
       .deletingLastPathComponent()
-      .appendingPathComponent("ReportTests/Fixtures/report-v2.json")
+      .appendingPathComponent("ReportTests/Fixtures/report.json")
       .path
     try writeFile(
       """
@@ -169,7 +169,7 @@ struct PackageWorkflowTests {
         "--case",
         "Noop",
         "--budget",
-        "mean:-1",
+        "wallClock:mean:-1",
         "--format",
         "json",
       ]
@@ -177,7 +177,7 @@ struct PackageWorkflowTests {
 
     #expect(list.contains("\"suite\" : \"Fixture\""))
     #expect(list.contains("\"caseName\" : \"Noop\""))
-    #expect(run.contains("\"schemaVersion\" : 2"))
+    #expect(run.contains("\"wallClock\""))
     #expect(run.contains("\"name\" : \"Noop\""))
     #expect(run.contains("\"measurement\""))
     #expect(failedCheck.status == 20)
@@ -295,8 +295,8 @@ struct PackageWorkflowTests {
         "testingBridge",
         "--baseline",
         testingBaselinePath,
-        "--threshold-percent",
-        "1000000",
+        "--threshold",
+        "1000000%",
         "--format",
         "json",
       ]
@@ -508,8 +508,8 @@ struct PackageWorkflowTests {
         "library",
         "--baseline",
         baselinePath,
-        "--threshold-percent",
-        "1000000",
+        "--threshold",
+        "1000000%",
         "--format",
         "json",
       ]
@@ -541,7 +541,7 @@ struct PackageWorkflowTests {
       arguments: [
         "swift", "package", "-q", "--package-path", fixturePath, "--scratch-path", scratchPath,
         "--allow-writing-to-directory", scratchPath, "benchmark", "check", "--tag", "library",
-        "--baseline", baselinePath, "--budget", "mean:-1", "--format", "json",
+        "--baseline", baselinePath, "--budget", "wallClock:mean:-1", "--format", "json",
         "--output", failedReportPath, "--quiet",
       ]
     )
@@ -589,10 +589,10 @@ struct PackageWorkflowTests {
     #expect(!testingList.contains("Plain Test"))
     #expect(standaloneList.contains("\"caseName\" : \"Standalone Testing Benchmark\""))
     #expect(standaloneList.contains("\"standalone\""))
-    #expect(run.contains("\"schemaVersion\" : 2"))
+    #expect(run.contains("\"wallClock\""))
     #expect(run.contains("\"name\" : \"Noop\""))
     #expect(run.contains("\"tags\""))
-    #expect(testingRun.contains("\"schemaVersion\" : 2"))
+    #expect(testingRun.contains("\"wallClock\""))
     #expect(testingRun.contains("\"name\" : \"Suite Noop\""))
     #expect(testingRun.contains("\"name\" : \"Case Override\""))
     #expect(testingRun.contains("\"TestingFixture\""))

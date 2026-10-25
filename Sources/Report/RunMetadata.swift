@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
 // Copyright (c) 2020-present Xudong Xu
 
+import Benchmark
 import Foundation
 
 public struct SourceLocationReport: Sendable, Equatable, Codable {
@@ -103,21 +104,30 @@ public struct BenchmarkConfigurationReport: Sendable, Equatable, Codable {
   }
 }
 
+/// One recorded sample: per-call values keyed by metric name.
 public struct SampleReport: Sendable, Equatable, Codable {
   public var id: ReportID
   public var iterationID: ReportID
   public var iteration: Int
-  public var durationNanoseconds: UInt64
+  /// Calls the sample measured.
+  public var batchSize: Int
+  public var values: [String: Double]
 
   public init(
     id: ReportID,
     iterationID: ReportID,
     iteration: Int,
-    durationNanoseconds: UInt64
+    batchSize: Int = 1,
+    values: [String: Double]
   ) {
     self.id = id
     self.iterationID = iterationID
     self.iteration = iteration
-    self.durationNanoseconds = durationNanoseconds
+    self.batchSize = batchSize
+    self.values = values
+  }
+
+  public func value(for metric: Benchmark.Metric) -> Double? {
+    values[metric.name]
   }
 }

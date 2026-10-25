@@ -27,7 +27,7 @@ struct BenchmarkRunnerTests {
     #expect(results[0].measurement.samples.count == 3)
     #expect(results[0].measurement.rows.count == 1)
     #expect(results[0].measurement.rows[0].size == nil)
-    #expect(results[0].measurement.samples.map(\.durationNanoseconds) == [10, 10, 10])
+    #expect(results[0].measurement.samples.map { $0.value(for: .wallClock) } == [10, 10, 10])
   }
 
   @Test
@@ -57,8 +57,9 @@ struct BenchmarkRunnerTests {
     #expect(generated.value == 2)
     #expect(measured.value == expectedMeasuredTotal)
     #expect(rows.map(\.size?.rawValue) == [10, 100])
-    #expect(rows.map { $0.samples.map(\.durationNanoseconds) } == [[5, 5], [5, 5]])
-    #expect(results[0].measurement.samples.map(\.durationNanoseconds) == [5, 5, 5, 5])
+    #expect(
+      rows.map { $0.samples.map { sample in sample.value(for: .wallClock) } } == [[5, 5], [5, 5]])
+    #expect(results[0].measurement.samples.map { $0.value(for: .wallClock) } == [5, 5, 5, 5])
   }
 
   @Test
@@ -244,7 +245,10 @@ struct BenchmarkRunnerTests {
     #expect(records.map(\.kind).contains(.warmupStarted))
     #expect(records.map(\.kind).contains(.sampleRecorded))
     #expect(records.map(\.kind).contains(.planEnded))
-    #expect(records.first { $0.kind == .sampleRecorded }?.context.durationNanoseconds == 3)
+    let sampleContext = records.first { $0.kind == .sampleRecorded }?.context
+    #expect(sampleContext?.values == ["wallClock": 3])
+    #expect(sampleContext?.batchSize == 1)
+    #expect(sampleContext?.metrics == [.wallClock])
     #expect(records.first { $0.kind == .caseStarted }?.context.tags == ["evented"])
 
     let lines = await jsonLines.lines()
@@ -318,7 +322,7 @@ struct BenchmarkRunnerTests {
 
     let results = try await BenchmarkRunner(clock: StepClock(step: 10)).run(suite)
 
-    #expect(results.first?.measurement.samples.map(\.durationNanoseconds) == [10, 10, 10])
+    #expect(results.first?.measurement.samples.map { $0.value(for: .wallClock) } == [10, 10, 10])
   }
 
   @Test
@@ -339,7 +343,7 @@ struct BenchmarkRunnerTests {
 
     let results = try await BenchmarkRunner(clock: StepClock(step: 10)).run(suite)
 
-    #expect(results.first?.measurement.samples.map(\.durationNanoseconds) == [10, 10])
+    #expect(results.first?.measurement.samples.map { $0.value(for: .wallClock) } == [10, 10])
   }
 
   @Test

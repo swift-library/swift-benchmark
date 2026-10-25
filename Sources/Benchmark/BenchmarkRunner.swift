@@ -168,7 +168,7 @@ public struct BenchmarkRunner: Sendable {
       await notifyWillRun(context: context, observers: observers)
       do {
         try await operation()
-        await notifyDidRun(context: context, durationNanoseconds: nil, observers: observers)
+        await notifyDidRun(context: context, sample: nil, observers: observers)
         await record(
           kind: .warmupEnded,
           context: Benchmark.Event.Context(
@@ -231,28 +231,28 @@ public struct BenchmarkRunner: Sendable {
         )
       }
       let end = clock.now()
-      let duration = start.duration(to: end)
-      samples.append(
-        Sample(iteration: iteration, durationNanoseconds: duration)
+      let sample = Sample(
+        iteration: iteration,
+        values: [.wallClock: Double(start.duration(to: end))]
       )
+      samples.append(sample)
       await record(
         kind: .sampleRecorded,
         context: Benchmark.Event.Context(
           step: step,
           iteration: iteration,
           phase: .measurement(iteration: iteration),
-          durationNanoseconds: duration
+          sample: sample
         ),
         eventRecorders: eventRecorders
       )
-      await notifyDidRun(context: context, durationNanoseconds: duration, observers: observers)
+      await notifyDidRun(context: context, sample: sample, observers: observers)
       await record(
         kind: .iterationEnded,
         context: Benchmark.Event.Context(
           step: step,
           iteration: iteration,
-          phase: .measurement(iteration: iteration),
-          durationNanoseconds: duration
+          phase: .measurement(iteration: iteration)
         ),
         eventRecorders: eventRecorders
       )
@@ -282,11 +282,11 @@ public struct BenchmarkRunner: Sendable {
 
   private func notifyDidRun(
     context: BenchmarkExecutionContext,
-    durationNanoseconds: UInt64?,
+    sample: Sample?,
     observers: [any BenchmarkExecutionObserver]
   ) async {
     for observer in observers {
-      await observer.benchmarkDidRun(context: context, durationNanoseconds: durationNanoseconds)
+      await observer.benchmarkDidRun(context: context, sample: sample)
     }
   }
 

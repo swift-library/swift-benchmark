@@ -120,9 +120,13 @@ enum ReportIDFactory {
   static func dimensionCurve(
     suiteName: String,
     caseName: String,
-    metric: Report.Measurement.Metric
+    metric: Benchmark.Metric,
+    statistic: Report.Statistic
   ) -> ReportID {
-    ReportID(rawValue: "curve:\(stable(suiteName)).\(stable(caseName)).\(metric.rawValue)")
+    ReportID(
+      rawValue:
+        "curve:\(stable(suiteName)).\(stable(caseName)).\(stable(metric.name)).\(statistic.rawValue)"
+    )
   }
 
   static func stable(_ value: String) -> String {

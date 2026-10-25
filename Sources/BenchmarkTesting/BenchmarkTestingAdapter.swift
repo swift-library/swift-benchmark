@@ -20,17 +20,13 @@ public struct BenchmarkTestingAdapter: Sendable {
     suites: [BenchmarkSuite],
     metadata: RunMetadata,
     baseline: BaselineDocument? = nil,
-    baselineMetric: Report.Measurement.Metric = .mean,
-    threshold: ThresholdPolicy = .relativePercentage(10),
-    budgets: [BudgetPolicy] = []
+    comparison: ComparisonPolicy = .default
   ) async throws -> ReportDocument {
     let output = try await command.run(
       suites: suites,
       metadata: metadata,
       baseline: baseline,
-      baselineMetric: baselineMetric,
-      threshold: threshold,
-      budgets: budgets,
+      comparison: comparison,
       format: .json
     )
     return try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))

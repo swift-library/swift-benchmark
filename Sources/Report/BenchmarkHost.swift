@@ -104,15 +104,13 @@ public enum BenchmarkHost {
       guard !plan.steps.isEmpty else {
         throw BenchmarkHostError.noBenchmarksSelected
       }
-      let baseline = try options.value(for: "--baseline").map(readBaseline)
+      let baseline = try options.value(for: "--baseline").map(BaselineDocument.read(path:))
       let format = try options.format(default: .console)
       let document = try await BenchmarkCommand().report(
         plan: plan,
         metadata: metadata,
         baseline: baseline,
-        baselineMetric: try options.metric(default: .mean),
-        threshold: try options.threshold(default: .relativePercentage(10)),
-        budgets: try options.budgets(),
+        comparison: try options.comparison(),
         timelineCapture: command == "trace" || options.hasFlag("--timeline")
           ? .benchmarkIterations : .disabled,
         metricProviders: options.metricProviders(),
@@ -137,15 +135,10 @@ public enum BenchmarkHost {
 
     Commands:
       list [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json]
-      run [--suite <name>] [--case <name>] [--tag <tag>] [--warmup <n>] [--iterations <n>] [--adaptive] [--min-duration-ns <n>] [--max-duration-ns <n>] [--format console|json|markdown|speedscope] [--baseline <path>] [--output <path>] [--trace <path>] [--required-trace <path>]
+      run [--suite <name>] [--case <name>] [--tag <tag>] [--warmup <n>] [--iterations <n>] [--adaptive] [--min-duration-ns <n>] [--max-duration-ns <n>] [--format console|json|speedscope] [--baseline <path>] [--statistic <name>] [--threshold [<metric>=]<value>] [--budget <metric>:<statistic>:<value>] [--output <path>] [--trace <path>] [--required-trace <path>]
       check --baseline <path> [--suite <name>] [--case <name>] [--tag <tag>]
       trace [same options as run, with timeline capture enabled]
     """
-  }
-
-  private static func readBaseline(_ path: String) throws -> BaselineDocument {
-    let data = try Data(contentsOf: URL(fileURLWithPath: path))
-    return try JSONDecoder().decode(BaselineDocument.self, from: data)
   }
 
   private static func writeOrReturn(_ output: String, options: BenchmarkHostOptions) throws
@@ -171,8 +164,6 @@ public enum BenchmarkHostError: Error, CustomStringConvertible {
   case missingValue(String)
   case invalidFormat(String)
   case invalidNumber(String, String)
-  case invalidMetric(String)
-  case invalidBudget(String)
   case noBenchmarksSelected
   case regressionFailure(output: String)
 
@@ -188,10 +179,6 @@ public enum BenchmarkHostError: Error, CustomStringConvertible {
       return "Invalid format '\(format)'."
     case .invalidNumber(let option, let value):
       return "Invalid number '\(value)' for \(option)."
-    case .invalidMetric(let metric):
-      return "Invalid metric '\(metric)'."
-    case .invalidBudget(let budget):
-      return "Invalid budget '\(budget)'."
     case .noBenchmarksSelected:
       return "No benchmarks matched the requested filters."
     case .regressionFailure:
@@ -258,31 +245,13 @@ private struct BenchmarkHostOptions {
     return format
   }
 
-  func metric(default defaultMetric: Report.Measurement.Metric) throws -> Report.Measurement.Metric
-  {
-    guard let value = value(for: "--baseline-metric") ?? value(for: "--metric") else {
-      return defaultMetric
-    }
-    guard let metric = Report.Measurement.Metric(rawValue: value) else {
-      throw BenchmarkHostError.invalidMetric(value)
-    }
-    return metric
-  }
-
-  func threshold(default defaultPolicy: ThresholdPolicy) throws -> ThresholdPolicy {
-    if let value = value(for: "--threshold-ns") {
-      guard let absolute = Double(value) else {
-        throw BenchmarkHostError.invalidNumber("--threshold-ns", value)
-      }
-      return .absoluteNanoseconds(absolute)
-    }
-    if let value = value(for: "--threshold-percent") {
-      guard let relative = Double(value) else {
-        throw BenchmarkHostError.invalidNumber("--threshold-percent", value)
-      }
-      return .relativePercentage(relative)
-    }
-    return defaultPolicy
+  func comparison() throws -> ComparisonPolicy {
+    try ComparisonArguments.policy(
+      statistic: value(for: "--statistic"),
+      thresholds: values(for: "--threshold"),
+      budgets: values(for: "--budget"),
+      caseBudgets: values(for: "--case-budget")
+    )
   }
 
   func configuration(overriding configuration: BenchmarkConfiguration) throws
@@ -346,11 +315,6 @@ private struct BenchmarkHostOptions {
     return integer
   }
 
-  func budgets() throws -> [BudgetPolicy] {
-    try values(for: "--budget").map(parseBudget)
-      + values(for: "--case-budget").map(parseCaseBudget)
-  }
-
   func metricProviders() -> [any MetricProvider] {
     values(for: "--optional-diagnostic").map {
       UnavailableMetricProvider(metricName: $0, reason: "Diagnostic unavailable from host request")
@@ -369,44 +333,6 @@ private struct BenchmarkHostOptions {
       + values(for: "--required-trace").map {
         traceExporter(path: $0, runID: runID, required: true)
       }
-  }
-
-  private func parseBudget(_ value: String) throws -> BudgetPolicy {
-    let parts = value.split(separator: ":").map(String.init)
-    guard parts.count == 2 else {
-      throw BenchmarkHostError.invalidBudget(value)
-    }
-    return BudgetPolicy(
-      metric: try parseMetric(parts[0]),
-      limitNanoseconds: try parseDouble(parts[1], option: "--budget")
-    )
-  }
-
-  private func parseCaseBudget(_ value: String) throws -> BudgetPolicy {
-    let parts = value.split(separator: ":").map(String.init)
-    guard parts.count == 4 else {
-      throw BenchmarkHostError.invalidBudget(value)
-    }
-    return BudgetPolicy(
-      suiteName: parts[0],
-      caseName: parts[1],
-      metric: try parseMetric(parts[2]),
-      limitNanoseconds: try parseDouble(parts[3], option: "--case-budget")
-    )
-  }
-
-  private func parseMetric(_ value: String) throws -> Report.Measurement.Metric {
-    guard let metric = Report.Measurement.Metric(rawValue: value) else {
-      throw BenchmarkHostError.invalidMetric(value)
-    }
-    return metric
-  }
-
-  private func parseDouble(_ value: String, option: String) throws -> Double {
-    guard let double = Double(value) else {
-      throw BenchmarkHostError.invalidNumber(option, value)
-    }
-    return double
   }
 
   private func traceExporter(path: String, runID: ReportID, required: Bool) -> TraceArtifactExporter

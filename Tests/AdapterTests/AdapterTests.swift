@@ -57,7 +57,18 @@ struct AdapterTests {
       }
     }
     let baseline = BaselineDocument(cases: [
-      BaselineCase(suiteName: "Adapters", caseName: "Parse", meanNanoseconds: 1)
+      BaselineCase(
+        suiteName: "Adapters",
+        caseName: "Parse",
+        measurement: Report.Measurement(
+          samples: [
+            SampleReport(
+              id: "sample:adapters.parse.0", iterationID: "iteration:adapters.parse.0",
+              iteration: 0, values: ["wallClock": 1])
+          ],
+          metrics: [.wallClock]
+        )
+      )
     ])
     let command = BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 10)))
     let testingAdapter = BenchmarkTestingAdapter(command: command)
@@ -67,8 +78,9 @@ struct AdapterTests {
       suites: [suite],
       metadata: metadata,
       baseline: baseline,
-      threshold: .relativePercentage(10),
-      budgets: [BudgetPolicy(metric: .mean, limitNanoseconds: 1)]
+      comparison: ComparisonPolicy(budgets: [
+        BudgetPolicy(metric: .wallClock, statistic: .mean, limit: 1)
+      ])
     )
     let testingContexts = testingAdapter.failureContexts(for: document)
     let xctestContexts = xctestAdapter.failureContexts(for: document)
@@ -90,18 +102,24 @@ struct AdapterTests {
   @Test
   func swiftTestingBenchmarkTraitCarriesReportPolicy() {
     let testTrait: any TestTrait = .benchmark(
-      baselineMetric: .p95,
-      budgets: [BudgetPolicy(metric: .p95, limitNanoseconds: 100)]
+      comparison: ComparisonPolicy(
+        statistic: .p95,
+        budgets: [BudgetPolicy(metric: .wallClock, statistic: .p95, limit: 100)]
+      )
     )
     let suiteTrait: any SuiteTrait = .benchmark(
-      threshold: .absoluteNanoseconds(50),
-      budgets: [BudgetPolicy(metric: .mean, limitNanoseconds: 200)]
+      comparison: ComparisonPolicy(
+        metricThresholds: [.wallClock: .absolute(50)],
+        budgets: [BudgetPolicy(metric: .wallClock, statistic: .mean, limit: 200)]
+      )
     )
 
-    #expect((testTrait as? BenchmarkTestingTrait)?.baselineMetric == .p95)
-    #expect((testTrait as? BenchmarkTestingTrait)?.budgets.first?.metric == .p95)
-    #expect((suiteTrait as? BenchmarkTestingTrait)?.threshold == .absoluteNanoseconds(50))
-    #expect((suiteTrait as? BenchmarkTestingTrait)?.budgets.first?.metric == .mean)
+    #expect((testTrait as? BenchmarkTestingTrait)?.comparison.statistic == .p95)
+    #expect((testTrait as? BenchmarkTestingTrait)?.comparison.budgets.first?.statistic == .p95)
+    #expect(
+      (suiteTrait as? BenchmarkTestingTrait)?.comparison.threshold(for: .wallClock)
+        == .absolute(50))
+    #expect((suiteTrait as? BenchmarkTestingTrait)?.comparison.budgets.first?.limit == 200)
   }
 }
 

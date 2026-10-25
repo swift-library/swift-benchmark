@@ -27,9 +27,7 @@ public actor ReportRecorder: BenchmarkEventRecorder {
   public func document(
     metadata: RunMetadata,
     baseline: BaselineDocument? = nil,
-    baselineMetric: Report.Measurement.Metric = .mean,
-    threshold: ThresholdPolicy = .relativePercentage(10),
-    budgets: [BudgetPolicy] = [],
+    comparison: ComparisonPolicy = .default,
     attributions: [TimelineAttribution] = [],
     diagnostics: [DiagnosticMetric] = [],
     attachments: [DiagnosticAttachment] = []
@@ -37,9 +35,7 @@ public actor ReportRecorder: BenchmarkEventRecorder {
     ReportBuilder(records: records).document(
       metadata: metadata,
       baseline: baseline,
-      baselineMetric: baselineMetric,
-      threshold: threshold,
-      budgets: budgets,
+      comparison: comparison,
       attributions: attributions,
       diagnostics: diagnostics,
       attachments: attachments
@@ -57,9 +53,7 @@ public struct ReportBuilder: Sendable {
   public func document(
     metadata: RunMetadata,
     baseline: BaselineDocument? = nil,
-    baselineMetric: Report.Measurement.Metric = .mean,
-    threshold: ThresholdPolicy = .relativePercentage(10),
-    budgets: [BudgetPolicy] = [],
+    comparison: ComparisonPolicy = .default,
     attributions: [TimelineAttribution] = [],
     diagnostics: [DiagnosticMetric] = [],
     attachments: [DiagnosticAttachment] = []
@@ -98,26 +92,17 @@ public struct ReportBuilder: Sendable {
                     id: row.id,
                     size: row.scale,
                     arguments: row.arguments,
-                    samples: samples.sorted { $0.iteration < $1.iteration }
+                    samples: samples.sorted { $0.iteration < $1.iteration },
+                    metrics: accumulator.metrics
                   )
                 }
             )
-            let baselineComparison = baseline?
-              .baselineCase(suiteName: accumulator.suiteName, caseName: accumulator.caseName)
-              .map { baselineCase in
-                BaselineComparison(
-                  currentMetrics: measurement.metrics,
-                  baselineCase: baselineCase,
-                  metric: baselineMetric,
-                  threshold: threshold
-                )
-              }
-            let budgetComparisons =
-              budgets
-              .filter {
-                $0.applies(suiteName: accumulator.suiteName, caseName: accumulator.caseName)
-              }
-              .map { BudgetComparison(policy: $0, metrics: measurement.metrics) }
+            let compared = comparison.compare(
+              suiteName: accumulator.suiteName,
+              caseName: accumulator.caseName,
+              measurement: measurement,
+              baseline: baseline
+            )
             return CaseReport(
               id: caseID,
               scope: scope,
@@ -129,9 +114,9 @@ public struct ReportBuilder: Sendable {
               ),
               tags: accumulator.tags,
               measurement: measurement,
-              baseline: baselineComparison,
-              budgets: budgetComparisons,
-              dimensionCurves: dimensionCurves(
+              baselines: compared.baselines,
+              budgets: compared.budgets,
+              dimensionCurves: Report.DimensionCurve.curves(
                 suiteName: accumulator.suiteName,
                 caseName: accumulator.caseName,
                 scope: scope,
@@ -167,11 +152,12 @@ public struct ReportBuilder: Sendable {
         .merge(context: record.context)
 
       guard record.kind == .sampleRecorded,
-        let iteration = record.context.iteration,
-        let duration = record.context.durationNanoseconds
+        let iteration = record.context.iteration
       else {
         continue
       }
+      let knownMetrics = cases[key]?.metrics ?? []
+      cases[key]?.metrics = Report.mergedMetrics([knownMetrics, record.context.metrics])
       let sample = SampleReport(
         id: ReportIDFactory.sample(
           suiteName: suiteName,
@@ -188,7 +174,8 @@ public struct ReportBuilder: Sendable {
           iteration: iteration
         ),
         iteration: iteration,
-        durationNanoseconds: duration
+        batchSize: record.context.batchSize ?? 1,
+        values: record.context.values
       )
       let row = Benchmark.ArgumentRow(
         id: record.context.argumentRowID,
@@ -198,50 +185,6 @@ public struct ReportBuilder: Sendable {
       cases[key]?.rows[row, default: []].append(sample)
     }
     return cases.filter { !$0.value.rows.isEmpty }
-  }
-
-  private func dimensionCurves(
-    suiteName: String,
-    caseName: String,
-    scope: ReportScope,
-    measurement: Report.Measurement,
-    sourceLocation: SourceLocationReport?
-  ) -> [Report.DimensionCurve] {
-    let rows = measurement.rows.filter { $0.size != nil }
-    guard !rows.isEmpty else {
-      return []
-    }
-    let metrics: [Report.Measurement.Metric] = [.mean, .median, .p95]
-    return metrics.map { metric in
-      let curveID = ReportIDFactory.dimensionCurve(
-        suiteName: suiteName,
-        caseName: caseName,
-        metric: metric
-      )
-      return Report.DimensionCurve(
-        id: curveID,
-        scope: ReportScope(
-          runID: scope.runID,
-          suiteID: scope.suiteID,
-          caseID: scope.caseID,
-          dimensionCurveID: curveID
-        ),
-        metric: metric,
-        points: rows.compactMap { row in
-          guard let size = row.size else {
-            return nil
-          }
-          let value = metric.value(from: row.metrics)
-          return Report.DimensionCurve.Point(
-            size: size,
-            valueNanoseconds: value,
-            amortizedNanosecondsPerUnit: Benchmark.Dimension.amortized(value, by: size),
-            sampleCount: row.samples.count,
-            sourceLocation: sourceLocation
-          )
-        }
-      )
-    }
   }
 }
 
@@ -257,6 +200,7 @@ private struct CaseAccumulator {
   var sourceLocation: BenchmarkSourceLocation?
   var configurationWarmup: String?
   var configurationIterations: String?
+  var metrics: [Benchmark.Metric] = []
   var rows: [Benchmark.ArgumentRow: [SampleReport]] = [:]
 
   mutating func merge(context: Benchmark.Event.Context) {

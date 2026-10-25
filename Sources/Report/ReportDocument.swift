@@ -20,10 +20,13 @@ public struct ReportVerdictCause: Sendable, Equatable, Codable {
   public var kind: Kind
   public var scope: ReportScope
   public var message: String
-  public var metric: Report.Measurement.Metric?
-  public var actualNanoseconds: Double?
-  public var expectedNanoseconds: Double?
-  public var deltaNanoseconds: Double?
+  public var metric: Benchmark.Metric?
+  public var statistic: Report.Statistic?
+  /// The measured value, in the metric's unit.
+  public var actual: Double?
+  /// The baseline value or budget limit, in the metric's unit.
+  public var expected: Double?
+  public var delta: Double?
   public var percentageDelta: Double?
   public var diagnosticID: ReportID?
   public var budget: BudgetPolicy?
@@ -32,10 +35,11 @@ public struct ReportVerdictCause: Sendable, Equatable, Codable {
     kind: Kind,
     scope: ReportScope,
     message: String,
-    metric: Report.Measurement.Metric? = nil,
-    actualNanoseconds: Double? = nil,
-    expectedNanoseconds: Double? = nil,
-    deltaNanoseconds: Double? = nil,
+    metric: Benchmark.Metric? = nil,
+    statistic: Report.Statistic? = nil,
+    actual: Double? = nil,
+    expected: Double? = nil,
+    delta: Double? = nil,
     percentageDelta: Double? = nil,
     diagnosticID: ReportID? = nil,
     budget: BudgetPolicy? = nil
@@ -44,9 +48,10 @@ public struct ReportVerdictCause: Sendable, Equatable, Codable {
     self.scope = scope
     self.message = message
     self.metric = metric
-    self.actualNanoseconds = actualNanoseconds
-    self.expectedNanoseconds = expectedNanoseconds
-    self.deltaNanoseconds = deltaNanoseconds
+    self.statistic = statistic
+    self.actual = actual
+    self.expected = expected
+    self.delta = delta
     self.percentageDelta = percentageDelta
     self.diagnosticID = diagnosticID
     self.budget = budget
@@ -61,7 +66,8 @@ public struct CaseReport: Sendable, Equatable, Codable {
   public var configuration: BenchmarkConfigurationReport
   public var tags: [String]
   public var measurement: Report.Measurement
-  public var baseline: BaselineComparison?
+  /// One comparison per metric that both this case and its baseline measured.
+  public var baselines: [BaselineComparison]
   public var budgets: [BudgetComparison]
   public var dimensionCurves: [Report.DimensionCurve]
   public var attribution: TimelineAttribution?
@@ -76,10 +82,6 @@ public struct CaseReport: Sendable, Equatable, Codable {
     measurement.samples
   }
 
-  public var metrics: Report.Measurement.Metrics {
-    measurement.metrics
-  }
-
   public init(
     id: ReportID,
     scope: ReportScope,
@@ -88,7 +90,7 @@ public struct CaseReport: Sendable, Equatable, Codable {
     configuration: BenchmarkConfigurationReport,
     tags: [String] = [],
     measurement: Report.Measurement,
-    baseline: BaselineComparison? = nil,
+    baselines: [BaselineComparison] = [],
     budgets: [BudgetComparison] = [],
     dimensionCurves: [Report.DimensionCurve] = [],
     attribution: TimelineAttribution? = nil,
@@ -105,7 +107,7 @@ public struct CaseReport: Sendable, Equatable, Codable {
     self.configuration = configuration
     self.tags = tags
     self.measurement = measurement
-    self.baseline = baseline
+    self.baselines = baselines
     self.budgets = budgets
     self.dimensionCurves = dimensionCurves
     self.attributions = attributions ?? attribution.map { [$0] } ?? []
@@ -118,13 +120,13 @@ public struct CaseReport: Sendable, Equatable, Codable {
       ?? CaseReport.makeVerdictCauses(
         scope: scope,
         status: status,
-        baseline: baseline,
+        baselines: baselines,
         budgets: budgets,
         diagnostics: diagnostics
       )
     if !self.verdictCauses.isEmpty {
       self.verdict = .failed
-    } else if baseline != nil || !budgets.isEmpty {
+    } else if !baselines.isEmpty || budgets.contains(where: { $0.verdict != .notCompared }) {
       self.verdict = .passed
     } else {
       self.verdict = .notCompared
@@ -139,7 +141,7 @@ public struct CaseReport: Sendable, Equatable, Codable {
     case configuration
     case tags
     case measurement
-    case baseline
+    case baselines
     case budgets
     case dimensionCurves
     case attribution
@@ -153,73 +155,33 @@ public struct CaseReport: Sendable, Equatable, Codable {
 
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    let id = try container.decode(ReportID.self, forKey: .id)
-    let scope = try container.decode(ReportScope.self, forKey: .scope)
-    let name = try container.decode(String.self, forKey: .name)
-    let sourceLocation = try container.decodeIfPresent(
-      SourceLocationReport.self,
-      forKey: .sourceLocation
-    )
-    let configuration = try container.decode(
-      BenchmarkConfigurationReport.self,
-      forKey: .configuration
-    )
-    let tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
-    let measurement = try container.decode(Report.Measurement.self, forKey: .measurement)
-    let baseline = try container.decodeIfPresent(BaselineComparison.self, forKey: .baseline)
-    let budgets = try container.decodeIfPresent([BudgetComparison].self, forKey: .budgets) ?? []
-    let dimensionCurves =
-      try container.decodeIfPresent(
-        [Report.DimensionCurve].self,
-        forKey: .dimensionCurves
-      ) ?? []
-    let attribution = try container.decodeIfPresent(
-      TimelineAttribution.self,
-      forKey: .attribution
-    )
-    let attributions = try container.decodeIfPresent(
-      [TimelineAttribution].self,
-      forKey: .attributions
-    )
-    let diagnostics =
-      try container.decodeIfPresent(
-        [DiagnosticMetric].self,
-        forKey: .diagnostics
-      ) ?? []
-    let attachments =
-      try container.decodeIfPresent(
-        [DiagnosticAttachment].self,
-        forKey: .attachments
-      ) ?? []
-    let status =
-      try container.decodeIfPresent(
-        ReportExecutionStatus.self,
-        forKey: .status
-      ) ?? .passed
-    let verdictCauses = try container.decodeIfPresent(
-      [ReportVerdictCause].self,
-      forKey: .verdictCauses
-    )
-
     self.init(
-      id: id,
-      scope: scope,
-      name: name,
-      sourceLocation: sourceLocation,
-      configuration: configuration,
-      tags: tags,
-      measurement: measurement,
-      baseline: baseline,
-      budgets: budgets,
-      dimensionCurves: dimensionCurves,
-      attribution: attribution,
-      attributions: attributions,
-      diagnostics: diagnostics,
-      attachments: attachments,
-      status: status,
-      verdictCauses: verdictCauses
+      id: try container.decode(ReportID.self, forKey: .id),
+      scope: try container.decode(ReportScope.self, forKey: .scope),
+      name: try container.decode(String.self, forKey: .name),
+      sourceLocation: try container.decodeIfPresent(
+        SourceLocationReport.self, forKey: .sourceLocation),
+      configuration: try container.decode(
+        BenchmarkConfigurationReport.self, forKey: .configuration),
+      tags: try container.decodeIfPresent([String].self, forKey: .tags) ?? [],
+      measurement: try container.decode(Report.Measurement.self, forKey: .measurement),
+      baselines: try container.decodeIfPresent([BaselineComparison].self, forKey: .baselines)
+        ?? [],
+      budgets: try container.decodeIfPresent([BudgetComparison].self, forKey: .budgets) ?? [],
+      dimensionCurves: try container.decodeIfPresent(
+        [Report.DimensionCurve].self, forKey: .dimensionCurves) ?? [],
+      attribution: try container.decodeIfPresent(TimelineAttribution.self, forKey: .attribution),
+      attributions: try container.decodeIfPresent(
+        [TimelineAttribution].self, forKey: .attributions),
+      diagnostics: try container.decodeIfPresent([DiagnosticMetric].self, forKey: .diagnostics)
+        ?? [],
+      attachments: try container.decodeIfPresent(
+        [DiagnosticAttachment].self, forKey: .attachments) ?? [],
+      status: try container.decodeIfPresent(ReportExecutionStatus.self, forKey: .status)
+        ?? .passed,
+      verdictCauses: try container.decodeIfPresent(
+        [ReportVerdictCause].self, forKey: .verdictCauses)
     )
-
     if let verdict = try container.decodeIfPresent(ReportVerdict.self, forKey: .verdict) {
       self.verdict = verdict
     }
@@ -228,7 +190,7 @@ public struct CaseReport: Sendable, Equatable, Codable {
   private static func makeVerdictCauses(
     scope: ReportScope,
     status: ReportExecutionStatus,
-    baseline: BaselineComparison?,
+    baselines: [BaselineComparison],
     budgets: [BudgetComparison],
     diagnostics: [DiagnosticMetric]
   ) -> [ReportVerdictCause] {
@@ -242,17 +204,19 @@ public struct CaseReport: Sendable, Equatable, Codable {
         )
       )
     }
-    if let baseline, baseline.verdict == .failed {
+    for comparison in baselines where comparison.verdict == .failed {
       causes.append(
         ReportVerdictCause(
           kind: .baselineRegression,
           scope: scope,
-          message: "Baseline regression for \(baseline.metric.rawValue).",
-          metric: baseline.metric,
-          actualNanoseconds: baseline.currentValueNanoseconds,
-          expectedNanoseconds: baseline.baselineValueNanoseconds,
-          deltaNanoseconds: baseline.absoluteDeltaNanoseconds,
-          percentageDelta: baseline.percentageDelta.isFinite ? baseline.percentageDelta : nil
+          message:
+            "Baseline regression for \(comparison.metric.name) \(comparison.statistic.rawValue).",
+          metric: comparison.metric,
+          statistic: comparison.statistic,
+          actual: comparison.current,
+          expected: comparison.baseline,
+          delta: comparison.delta,
+          percentageDelta: comparison.percentageDelta.isFinite ? comparison.percentageDelta : nil
         )
       )
     }
@@ -261,11 +225,13 @@ public struct CaseReport: Sendable, Equatable, Codable {
         ReportVerdictCause(
           kind: .budgetExceeded,
           scope: scope,
-          message: "Budget exceeded for \(budget.policy.metric.rawValue).",
+          message:
+            "Budget exceeded for \(budget.policy.metric.name) \(budget.policy.statistic.rawValue).",
           metric: budget.policy.metric,
-          actualNanoseconds: budget.actualNanoseconds,
-          expectedNanoseconds: budget.policy.limitNanoseconds,
-          deltaNanoseconds: budget.absoluteDeltaNanoseconds,
+          statistic: budget.policy.statistic,
+          actual: budget.actual,
+          expected: budget.policy.limit,
+          delta: budget.delta,
           budget: budget.policy
         )
       )
@@ -301,6 +267,7 @@ public struct SuiteReport: Sendable, Equatable, Codable {
 public struct ReportSummary: Sendable, Equatable, Codable {
   public var suiteCount: Int
   public var caseCount: Int
+  /// Cases with at least one failed baseline comparison.
   public var failedRegressionCount: Int
   public var failedBudgetCount: Int
   public var unavailableDiagnosticCount: Int
@@ -308,28 +275,21 @@ public struct ReportSummary: Sendable, Equatable, Codable {
   public var verdict: ReportVerdict
 
   public init(suites: [SuiteReport]) {
+    let cases = suites.flatMap(\.cases)
     self.suiteCount = suites.count
-    self.caseCount = suites.reduce(0) { $0 + $1.cases.count }
-    self.failedRegressionCount = suites.reduce(0) { partial, suite in
-      partial + suite.cases.filter { $0.baseline?.verdict == .failed }.count
+    self.caseCount = cases.count
+    self.failedRegressionCount =
+      cases.filter { report in
+        report.baselines.contains { $0.verdict == .failed }
+      }.count
+    self.failedBudgetCount = cases.reduce(0) { partial, report in
+      partial + report.budgets.filter { $0.verdict == .failed }.count
     }
-    self.failedBudgetCount = suites.reduce(0) { partial, suite in
-      partial
-        + suite.cases.reduce(0) { casePartial, report in
-          casePartial + report.budgets.filter { $0.verdict == .failed }.count
-        }
+    self.unavailableDiagnosticCount = cases.reduce(0) { partial, report in
+      partial + report.diagnostics.filter { $0.state.kind == .unavailable }.count
     }
-    self.unavailableDiagnosticCount = suites.reduce(0) { partial, suite in
-      partial
-        + suite.cases.reduce(0) { casePartial, report in
-          casePartial + report.diagnostics.filter { $0.state.kind == .unavailable }.count
-        }
-    }
-    self.failedDiagnosticCount = suites.reduce(0) { partial, suite in
-      partial
-        + suite.cases.reduce(0) { casePartial, report in
-          casePartial + report.diagnostics.filter { $0.state.kind == .failed }.count
-        }
+    self.failedDiagnosticCount = cases.reduce(0) { partial, report in
+      partial + report.diagnostics.filter { $0.state.kind == .failed }.count
     }
     self.verdict =
       failedRegressionCount == 0 && failedBudgetCount == 0 && failedDiagnosticCount == 0
@@ -338,19 +298,11 @@ public struct ReportSummary: Sendable, Equatable, Codable {
 }
 
 public struct ReportDocument: Sendable, Equatable, Codable {
-  public static let currentSchemaVersion = 2
-
-  public var schemaVersion: Int
   public var metadata: RunMetadata
   public var suites: [SuiteReport]
   public var summary: ReportSummary
 
-  public init(
-    schemaVersion: Int = ReportDocument.currentSchemaVersion,
-    metadata: RunMetadata,
-    suites: [SuiteReport]
-  ) {
-    self.schemaVersion = schemaVersion
+  public init(metadata: RunMetadata, suites: [SuiteReport]) {
     self.metadata = metadata
     self.suites = suites
     self.summary = ReportSummary(suites: suites)
@@ -360,9 +312,7 @@ public struct ReportDocument: Sendable, Equatable, Codable {
     metadata: RunMetadata,
     results: [BenchmarkResult],
     baseline: BaselineDocument? = nil,
-    baselineMetric: Report.Measurement.Metric = .mean,
-    threshold: ThresholdPolicy = .relativePercentage(10),
-    budgets: [BudgetPolicy] = [],
+    comparison: ComparisonPolicy = .default,
     attributions: [TimelineAttribution] = [],
     diagnostics: [DiagnosticMetric] = [],
     attachments: [DiagnosticAttachment] = []
@@ -378,20 +328,12 @@ public struct ReportDocument: Sendable, Equatable, Codable {
         )
         let scope = ReportScope(runID: metadata.id, suiteID: suiteID, caseID: caseID)
         let measurement = ReportDocument.reportMeasurement(from: result)
-        let baselineComparison = baseline?
-          .baselineCase(suiteName: result.suiteName, caseName: result.caseName)
-          .map { baselineCase in
-            BaselineComparison(
-              currentMetrics: measurement.metrics,
-              baselineCase: baselineCase,
-              metric: baselineMetric,
-              threshold: threshold
-            )
-          }
-        let budgetComparisons =
-          budgets
-          .filter { $0.applies(suiteName: result.suiteName, caseName: result.caseName) }
-          .map { BudgetComparison(policy: $0, metrics: measurement.metrics) }
+        let compared = comparison.compare(
+          suiteName: result.suiteName,
+          caseName: result.caseName,
+          measurement: measurement,
+          baseline: baseline
+        )
         let sourceLocation = result.sourceLocation.map(SourceLocationReport.init)
 
         return CaseReport(
@@ -402,9 +344,9 @@ public struct ReportDocument: Sendable, Equatable, Codable {
           configuration: BenchmarkConfigurationReport(result.configuration),
           tags: result.tags,
           measurement: measurement,
-          baseline: baselineComparison,
-          budgets: budgetComparisons,
-          dimensionCurves: ReportDocument.dimensionCurves(
+          baselines: compared.baselines,
+          budgets: compared.budgets,
+          dimensionCurves: Report.DimensionCurve.curves(
             suiteName: result.suiteName,
             caseName: result.caseName,
             scope: scope,
@@ -428,32 +370,21 @@ public struct ReportDocument: Sendable, Equatable, Codable {
     self.init(metadata: metadata, suites: suites)
   }
 
+  /// Replaces every case's baseline comparisons and budgets with the result
+  /// of comparing it under `comparison`. Without a baseline, existing baseline
+  /// comparisons are kept.
   public func comparing(
     baseline: BaselineDocument? = nil,
-    baselineMetric: Report.Measurement.Metric = .mean,
-    threshold: ThresholdPolicy = .relativePercentage(10),
-    budgets: [BudgetPolicy] = []
+    comparison: ComparisonPolicy = .default
   ) -> ReportDocument {
     let suites = self.suites.map { suite in
       let cases = suite.cases.map { report in
-        let baselineComparison =
-          baseline?
-          .baselineCase(suiteName: suite.name, caseName: report.name)
-          .map { baselineCase in
-            BaselineComparison(
-              currentMetrics: report.measurement.metrics,
-              baselineCase: baselineCase,
-              metric: baselineMetric,
-              threshold: threshold
-            )
-          } ?? report.baseline
-        let budgetComparisons =
-          budgets.isEmpty
-          ? report.budgets
-          : budgets
-            .filter { $0.applies(suiteName: suite.name, caseName: report.name) }
-            .map { BudgetComparison(policy: $0, metrics: report.measurement.metrics) }
-
+        let compared = comparison.compare(
+          suiteName: suite.name,
+          caseName: report.name,
+          measurement: report.measurement,
+          baseline: baseline
+        )
         return CaseReport(
           id: report.id,
           scope: report.scope,
@@ -462,8 +393,8 @@ public struct ReportDocument: Sendable, Equatable, Codable {
           configuration: report.configuration,
           tags: report.tags,
           measurement: report.measurement,
-          baseline: baselineComparison,
-          budgets: budgetComparisons,
+          baselines: baseline == nil ? report.baselines : compared.baselines,
+          budgets: comparison.budgets.isEmpty ? report.budgets : compared.budgets,
           dimensionCurves: report.dimensionCurves,
           attribution: report.attribution,
           attributions: report.attributions,
@@ -474,7 +405,7 @@ public struct ReportDocument: Sendable, Equatable, Codable {
       }
       return SuiteReport(id: suite.id, scope: suite.scope, name: suite.name, cases: cases)
     }
-    return ReportDocument(schemaVersion: schemaVersion, metadata: metadata, suites: suites)
+    return ReportDocument(metadata: metadata, suites: suites)
   }
 
   private static func reportMeasurement(from result: BenchmarkResult) -> Report.Measurement {
@@ -501,58 +432,15 @@ public struct ReportDocument: Sendable, Equatable, Codable {
                 iteration: sample.iteration
               ),
               iteration: sample.iteration,
-              durationNanoseconds: sample.durationNanoseconds
+              batchSize: sample.batchSize,
+              values: Dictionary(
+                uniqueKeysWithValues: sample.values.map { ($0.key.name, $0.value) })
             )
-          }
+          },
+          metrics: Array(Set(row.samples.flatMap(\.values.keys)))
         )
       }
     )
-  }
-
-  private static func dimensionCurves(
-    suiteName: String,
-    caseName: String,
-    scope: ReportScope,
-    measurement: Report.Measurement,
-    sourceLocation: SourceLocationReport?
-  ) -> [Report.DimensionCurve] {
-    let dimensionRows = measurement.rows.compactMap { row -> Report.Measurement.Row? in
-      row.size == nil ? nil : row
-    }
-    guard !dimensionRows.isEmpty else {
-      return []
-    }
-
-    return [.mean, .median, .p95].map { metric in
-      Report.DimensionCurve(
-        id: ReportIDFactory.dimensionCurve(
-          suiteName: suiteName, caseName: caseName, metric: metric),
-        scope: ReportScope(
-          runID: scope.runID,
-          suiteID: scope.suiteID,
-          caseID: scope.caseID,
-          dimensionCurveID: ReportIDFactory.dimensionCurve(
-            suiteName: suiteName,
-            caseName: caseName,
-            metric: metric
-          )
-        ),
-        metric: metric,
-        points: dimensionRows.compactMap { row in
-          guard let size = row.size else {
-            return nil
-          }
-          let value = metric.value(from: row.metrics)
-          return Report.DimensionCurve.Point(
-            size: size,
-            valueNanoseconds: value,
-            amortizedNanosecondsPerUnit: Benchmark.Dimension.amortized(value, by: size),
-            sampleCount: row.samples.count,
-            sourceLocation: sourceLocation
-          )
-        }
-      )
-    }
   }
 }
 

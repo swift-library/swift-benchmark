@@ -16,10 +16,7 @@ struct ReportDocumentTests {
       caseName: "ParseDocument",
       configuration: BenchmarkConfiguration(warmup: .iterations(1), iterations: .iterations(2)),
       tags: ["parser", "critical"],
-      measurement: Measurement(samples: [
-        Sample(iteration: 0, durationNanoseconds: 1_000),
-        Sample(iteration: 1, durationNanoseconds: 3_000),
-      ])
+      measurement: Measurement(samples: wallClockSamples([1_000, 3_000]))
     )
     let metadata = RunMetadata.fixture()
     let timeline = makeTimeline()
@@ -39,14 +36,14 @@ struct ReportDocumentTests {
       state: .unavailable("memory metrics are unavailable on this platform")
     )
     let baseline = BaselineDocument(cases: [
-      BaselineCase(suiteName: "Parser", caseName: "ParseDocument", meanNanoseconds: 1_000)
+      baselineCase("Parser", "ParseDocument", wallClock: [1_000])
     ])
 
     let document = ReportDocument(
       metadata: metadata,
       results: [result],
       baseline: baseline,
-      threshold: .relativePercentage(50),
+      comparison: ComparisonPolicy(statistic: .mean, threshold: .relativePercentage(50)),
       attributions: [attribution],
       diagnostics: [diagnostic]
     )
@@ -54,9 +51,9 @@ struct ReportDocumentTests {
     let report = try #require(document.suites.first?.cases.first)
     #expect(document.summary.verdict == .failed)
     #expect(report.tags == ["parser", "critical"])
-    #expect(report.samples.map(\.durationNanoseconds) == [1_000, 3_000])
-    #expect(report.baseline?.absoluteDeltaNanoseconds == 1_000)
-    #expect(report.baseline?.percentageDelta == 100)
+    #expect(report.samples.map { $0.value(for: .wallClock) } == [1_000, 3_000])
+    #expect(report.baselines.first?.delta == 1_000)
+    #expect(report.baselines.first?.percentageDelta == 100)
     #expect(report.verdict == .failed)
     #expect(report.attribution?.spans.map(\.name) == ["ParseAST"])
     #expect(report.attribution?.events.map(\.name) == ["CacheMiss"])
@@ -65,7 +62,7 @@ struct ReportDocumentTests {
   }
 
   @Test
-  func jsonMarkdownAndConsoleRenderTheSameReportDocument() throws {
+  func jsonAndConsoleRenderTheSameReportDocument() throws {
     let document = ReportDocument(
       metadata: .fixture(),
       results: [
@@ -73,20 +70,17 @@ struct ReportDocumentTests {
           suiteName: "Parser",
           caseName: "Tokenize",
           configuration: .default,
-          measurement: Measurement(samples: [Sample(iteration: 0, durationNanoseconds: 2_000)])
+          measurement: Measurement(samples: wallClockSamples([2_000]))
         )
       ]
     )
 
     let json = try JSONReportRenderer.render(document)
     let decoded = try JSONDecoder().decode(ReportDocument.self, from: Data(json.utf8))
-    let markdown = MarkdownReportRenderer.render(document)
     let console = ConsoleReportRenderer.render(document)
 
     #expect(decoded == document)
-    #expect(markdown.contains("Tokenize"))
-    #expect(markdown.contains("2.000 us"))
-    #expect(console.contains("Tokenize: mean 2.000 us"))
+    #expect(console.contains("Tokenize: wallClock median 2.000 us, p95 2.000 us"))
   }
 
   @Test
@@ -112,33 +106,32 @@ struct ReportDocumentTests {
 
     #expect(eventReport.name == directReport.name)
     #expect(eventReport.tags == ["event-report"])
-    #expect(eventReport.samples.map(\.durationNanoseconds) == [11, 11])
-    #expect(
-      eventReport.samples.map(\.durationNanoseconds)
-        == directReport.samples.map(\.durationNanoseconds))
+    #expect(eventReport.samples.map { $0.value(for: .wallClock) } == [11, 11])
+    #expect(eventReport.measurement == directReport.measurement)
     #expect(eventReport.configuration == directReport.configuration)
     #expect(eventReport.sourceLocation == directReport.sourceLocation)
   }
 
   @Test
-  func jsonSchemaFixtureRoundTripsAndExposesVerdictCauses() throws {
-    let fixture = try Data(contentsOf: reportFixtureURL("report-v2.json"))
+  func jsonFixtureRoundTripsAndExposesVerdictCauses() throws {
+    let fixture = try Data(contentsOf: reportFixtureURL("report.json"))
     let decoded = try JSONDecoder().decode(ReportDocument.self, from: fixture)
     let encoded = try JSONReportRenderer.render(decoded)
     let roundTripped = try JSONDecoder().decode(ReportDocument.self, from: Data(encoded.utf8))
     let report = try #require(roundTripped.suites.first?.cases.first)
 
     #expect(roundTripped == decoded)
-    #expect(roundTripped.schemaVersion == ReportDocument.currentSchemaVersion)
     #expect(roundTripped.summary.verdict == .failed)
     #expect(report.tags == [])
     #expect(report.verdictCauses.map(\.kind) == [.budgetExceeded, .diagnosticFailed])
+    #expect(report.verdictCauses.first?.metric == .wallClock)
     #expect(report.sourceLocation?.line == 42)
-    #expect(report.samples.map(\.durationNanoseconds) == [1_000, 2_000])
+    #expect(report.samples.map { $0.value(for: .wallClock) } == [1_000, 2_000])
+    #expect(report.measurement.statistics(for: .wallClock)?.p95 == 1_950)
   }
 
   @Test
-  func baselineAndBudgetSelectorsPreserveTypedVerdictCauses() throws {
+  func baselineAndBudgetStatisticsPreserveTypedVerdictCauses() throws {
     let result = BenchmarkResult(
       suiteName: "Parser",
       caseName: "ParseDocument",
@@ -149,54 +142,104 @@ struct ReportDocumentTests {
         column: 5
       ),
       configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(3)),
-      measurement: Measurement(samples: [
-        Sample(iteration: 0, durationNanoseconds: 1_000),
-        Sample(iteration: 1, durationNanoseconds: 2_000),
-        Sample(iteration: 2, durationNanoseconds: 3_000),
-      ])
+      measurement: Measurement(samples: wallClockSamples([1_000, 2_000, 3_000]))
     )
     let baseline = BaselineDocument(cases: [
-      BaselineCase(
-        suiteName: "Parser",
-        caseName: "ParseDocument",
-        meanNanoseconds: 2_000,
-        metrics: Report.Measurement.Metrics(
-          count: 3,
-          min: 1_000,
-          max: 2_000,
-          mean: 1_800,
-          median: 1_800,
-          standardDeviation: 0,
-          p90: 1_800,
-          p95: 1_800,
-          p99: 1_800
-        )
-      )
+      baselineCase("Parser", "ParseDocument", wallClock: [1_800])
     ])
 
     let document = ReportDocument(
       metadata: .fixture(),
       results: [result],
       baseline: baseline,
-      baselineMetric: .p95,
-      threshold: .absoluteNanoseconds(1_000),
-      budgets: [
-        BudgetPolicy(metric: .mean, limitNanoseconds: 2_500),
-        BudgetPolicy(metric: .p95, limitNanoseconds: 2_500),
-      ]
+      comparison: ComparisonPolicy(
+        statistic: .p95,
+        threshold: .relativePercentage(10),
+        metricThresholds: [.wallClock: .absolute(1_000)],
+        budgets: [
+          BudgetPolicy(metric: .wallClock, statistic: .mean, limit: 2_500),
+          BudgetPolicy(metric: .wallClock, statistic: .p95, limit: 2_500),
+        ]
+      )
     )
     let report = try #require(document.suites.first?.cases.first)
+    let comparison = try #require(report.baselines.first)
 
-    #expect(report.baseline?.metric == .p95)
-    #expect(report.baseline?.currentValueNanoseconds == 2_900)
-    #expect(report.baseline?.baselineValueNanoseconds == 1_800)
-    #expect(report.baseline?.verdict == .failed)
+    #expect(comparison.metric == .wallClock)
+    #expect(comparison.statistic == .p95)
+    #expect(comparison.current == 2_900)
+    #expect(comparison.baseline == 1_800)
+    #expect(comparison.threshold == .absolute(1_000))
+    #expect(comparison.verdict == .failed)
     #expect(report.budgets.map(\.verdict) == [.passed, .failed])
     #expect(report.verdict == .failed)
     #expect(report.verdictCauses.map(\.kind) == [.baselineRegression, .budgetExceeded])
-    #expect(report.verdictCauses.map(\.metric) == [.p95, .p95])
+    #expect(report.verdictCauses.map(\.statistic) == [.p95, .p95])
     #expect(document.summary.failedRegressionCount == 1)
     #expect(document.summary.failedBudgetCount == 1)
+  }
+
+  @Test
+  func everySharedMetricIsComparedAndDirectionDecidesRegression() throws {
+    let throughput = Benchmark.Metric(
+      name: "throughput", unit: .count, direction: .higherIsBetter)
+    let allocations = Benchmark.Metric(name: "allocations", unit: .count)
+    let result = BenchmarkResult(
+      suiteName: "Parser",
+      caseName: "Tokenize",
+      configuration: .default,
+      measurement: Measurement(samples: [
+        Sample(iteration: 0, values: [.wallClock: 1_000, throughput: 80, allocations: 4])
+      ])
+    )
+    let baseline = BaselineDocument(cases: [
+      BaselineCase(
+        suiteName: "Parser",
+        caseName: "Tokenize",
+        measurement: Report.Measurement(
+          samples: [
+            SampleReport(
+              id: "sample:baseline.0", iterationID: "iteration:baseline.0", iteration: 0,
+              values: ["wallClock": 1_000, "throughput": 100])
+          ],
+          metrics: [.wallClock, throughput]
+        )
+      )
+    ])
+
+    let document = ReportDocument(metadata: .fixture(), results: [result], baseline: baseline)
+    let report = try #require(document.suites.first?.cases.first)
+
+    #expect(report.baselines.map(\.metric.name) == ["throughput", "wallClock"])
+    #expect(report.baselines.map(\.verdict) == [.failed, .passed])
+    #expect(report.baselines.first?.percentageDelta == -20)
+  }
+
+  @Test
+  func budgetOnUnmeasuredMetricIsNotCompared() throws {
+    let document = ReportDocument(
+      metadata: .fixture(),
+      results: [
+        BenchmarkResult(
+          suiteName: "Parser",
+          caseName: "Tokenize",
+          configuration: .default,
+          measurement: Measurement(samples: wallClockSamples([2_000]))
+        )
+      ],
+      comparison: ComparisonPolicy(budgets: [
+        BudgetPolicy(
+          metric: Benchmark.Metric(name: "allocations", unit: .count),
+          statistic: .median,
+          limit: 0
+        )
+      ])
+    )
+    let report = try #require(document.suites.first?.cases.first)
+
+    #expect(report.budgets.first?.verdict == .notCompared)
+    #expect(report.budgets.first?.actual == nil)
+    #expect(report.verdict == .notCompared)
   }
 
   @Test
@@ -208,22 +251,23 @@ struct ReportDocumentTests {
           suiteName: "Parser",
           caseName: "Tokenize",
           configuration: .default,
-          measurement: Measurement(samples: [Sample(iteration: 0, durationNanoseconds: 2_000)])
+          measurement: Measurement(samples: wallClockSamples([2_000]))
         )
       ]
     )
     let baseline = BaselineDocument(cases: [
-      BaselineCase(suiteName: "Parser", caseName: "Tokenize", meanNanoseconds: 1_000)
+      baselineCase("Parser", "Tokenize", wallClock: [1_000])
     ])
     let compared = original.comparing(
       baseline: baseline,
-      threshold: .relativePercentage(10),
-      budgets: [BudgetPolicy(metric: .mean, limitNanoseconds: 1_500)]
+      comparison: ComparisonPolicy(budgets: [
+        BudgetPolicy(metric: .wallClock, statistic: .mean, limit: 1_500)
+      ])
     )
     let report = try #require(compared.suites.first?.cases.first)
 
-    #expect(report.samples.map(\.durationNanoseconds) == [2_000])
-    #expect(report.baseline?.verdict == .failed)
+    #expect(report.samples.map { $0.value(for: .wallClock) } == [2_000])
+    #expect(report.baselines.first?.verdict == .failed)
     #expect(report.budgets.first?.verdict == .failed)
     #expect(report.verdictCauses.map(\.kind) == [.baselineRegression, .budgetExceeded])
     #expect(compared.summary.failedRegressionCount == 1)
@@ -236,7 +280,7 @@ struct ReportDocumentTests {
       suiteName: "Parser",
       caseName: "ParseDocument",
       configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1)),
-      measurement: Measurement(samples: [Sample(iteration: 1, durationNanoseconds: 20)])
+      measurement: Measurement(samples: [Sample(iteration: 1, values: [.wallClock: 20])])
     )
     let metadata = RunMetadata.fixture()
     let attribution = TimelineCorrelator.attribution(
@@ -292,16 +336,13 @@ struct ReportDocumentTests {
           suiteName: "Parser",
           caseName: "Tokenize",
           configuration: .default,
-          measurement: Measurement(samples: [Sample(iteration: 0, durationNanoseconds: 2_000)])
+          measurement: Measurement(samples: wallClockSamples([2_000]))
         )
       ],
-      baseline: BaselineDocument(cases: [
-        BaselineCase(suiteName: "Parser", caseName: "Tokenize", meanNanoseconds: 0)
-      ]),
-      threshold: .relativePercentage(10)
+      baseline: BaselineDocument(cases: [baselineCase("Parser", "Tokenize", wallClock: [0])])
     )
     let report = try #require(document.suites.first?.cases.first)
-    #expect(report.baseline?.percentageDelta == .infinity)
+    #expect(report.baselines.first?.percentageDelta == .infinity)
     #expect(report.verdict == .failed)
 
     let json = try JSONReportRenderer.render(document)
@@ -314,13 +355,39 @@ struct ReportDocumentTests {
   @Test
   func absoluteThresholdAllowsSmallRegression() throws {
     let comparison = BaselineComparison(
-      currentMeanNanoseconds: 1_100,
-      baselineMeanNanoseconds: 1_000,
-      threshold: .absoluteNanoseconds(100)
+      metric: .wallClock,
+      statistic: .median,
+      current: 1_100,
+      baseline: 1_000,
+      threshold: .absolute(100)
     )
 
     #expect(comparison.verdict == .passed)
-    #expect(comparison.absoluteDeltaNanoseconds == 100)
+    #expect(comparison.delta == 100)
+  }
+
+  private func wallClockSamples(_ values: [Double]) -> [Sample] {
+    values.enumerated().map { Sample(iteration: $0.offset, values: [.wallClock: $0.element]) }
+  }
+
+  private func baselineCase(_ suiteName: String, _ caseName: String, wallClock: [Double])
+    -> BaselineCase
+  {
+    BaselineCase(
+      suiteName: suiteName,
+      caseName: caseName,
+      measurement: Report.Measurement(
+        samples: wallClock.enumerated().map { index, value in
+          SampleReport(
+            id: ReportID(rawValue: "sample:baseline.\(index)"),
+            iterationID: ReportID(rawValue: "iteration:baseline.\(index)"),
+            iteration: index,
+            values: ["wallClock": value]
+          )
+        },
+        metrics: [.wallClock]
+      )
+    )
   }
 
   private func makeTimeline() -> Timeline {

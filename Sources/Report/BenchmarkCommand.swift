@@ -6,7 +6,6 @@ import Benchmark
 public enum ReportFormat: String, Sendable, Codable, CaseIterable {
   case console
   case json
-  case markdown
   case speedscope
 
   public func render(_ document: ReportDocument) throws -> String {
@@ -15,8 +14,6 @@ public enum ReportFormat: String, Sendable, Codable, CaseIterable {
       return ConsoleReportRenderer.render(document)
     case .json:
       return try JSONReportRenderer.render(document)
-    case .markdown:
-      return MarkdownReportRenderer.render(document)
     case .speedscope:
       return try SpeedscopeReportRenderer.render(document)
     }
@@ -39,9 +36,7 @@ public struct BenchmarkCommand: Sendable {
     suites: [BenchmarkSuite],
     metadata: RunMetadata,
     baseline: BaselineDocument? = nil,
-    baselineMetric: Report.Measurement.Metric = .mean,
-    threshold: ThresholdPolicy = .relativePercentage(10),
-    budgets: [BudgetPolicy] = [],
+    comparison: ComparisonPolicy = .default,
     attributions: [TimelineAttribution] = [],
     diagnostics: [DiagnosticMetric] = [],
     attachments: [DiagnosticAttachment] = [],
@@ -56,9 +51,7 @@ public struct BenchmarkCommand: Sendable {
       plan: BenchmarkRunner.Plan(suites: suites),
       metadata: metadata,
       baseline: baseline,
-      baselineMetric: baselineMetric,
-      threshold: threshold,
-      budgets: budgets,
+      comparison: comparison,
       attributions: attributions,
       diagnostics: diagnostics,
       attachments: attachments,
@@ -75,9 +68,7 @@ public struct BenchmarkCommand: Sendable {
     plan: BenchmarkRunner.Plan,
     metadata: RunMetadata,
     baseline: BaselineDocument? = nil,
-    baselineMetric: Report.Measurement.Metric = .mean,
-    threshold: ThresholdPolicy = .relativePercentage(10),
-    budgets: [BudgetPolicy] = [],
+    comparison: ComparisonPolicy = .default,
     attributions: [TimelineAttribution] = [],
     diagnostics: [DiagnosticMetric] = [],
     attachments: [DiagnosticAttachment] = [],
@@ -93,9 +84,7 @@ public struct BenchmarkCommand: Sendable {
         plan: plan,
         metadata: metadata,
         baseline: baseline,
-        baselineMetric: baselineMetric,
-        threshold: threshold,
-        budgets: budgets,
+        comparison: comparison,
         attributions: attributions,
         diagnostics: diagnostics,
         attachments: attachments,
@@ -112,9 +101,7 @@ public struct BenchmarkCommand: Sendable {
     plan: BenchmarkRunner.Plan,
     metadata: RunMetadata,
     baseline: BaselineDocument? = nil,
-    baselineMetric: Report.Measurement.Metric = .mean,
-    threshold: ThresholdPolicy = .relativePercentage(10),
-    budgets: [BudgetPolicy] = [],
+    comparison: ComparisonPolicy = .default,
     attributions: [TimelineAttribution] = [],
     diagnostics: [DiagnosticMetric] = [],
     attachments: [DiagnosticAttachment] = [],
@@ -184,9 +171,7 @@ public struct BenchmarkCommand: Sendable {
     let document = await reportRecorder.document(
       metadata: metadata,
       baseline: baseline,
-      baselineMetric: baselineMetric,
-      threshold: threshold,
-      budgets: budgets,
+      comparison: comparison,
       attributions: collectedAttributions,
       diagnostics: collectedDiagnostics,
       attachments: collectedAttachments

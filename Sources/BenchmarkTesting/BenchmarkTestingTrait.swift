@@ -10,22 +10,16 @@ import Report
   public struct BenchmarkTestingTrait: TestTrait, SuiteTrait {
     public var configuration: BenchmarkConfiguration?
     public var baseline: BaselineDocument?
-    public var baselineMetric: Report.Measurement.Metric
-    public var threshold: ThresholdPolicy
-    public var budgets: [BudgetPolicy]
+    public var comparison: ComparisonPolicy
 
     public init(
       configuration: BenchmarkConfiguration? = nil,
       baseline: BaselineDocument? = nil,
-      baselineMetric: Report.Measurement.Metric = .mean,
-      threshold: ThresholdPolicy = .relativePercentage(10),
-      budgets: [BudgetPolicy] = []
+      comparison: ComparisonPolicy = .default
     ) {
       self.configuration = configuration
       self.baseline = baseline
-      self.baselineMetric = baselineMetric
-      self.threshold = threshold
-      self.budgets = budgets
+      self.comparison = comparison
     }
   }
 
@@ -33,17 +27,10 @@ import Report
     public static func benchmark(
       configuration: BenchmarkConfiguration? = nil,
       baseline: BaselineDocument? = nil,
-      baselineMetric: Report.Measurement.Metric = .mean,
-      threshold: ThresholdPolicy = .relativePercentage(10),
-      budgets: [BudgetPolicy] = []
+      comparison: ComparisonPolicy = .default
     ) -> BenchmarkTestingTrait {
       BenchmarkTestingTrait(
-        configuration: configuration,
-        baseline: baseline,
-        baselineMetric: baselineMetric,
-        threshold: threshold,
-        budgets: budgets
-      )
+        configuration: configuration, baseline: baseline, comparison: comparison)
     }
   }
 
@@ -51,17 +38,10 @@ import Report
     public static func benchmark(
       configuration: BenchmarkConfiguration? = nil,
       baseline: BaselineDocument? = nil,
-      baselineMetric: Report.Measurement.Metric = .mean,
-      threshold: ThresholdPolicy = .relativePercentage(10),
-      budgets: [BudgetPolicy] = []
+      comparison: ComparisonPolicy = .default
     ) -> BenchmarkTestingTrait {
       BenchmarkTestingTrait(
-        configuration: configuration,
-        baseline: baseline,
-        baselineMetric: baselineMetric,
-        threshold: threshold,
-        budgets: budgets
-      )
+        configuration: configuration, baseline: baseline, comparison: comparison)
     }
   }
 #endif

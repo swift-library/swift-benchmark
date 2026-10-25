@@ -25,14 +25,13 @@ public struct BenchmarkExecutionContext: Sendable, Equatable {
 
 public protocol BenchmarkExecutionObserver: Sendable {
   func benchmarkWillRun(context: BenchmarkExecutionContext) async
-  func benchmarkDidRun(context: BenchmarkExecutionContext, durationNanoseconds: UInt64?) async
+  /// Called after a warmup call or a measured sample. `sample` is `nil` for warmup.
+  func benchmarkDidRun(context: BenchmarkExecutionContext, sample: Sample?) async
   func benchmarkDidFail(context: BenchmarkExecutionContext, error: any Error) async
 }
 
 extension BenchmarkExecutionObserver {
   public func benchmarkWillRun(context: BenchmarkExecutionContext) async {}
-  public func benchmarkDidRun(context: BenchmarkExecutionContext, durationNanoseconds: UInt64?)
-    async
-  {}
+  public func benchmarkDidRun(context: BenchmarkExecutionContext, sample: Sample?) async {}
   public func benchmarkDidFail(context: BenchmarkExecutionContext, error: any Error) async {}
 }
