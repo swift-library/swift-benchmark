@@ -29,18 +29,21 @@ struct BenchmarkCommandTests {
   func commandRunsSuitesThroughBenchmarkAndReport() async throws {
     let suite = BenchmarkSuite(
       "Command",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(2))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(2), batching: .fixed(1))
     ) {
       Benchmark("Measured") {
         blackHole(1)
       }
     }
-    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100)))
-      .run(
-        suites: [suite],
-        metadata: .fixture(),
-        format: .json
-      )
+    let output = try await BenchmarkCommand(
+      runner: BenchmarkRunner(clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
+    )
+    .run(
+      suites: [suite],
+      metadata: .fixture(),
+      format: .json
+    )
     let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
     let report = try #require(document.suites.first?.cases.first)
 
@@ -53,21 +56,24 @@ struct BenchmarkCommandTests {
   func commandCollectsOptionalDiagnosticsIntoReport() async throws {
     let suite = BenchmarkSuite(
       "Command",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("Measured") {
         blackHole(1)
       }
     }
-    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100)))
-      .run(
-        suites: [suite],
-        metadata: .fixture(),
-        metricProviders: [
-          UnavailableMetricProvider(metricName: "metrickit.cpu", reason: "MetricKit unavailable")
-        ],
-        format: .json
-      )
+    let output = try await BenchmarkCommand(
+      runner: BenchmarkRunner(clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
+    )
+    .run(
+      suites: [suite],
+      metadata: .fixture(),
+      metricProviders: [
+        UnavailableMetricProvider(metricName: "metrickit.cpu", reason: "MetricKit unavailable")
+      ],
+      format: .json
+    )
     let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
     let report = try #require(document.suites.first?.cases.first)
 
@@ -80,19 +86,22 @@ struct BenchmarkCommandTests {
   func commandCanCaptureBenchmarkIterationTimelineAttribution() async throws {
     let suite = BenchmarkSuite(
       "Command",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(2))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(2), batching: .fixed(1))
     ) {
       Benchmark("Measured") {
         blackHole(1)
       }
     }
-    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100)))
-      .run(
-        suites: [suite],
-        metadata: .fixture(),
-        timelineCapture: .benchmarkIterations,
-        format: .json
-      )
+    let output = try await BenchmarkCommand(
+      runner: BenchmarkRunner(clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
+    )
+    .run(
+      suites: [suite],
+      metadata: .fixture(),
+      timelineCapture: .benchmarkIterations,
+      format: .json
+    )
     let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
     let report = try #require(document.suites.first?.cases.first)
 
@@ -114,7 +123,8 @@ struct BenchmarkCommandTests {
   func commandCapturesWorkloadSpansAsTimelineDescendants() async throws {
     let suite = BenchmarkSuite(
       "Command",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("Measured") {
         Instruments.current.span("Parser.normalize") {
@@ -123,13 +133,15 @@ struct BenchmarkCommandTests {
         }
       }
     }
-    let output = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100)))
-      .run(
-        suites: [suite],
-        metadata: .fixture(),
-        timelineCapture: .benchmarkIterations,
-        format: .json
-      )
+    let output = try await BenchmarkCommand(
+      runner: BenchmarkRunner(clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
+    )
+    .run(
+      suites: [suite],
+      metadata: .fixture(),
+      timelineCapture: .benchmarkIterations,
+      format: .json
+    )
     let document = try JSONDecoder().decode(ReportDocument.self, from: Data(output.utf8))
     let report = try #require(document.suites.first?.cases.first)
     let attribution = try #require(report.attributions.first)
@@ -149,7 +161,8 @@ struct BenchmarkCommandTests {
     let previous = IdentityRecorder()
     let suite = BenchmarkSuite(
       "Command",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("Throws") {
         throw DummyError.boom
@@ -158,7 +171,10 @@ struct BenchmarkCommandTests {
 
     await Instruments.withCurrentRecorder(previous) {
       do {
-        _ = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100))).run(
+        _ = try await BenchmarkCommand(
+          runner: BenchmarkRunner(
+            clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
+        ).run(
           suites: [suite],
           metadata: .fixture(),
           timelineCapture: .benchmarkIterations,
@@ -175,7 +191,8 @@ struct BenchmarkCommandTests {
   func commandFailsWhenRequiredDiagnosticIsUnavailable() async throws {
     let suite = BenchmarkSuite(
       "Command",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("Measured") {
         blackHole(1)
@@ -183,7 +200,10 @@ struct BenchmarkCommandTests {
     }
 
     do {
-      _ = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100))).run(
+      _ = try await BenchmarkCommand(
+        runner: BenchmarkRunner(
+          clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
+      ).run(
         suites: [suite],
         metadata: .fixture(),
         metricProviders: [
@@ -205,7 +225,8 @@ struct BenchmarkCommandTests {
   func commandFailsWhenRequiredTraceArtifactIsUnavailable() async throws {
     let suite = BenchmarkSuite(
       "Command",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("Measured") {
         blackHole(1)
@@ -213,7 +234,10 @@ struct BenchmarkCommandTests {
     }
 
     do {
-      _ = try await BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 100))).run(
+      _ = try await BenchmarkCommand(
+        runner: BenchmarkRunner(
+          clock: StepClock(step: 100), cpuClock: nil, countsAllocations: false)
+      ).run(
         suites: [suite],
         metadata: .fixture(),
         traceExporters: [
@@ -274,6 +298,8 @@ struct BenchmarkCommandTests {
         "fast",
         "--warmup",
         "0",
+        "--batch-size",
+        "1",
         "--iterations",
         "2",
         "--format",
@@ -285,9 +311,11 @@ struct BenchmarkCommandTests {
     let report = try #require(document.suites.first?.cases.first)
 
     #expect(report.tags == ["macro-host", "fast"])
-    #expect(report.samples.count == 2)
+    #expect(report.samples.filter { $0.value(for: .wallClock) != nil }.count == 2)
+    #expect(report.samples.allSatisfy { $0.batchSize == 1 })
     #expect(report.configuration.warmup == "none")
     #expect(report.configuration.iterations == "iterations(2)")
+    #expect(report.configuration.batching == "fixed(1)")
   }
 
   @Test
@@ -369,6 +397,8 @@ struct BenchmarkCommandTests {
           "wallClock=10ms",
           "--warmup",
           "0",
+          "--batch-size",
+          "1",
           "--iterations",
           "1",
           "--format",
@@ -382,7 +412,9 @@ struct BenchmarkCommandTests {
       #expect(document.summary.verdict == .failed)
       #expect(document.summary.failedRegressionCount == 1)
     }
-    #expect(HostCheckWorkload.shared.invocationCount == 1)
+    // One timed call produced the reported verdict; the second call is the
+    // allocation counting pass, which records no time.
+    #expect(HostCheckWorkload.shared.invocationCount == 2)
   }
 }
 

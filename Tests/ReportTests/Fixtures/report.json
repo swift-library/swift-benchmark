@@ -34,6 +34,7 @@
             }
           ],
           "configuration": {
+            "batching": "fixed(1)",
             "iterations": "iterations(2)",
             "warmup": "none"
           },

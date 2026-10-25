@@ -54,6 +54,7 @@ extension Benchmark.Event {
     public var sourceLocation: BenchmarkSourceLocation?
     public var configurationWarmup: String?
     public var configurationIterations: String?
+    public var configurationBatching: String?
     public var message: String?
 
     public init(
@@ -72,6 +73,7 @@ extension Benchmark.Event {
       sourceLocation: BenchmarkSourceLocation? = nil,
       configurationWarmup: String? = nil,
       configurationIterations: String? = nil,
+      configurationBatching: String? = nil,
       message: String? = nil
     ) {
       self.suiteName = suiteName
@@ -89,6 +91,7 @@ extension Benchmark.Event {
       self.sourceLocation = sourceLocation
       self.configurationWarmup = configurationWarmup
       self.configurationIterations = configurationIterations
+      self.configurationBatching = configurationBatching
       self.message = message
     }
 
@@ -117,6 +120,7 @@ extension Benchmark.Event {
         sourceLocation: step.benchmarkCase.sourceLocation,
         configurationWarmup: String(describing: step.configuration.warmup),
         configurationIterations: String(describing: step.configuration.iterations),
+        configurationBatching: String(describing: step.configuration.batching),
         message: message
       )
     }

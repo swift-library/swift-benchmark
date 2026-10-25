@@ -459,7 +459,8 @@ extension BenchmarkConfigurationReport {
   init(_ configuration: BenchmarkConfiguration) {
     self.init(
       warmup: String(describing: configuration.warmup),
-      iterations: String(describing: configuration.iterations)
+      iterations: String(describing: configuration.iterations),
+      batching: String(describing: configuration.batching)
     )
   }
 }

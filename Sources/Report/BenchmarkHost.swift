@@ -135,7 +135,7 @@ public enum BenchmarkHost {
 
     Commands:
       list [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json]
-      run [--suite <name>] [--case <name>] [--tag <tag>] [--warmup <n>] [--iterations <n>] [--adaptive] [--min-duration-ns <n>] [--max-duration-ns <n>] [--format console|json|speedscope] [--baseline <path>] [--statistic <name>] [--threshold [<metric>=]<value>] [--budget <metric>:<statistic>:<value>] [--output <path>] [--trace <path>] [--required-trace <path>]
+      run [--suite <name>] [--case <name>] [--tag <tag>] [--warmup <n>] [--iterations <n>] [--batch-size <n>] [--adaptive] [--min-duration-ns <n>] [--max-duration-ns <n>] [--format console|json|speedscope] [--baseline <path>] [--statistic <name>] [--threshold [<metric>=]<value>] [--budget <metric>:<statistic>:<value>] [--output <path>] [--trace <path>] [--required-trace <path>]
       check --baseline <path> [--suite <name>] [--case <name>] [--tag <tag>]
       trace [same options as run, with timeline capture enabled]
     """
@@ -259,8 +259,16 @@ private struct BenchmarkHostOptions {
   {
     BenchmarkConfiguration(
       warmup: try warmup(default: configuration.warmup),
-      iterations: try iterations(default: configuration.iterations)
+      iterations: try iterations(default: configuration.iterations),
+      batching: try batching(default: configuration.batching)
     )
+  }
+
+  func batching(default defaultPolicy: BatchingPolicy) throws -> BatchingPolicy {
+    guard let count = try intValue(for: "--batch-size") else {
+      return defaultPolicy
+    }
+    return .fixed(count)
   }
 
   func warmup(default defaultPolicy: WarmupPolicy) throws -> WarmupPolicy {

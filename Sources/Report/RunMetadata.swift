@@ -97,10 +97,12 @@ enum SystemArchitecture {
 public struct BenchmarkConfigurationReport: Sendable, Equatable, Codable {
   public var warmup: String
   public var iterations: String
+  public var batching: String
 
-  public init(warmup: String, iterations: String) {
+  public init(warmup: String, iterations: String, batching: String) {
     self.warmup = warmup
     self.iterations = iterations
+    self.batching = batching
   }
 }
 

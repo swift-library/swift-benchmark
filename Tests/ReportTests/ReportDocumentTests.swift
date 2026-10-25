@@ -14,7 +14,8 @@ struct ReportDocumentTests {
     let result = BenchmarkResult(
       suiteName: "Parser",
       caseName: "ParseDocument",
-      configuration: BenchmarkConfiguration(warmup: .iterations(1), iterations: .iterations(2)),
+      configuration: BenchmarkConfiguration(
+        warmup: .iterations(1), iterations: .iterations(2), batching: .fixed(1)),
       tags: ["parser", "critical"],
       measurement: Measurement(samples: wallClockSamples([1_000, 3_000]))
     )
@@ -87,7 +88,8 @@ struct ReportDocumentTests {
   func reportRecorderBuildsReportDocumentFromBenchmarkEventStream() async throws {
     let suite = BenchmarkSuite(
       "Events",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(2)),
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(2), batching: .fixed(1)),
       traits: [.tag("event-report")]
     ) {
       Benchmark("Measured") {
@@ -95,7 +97,8 @@ struct ReportDocumentTests {
       }
     }
     let recorder = ReportRecorder()
-    let runner = BenchmarkRunner(clock: ReportStepClock(step: 11))
+    let runner = BenchmarkRunner(
+      clock: ReportStepClock(step: 11), cpuClock: nil, countsAllocations: false)
 
     let results = try await runner.run(suite, eventRecorders: [recorder])
     let metadata = RunMetadata.fixture()
@@ -141,7 +144,8 @@ struct ReportDocumentTests {
         line: 42,
         column: 5
       ),
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(3)),
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(3), batching: .fixed(1)),
       measurement: Measurement(samples: wallClockSamples([1_000, 2_000, 3_000]))
     )
     let baseline = BaselineDocument(cases: [
@@ -279,7 +283,8 @@ struct ReportDocumentTests {
     let result = BenchmarkResult(
       suiteName: "Parser",
       caseName: "ParseDocument",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1)),
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1)),
       measurement: Measurement(samples: [Sample(iteration: 1, values: [.wallClock: 20])])
     )
     let metadata = RunMetadata.fixture()

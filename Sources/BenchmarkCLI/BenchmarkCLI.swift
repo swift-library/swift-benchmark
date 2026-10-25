@@ -100,6 +100,7 @@ struct BenchmarkCLI {
       --tag <tag>
       --warmup <n>
       --iterations <n>
+      --batch-size <n>   (default: automatic batching)
       --adaptive
       --min-iterations <n>
       --max-iterations <n>

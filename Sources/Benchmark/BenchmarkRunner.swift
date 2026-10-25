@@ -3,9 +3,26 @@
 
 public struct BenchmarkRunner: Sendable {
   public let clock: any BenchmarkClock
+  /// Reads CPU time for ``Benchmark/Metric/cpuTime``; `nil` leaves the metric out.
+  public let cpuClock: (any BenchmarkClock)?
+  /// Whether each step ends with a pass that counts Swift heap allocations and
+  /// reference-counting operations.
+  public let countsAllocations: Bool
+  /// Whether each step records ``Benchmark/Metric/peakMemory``. Enable it only
+  /// when the process measures a single step, because the footprint peak
+  /// covers the whole process lifetime.
+  public let recordsPeakMemory: Bool
 
-  public init(clock: any BenchmarkClock = ContinuousBenchmarkClock()) {
+  public init(
+    clock: any BenchmarkClock = ContinuousBenchmarkClock(),
+    cpuClock: (any BenchmarkClock)? = ProcessCPUClock(),
+    countsAllocations: Bool = true,
+    recordsPeakMemory: Bool = false
+  ) {
     self.clock = clock
+    self.cpuClock = cpuClock
+    self.countsAllocations = countsAllocations
+    self.recordsPeakMemory = recordsPeakMemory
   }
 
   public func run(
@@ -134,14 +151,14 @@ public struct BenchmarkRunner: Sendable {
       context: Benchmark.Event.Context(step: step),
       eventRecorders: eventRecorders
     )
-    let operation: @Sendable () async throws -> Void
+    let workload: BenchmarkWorkload
     do {
       guard step.action.isMeasure, let row = step.caseRow else {
         throw BenchmarkRunnerError.invalidConfiguration(
           "Step '\(step.id)' does not contain a measurement row."
         )
       }
-      operation = try await row.makeOperation()
+      workload = try await row.makeOperation()
     } catch {
       throw BenchmarkRunnerError.caseFailed(
         suite: suite.name,
@@ -151,14 +168,9 @@ public struct BenchmarkRunner: Sendable {
       )
     }
 
+    var lastWarmupNanoseconds: UInt64?
     for iteration in 0..<policy.warmupCount {
-      let context = BenchmarkExecutionContext(
-        suiteName: suite.name,
-        caseName: step.benchmarkCase.name,
-        size: step.size,
-        arguments: step.arguments,
-        phase: .warmup(iteration: iteration)
-      )
+      let context = executionContext(step: step, suite: suite, phase: .warmup(iteration: iteration))
       await record(
         kind: .warmupStarted,
         context: Benchmark.Event.Context(
@@ -167,7 +179,8 @@ public struct BenchmarkRunner: Sendable {
       )
       await notifyWillRun(context: context, observers: observers)
       do {
-        try await operation()
+        let interval = try await workload.callTimed(1, clock: clock)
+        lastWarmupNanoseconds = interval.start.duration(to: interval.end)
         await notifyDidRun(context: context, sample: nil, observers: observers)
         await record(
           kind: .warmupEnded,
@@ -177,13 +190,9 @@ public struct BenchmarkRunner: Sendable {
         )
       } catch {
         await notifyDidFail(context: context, error: error, observers: observers)
-        await record(
-          kind: .issueRecorded,
-          context: Benchmark.Event.Context(
-            step: step, iteration: iteration, phase: .warmup(iteration: iteration),
-            message: String(describing: error)),
-          eventRecorders: eventRecorders
-        )
+        await recordIssue(
+          error, step: step, iteration: iteration, phase: .warmup(iteration: iteration),
+          eventRecorders: eventRecorders)
         throw BenchmarkRunnerError.caseFailed(
           suite: suite.name,
           case: step.benchmarkCase.name,
@@ -193,67 +202,98 @@ public struct BenchmarkRunner: Sendable {
       }
     }
 
+    let batchSize: Int
+    do {
+      batchSize = try await calibratedBatchSize(
+        workload, policy: policy.batching, lastWarmupNanoseconds: lastWarmupNanoseconds)
+    } catch {
+      await recordIssue(
+        error, step: step, iteration: nil, phase: .calibration, eventRecorders: eventRecorders)
+      throw BenchmarkRunnerError.caseFailed(
+        suite: suite.name, case: step.benchmarkCase.name, phase: .calibration, underlying: error)
+    }
+
     var samples: [Sample] = []
-    samples.reserveCapacity(policy.iterations.maxIterations)
+    samples.reserveCapacity(policy.iterations.maxIterations + 2)
     while policy.iterations.shouldContinue(after: samples) {
       let iteration = samples.count
-      let context = BenchmarkExecutionContext(
-        suiteName: suite.name,
-        caseName: step.benchmarkCase.name,
-        size: step.size,
-        arguments: step.arguments,
-        phase: .measurement(iteration: iteration)
-      )
+      let phase = BenchmarkPhase.measurement(iteration: iteration)
+      let context = executionContext(step: step, suite: suite, phase: phase)
       await record(
         kind: .iterationStarted,
-        context: Benchmark.Event.Context(
-          step: step, iteration: iteration, phase: .measurement(iteration: iteration)),
+        context: Benchmark.Event.Context(step: step, iteration: iteration, phase: phase),
         eventRecorders: eventRecorders
       )
       await notifyWillRun(context: context, observers: observers)
-      let start = clock.now()
+      let sample: Sample
       do {
-        try await operation()
+        sample = try await measureSample(workload, iteration: iteration, batchSize: batchSize)
       } catch {
         await notifyDidFail(context: context, error: error, observers: observers)
-        await record(
-          kind: .issueRecorded,
-          context: Benchmark.Event.Context(
-            step: step, iteration: iteration, phase: .measurement(iteration: iteration),
-            message: String(describing: error)),
-          eventRecorders: eventRecorders
-        )
+        await recordIssue(
+          error, step: step, iteration: iteration, phase: phase, eventRecorders: eventRecorders)
         throw BenchmarkRunnerError.caseFailed(
           suite: suite.name,
           case: step.benchmarkCase.name,
-          phase: .measurement(iteration: iteration),
+          phase: phase,
           underlying: error
         )
       }
-      let end = clock.now()
-      let sample = Sample(
-        iteration: iteration,
-        values: [.wallClock: Double(start.duration(to: end))]
-      )
       samples.append(sample)
       await record(
         kind: .sampleRecorded,
         context: Benchmark.Event.Context(
-          step: step,
-          iteration: iteration,
-          phase: .measurement(iteration: iteration),
-          sample: sample
-        ),
+          step: step, iteration: iteration, phase: phase, sample: sample),
         eventRecorders: eventRecorders
       )
       await notifyDidRun(context: context, sample: sample, observers: observers)
       await record(
         kind: .iterationEnded,
-        context: Benchmark.Event.Context(
-          step: step,
-          iteration: iteration,
-          phase: .measurement(iteration: iteration)
-        ),
+        context: Benchmark.Event.Context(step: step, iteration: iteration, phase: phase),
+        eventRecorders: eventRecorders
+      )
+    }
+
+    if countsAllocations {
+      let counts: RuntimeCounters.Counts?
+      do {
+        counts = try await RuntimeCounters.counting {
+          try await workload.callRepeatedly(batchSize)
+        }
+      } catch {
+        await recordIssue(
+          error, step: step, iteration: nil, phase: .counting, eventRecorders: eventRecorders)
+        throw BenchmarkRunnerError.caseFailed(
+          suite: suite.name, case: step.benchmarkCase.name, phase: .counting, underlying: error)
+      }
+      if let counts {
+        let calls = Double(batchSize)
+        let sample = Sample(
+          iteration: samples.count,
+          batchSize: batchSize,
+          values: [
+            .allocations: Double(counts.allocations) / calls,
+            .allocatedBytes: Double(counts.allocatedBytes) / calls,
+            .retains: Double(counts.retains) / calls,
+            .releases: Double(counts.releases) / calls,
+          ]
+        )
+        samples.append(sample)
+        await record(
+          kind: .sampleRecorded,
+          context: Benchmark.Event.Context(
+            step: step, iteration: sample.iteration, phase: .counting, sample: sample),
+          eventRecorders: eventRecorders
+        )
+      }
+    }
+
+    if recordsPeakMemory, let peak = PhysicalFootprint.peak() {
+      let sample = Sample(iteration: samples.count, values: [.peakMemory: Double(peak)])
+      samples.append(sample)
+      await record(
+        kind: .sampleRecorded,
+        context: Benchmark.Event.Context(step: step, iteration: sample.iteration, sample: sample),
         eventRecorders: eventRecorders
       )
     }
@@ -268,6 +308,89 @@ public struct BenchmarkRunner: Sendable {
       size: step.size,
       arguments: step.arguments,
       samples: samples
+    )
+  }
+
+  /// Measures one timed sample of `batchSize` calls: wall-clock time, CPU
+  /// time and any values the workload records, each divided by the batch size.
+  private func measureSample(
+    _ workload: BenchmarkWorkload,
+    iteration: Int,
+    batchSize: Int
+  ) async throws -> Sample {
+    let recorder = CustomMetricRecorder()
+    let cpuStart = cpuClock?.now()
+    let interval = try await CustomMetricRecorder.$current.withValue(recorder) {
+      try await workload.callTimed(batchSize, clock: clock)
+    }
+    let cpuEnd = cpuClock?.now()
+    let calls = Double(batchSize)
+    var values: [Benchmark.Metric: Double] = recorder.values().mapValues { $0 / calls }
+    values[.wallClock] = Double(interval.start.duration(to: interval.end)) / calls
+    if let cpuStart, let cpuEnd {
+      values[.cpuTime] = Double(cpuStart.duration(to: cpuEnd)) / calls
+    }
+    return Sample(iteration: iteration, batchSize: batchSize, values: values)
+  }
+
+  /// Chooses how many calls each sample measures. Automatic batching grows
+  /// the batch until one batch lasts the target duration; the timed batches
+  /// it runs are not recorded.
+  private func calibratedBatchSize(
+    _ workload: BenchmarkWorkload,
+    policy: BatchingPolicy,
+    lastWarmupNanoseconds: UInt64?
+  ) async throws -> Int {
+    switch policy {
+    case .fixed(let count):
+      return count
+    case .automatic(let targetNanoseconds, let maxBatchSize):
+      if let lastWarmupNanoseconds, lastWarmupNanoseconds >= targetNanoseconds {
+        return 1
+      }
+      var count = 1
+      while count < maxBatchSize {
+        let interval = try await workload.callTimed(count, clock: clock)
+        let elapsed = interval.start.duration(to: interval.end)
+        if elapsed >= targetNanoseconds {
+          break
+        }
+        let estimate =
+          elapsed == 0
+          ? count * 100
+          : Int((Double(count) * Double(targetNanoseconds) / Double(elapsed)).rounded(.up))
+        count = min(maxBatchSize, max(count * 2, min(estimate, count * 100)))
+      }
+      return count
+    }
+  }
+
+  private func executionContext(
+    step: Plan.Step,
+    suite: BenchmarkSuite,
+    phase: BenchmarkPhase
+  ) -> BenchmarkExecutionContext {
+    BenchmarkExecutionContext(
+      suiteName: suite.name,
+      caseName: step.benchmarkCase.name,
+      size: step.size,
+      arguments: step.arguments,
+      phase: phase
+    )
+  }
+
+  private func recordIssue(
+    _ error: any Error,
+    step: Plan.Step,
+    iteration: Int?,
+    phase: BenchmarkPhase,
+    eventRecorders: [any BenchmarkEventRecorder]
+  ) async {
+    await record(
+      kind: .issueRecorded,
+      context: Benchmark.Event.Context(
+        step: step, iteration: iteration, phase: phase, message: String(describing: error)),
+      eventRecorders: eventRecorders
     )
   }
 
@@ -333,7 +456,9 @@ public enum BenchmarkPhase: Sendable, Equatable {
   case configuration
   case dimensionSetup(size: Benchmark.Scale?)
   case warmup(iteration: Int)
+  case calibration
   case measurement(iteration: Int)
+  case counting
 }
 
 public enum BenchmarkRunnerError: Error, CustomStringConvertible {

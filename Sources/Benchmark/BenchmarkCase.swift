@@ -24,7 +24,7 @@ public struct BenchmarkCase: Sendable {
   public let traits: [any BenchmarkCaseTrait]
   public let dimension: Benchmark.Dimension?
   let parameterizedRows: [BenchmarkCaseRow]?
-  let makeOperation: @Sendable (Benchmark.Scale?) async throws -> @Sendable () async throws -> Void
+  let makeOperation: @Sendable (Benchmark.Scale?) async throws -> BenchmarkWorkload
 
   private init(
     _ name: String,
@@ -37,9 +37,7 @@ public struct BenchmarkCase: Sendable {
     traits: [any BenchmarkCaseTrait],
     dimension: Benchmark.Dimension?,
     parameterizedRows: [BenchmarkCaseRow]? = nil,
-    makeOperation:
-      @escaping @Sendable (Benchmark.Scale?) async throws ->
-      @Sendable () async throws -> Void
+    makeOperation: @escaping @Sendable (Benchmark.Scale?) async throws -> BenchmarkWorkload
   ) {
     self.name = name
     self.configuration = configuration
@@ -78,7 +76,7 @@ public struct BenchmarkCase: Sendable {
       column: column,
       traits: traits,
       dimension: nil,
-      makeOperation: { _ in operation }
+      makeOperation: { _ in .asynchronous(operation) }
     )
   }
 
@@ -103,7 +101,7 @@ public struct BenchmarkCase: Sendable {
       column: column,
       traits: traits,
       dimension: nil,
-      makeOperation: { _ in { try operation() } }
+      makeOperation: { _ in .synchronous(operation) }
     )
   }
 
@@ -128,7 +126,7 @@ public struct BenchmarkCase: Sendable {
       column: column,
       traits: traits,
       dimension: nil,
-      makeOperation: { _ in { operation() } }
+      makeOperation: { _ in .synchronous(operation) }
     )
   }
 
@@ -153,11 +151,7 @@ public struct BenchmarkCase: Sendable {
       column: column,
       traits: traits,
       dimension: nil,
-      makeOperation: { _ in
-        {
-          blackHole(try await operation())
-        }
-      }
+      makeOperation: { _ in .asynchronous { blackHole(try await operation()) } }
     )
   }
 
@@ -182,11 +176,7 @@ public struct BenchmarkCase: Sendable {
       column: column,
       traits: traits,
       dimension: nil,
-      makeOperation: { _ in
-        {
-          blackHole(await operation())
-        }
-      }
+      makeOperation: { _ in .asynchronous { blackHole(await operation()) } }
     )
   }
 
@@ -211,11 +201,7 @@ public struct BenchmarkCase: Sendable {
       column: column,
       traits: traits,
       dimension: nil,
-      makeOperation: { _ in
-        {
-          blackHole(try operation())
-        }
-      }
+      makeOperation: { _ in .synchronous { blackHole(try operation()) } }
     )
   }
 
@@ -240,11 +226,7 @@ public struct BenchmarkCase: Sendable {
       column: column,
       traits: traits,
       dimension: nil,
-      makeOperation: { _ in
-        {
-          blackHole(operation())
-        }
-      }
+      makeOperation: { _ in .synchronous { blackHole(operation()) } }
     )
   }
 
@@ -260,35 +242,34 @@ public struct BenchmarkCase: Sendable {
     column: Int = #column,
     _ operation: @escaping @Sendable (C.Element) async throws -> Void
   ) where C.Element: Sendable {
-    let values = Array(arguments)
-    let rows = values.enumerated().map { index, value in
-      BenchmarkCaseRow(
-        metadata: Benchmark.ArgumentRow(
-          id: Self.argumentRowID(index: index, values: [value as Any]),
-          arguments: [Benchmark.ArgumentValue(value)]
-        ),
-        makeOperation: {
-          {
-            try await operation(value)
-          }
-        }
-      )
-    }
     self.init(
-      name,
-      configuration: configuration,
-      sourceLocation: sourceLocation,
-      fileID: fileID,
-      filePath: filePath,
-      line: line,
-      column: column,
-      traits: traits,
-      dimension: nil,
-      parameterizedRows: rows,
-      makeOperation: { _ in
-        throw BenchmarkRunnerError.invalidConfiguration(
-          "Parameterized benchmark '\(name)' requires an argument row."
-        )
+      name, configuration: configuration, sourceLocation: sourceLocation, fileID: fileID,
+      filePath: filePath, line: line, column: column, traits: traits,
+      rows: Self.rows(arguments.map { value in [value] }) { values in
+        let value = values[0] as! C.Element
+        return .asynchronous { try await operation(value) }
+      }
+    )
+  }
+
+  public init<C: Collection>(
+    _ name: String,
+    arguments: C,
+    configuration: BenchmarkConfiguration? = nil,
+    traits: [any BenchmarkCaseTrait] = [],
+    sourceLocation: BenchmarkSourceLocation? = nil,
+    fileID: String = #fileID,
+    filePath: String = #filePath,
+    line: Int = #line,
+    column: Int = #column,
+    _ operation: @escaping @Sendable (C.Element) throws -> Void
+  ) where C.Element: Sendable {
+    self.init(
+      name, configuration: configuration, sourceLocation: sourceLocation, fileID: fileID,
+      filePath: filePath, line: line, column: column, traits: traits,
+      rows: Self.rows(arguments.map { value in [value] }) { values in
+        let value = values[0] as! C.Element
+        return .synchronous { try operation(value) }
       }
     )
   }
@@ -306,46 +287,35 @@ public struct BenchmarkCase: Sendable {
     column: Int = #column,
     _ operation: @escaping @Sendable (C1.Element, C2.Element) async throws -> Void
   ) where C1.Element: Sendable, C2.Element: Sendable {
-    let values1 = Array(collection1)
-    let values2 = Array(collection2)
-    var rows: [BenchmarkCaseRow] = []
-    var index = 0
-    for value1 in values1 {
-      for value2 in values2 {
-        rows.append(
-          BenchmarkCaseRow(
-            metadata: Benchmark.ArgumentRow(
-              id: Self.argumentRowID(index: index, values: [value1 as Any, value2 as Any]),
-              arguments: [
-                Benchmark.ArgumentValue(value1),
-                Benchmark.ArgumentValue(value2),
-              ]
-            ),
-            makeOperation: {
-              {
-                try await operation(value1, value2)
-              }
-            }
-          )
-        )
-        index += 1
-      }
-    }
     self.init(
-      name,
-      configuration: configuration,
-      sourceLocation: sourceLocation,
-      fileID: fileID,
-      filePath: filePath,
-      line: line,
-      column: column,
-      traits: traits,
-      dimension: nil,
-      parameterizedRows: rows,
-      makeOperation: { _ in
-        throw BenchmarkRunnerError.invalidConfiguration(
-          "Parameterized benchmark '\(name)' requires an argument row."
-        )
+      name, configuration: configuration, sourceLocation: sourceLocation, fileID: fileID,
+      filePath: filePath, line: line, column: column, traits: traits,
+      rows: Self.rows(Self.product(collection1, collection2)) { values in
+        let (value1, value2) = (values[0] as! C1.Element, values[1] as! C2.Element)
+        return .asynchronous { try await operation(value1, value2) }
+      }
+    )
+  }
+
+  public init<C1: Collection, C2: Collection>(
+    _ name: String,
+    arguments collection1: C1,
+    _ collection2: C2,
+    configuration: BenchmarkConfiguration? = nil,
+    traits: [any BenchmarkCaseTrait] = [],
+    sourceLocation: BenchmarkSourceLocation? = nil,
+    fileID: String = #fileID,
+    filePath: String = #filePath,
+    line: Int = #line,
+    column: Int = #column,
+    _ operation: @escaping @Sendable (C1.Element, C2.Element) throws -> Void
+  ) where C1.Element: Sendable, C2.Element: Sendable {
+    self.init(
+      name, configuration: configuration, sourceLocation: sourceLocation, fileID: fileID,
+      filePath: filePath, line: line, column: column, traits: traits,
+      rows: Self.rows(Self.product(collection1, collection2)) { values in
+        let (value1, value2) = (values[0] as! C1.Element, values[1] as! C2.Element)
+        return .synchronous { try operation(value1, value2) }
       }
     )
   }
@@ -362,23 +332,49 @@ public struct BenchmarkCase: Sendable {
     column: Int = #column,
     _ operation: @escaping @Sendable (C1.Element, C2.Element) async throws -> Void
   ) where C1.Element: Sendable, C2.Element: Sendable {
-    let pairs = Array(zipped)
-    let rows = pairs.enumerated().map { index, pair in
-      BenchmarkCaseRow(
-        metadata: Benchmark.ArgumentRow(
-          id: Self.argumentRowID(index: index, values: [pair.0 as Any, pair.1 as Any]),
-          arguments: [
-            Benchmark.ArgumentValue(pair.0),
-            Benchmark.ArgumentValue(pair.1),
-          ]
-        ),
-        makeOperation: {
-          {
-            try await operation(pair.0, pair.1)
-          }
-        }
-      )
-    }
+    self.init(
+      name, configuration: configuration, sourceLocation: sourceLocation, fileID: fileID,
+      filePath: filePath, line: line, column: column, traits: traits,
+      rows: Self.rows(zipped.map { pair in [pair.0, pair.1] }) { values in
+        let (value1, value2) = (values[0] as! C1.Element, values[1] as! C2.Element)
+        return .asynchronous { try await operation(value1, value2) }
+      }
+    )
+  }
+
+  public init<C1: Sequence, C2: Sequence>(
+    _ name: String,
+    arguments zipped: Zip2Sequence<C1, C2>,
+    configuration: BenchmarkConfiguration? = nil,
+    traits: [any BenchmarkCaseTrait] = [],
+    sourceLocation: BenchmarkSourceLocation? = nil,
+    fileID: String = #fileID,
+    filePath: String = #filePath,
+    line: Int = #line,
+    column: Int = #column,
+    _ operation: @escaping @Sendable (C1.Element, C2.Element) throws -> Void
+  ) where C1.Element: Sendable, C2.Element: Sendable {
+    self.init(
+      name, configuration: configuration, sourceLocation: sourceLocation, fileID: fileID,
+      filePath: filePath, line: line, column: column, traits: traits,
+      rows: Self.rows(zipped.map { pair in [pair.0, pair.1] }) { values in
+        let (value1, value2) = (values[0] as! C1.Element, values[1] as! C2.Element)
+        return .synchronous { try operation(value1, value2) }
+      }
+    )
+  }
+
+  private init(
+    _ name: String,
+    configuration: BenchmarkConfiguration?,
+    sourceLocation: BenchmarkSourceLocation?,
+    fileID: String,
+    filePath: String,
+    line: Int,
+    column: Int,
+    traits: [any BenchmarkCaseTrait],
+    rows: [BenchmarkCaseRow]
+  ) {
     self.init(
       name,
       configuration: configuration,
@@ -428,9 +424,7 @@ public struct BenchmarkCase: Sendable {
           )
         }
         let value = try await input(size)
-        return {
-          try await operation(value)
-        }
+        return .asynchronous { try await operation(value) }
       }
     )
   }
@@ -465,15 +459,38 @@ public struct BenchmarkCase: Sendable {
           )
         }
         let value = input(size)
-        return {
-          try operation(value)
-        }
+        return .synchronous { try operation(value) }
       }
     )
   }
 }
 
 extension BenchmarkCase {
+  /// Builds one argument row per element of `argumentLists`, in order.
+  fileprivate static func rows(
+    _ argumentLists: [[any Sendable]],
+    workload: @escaping @Sendable ([any Sendable]) -> BenchmarkWorkload
+  ) -> [BenchmarkCaseRow] {
+    argumentLists.enumerated().map { index, values in
+      BenchmarkCaseRow(
+        metadata: Benchmark.ArgumentRow(
+          id: argumentRowID(index: index, values: values.map { $0 as Any }),
+          arguments: values.map { Benchmark.ArgumentValue($0) }
+        ),
+        makeOperation: { workload(values) }
+      )
+    }
+  }
+
+  /// Every pair of an element of `collection1` with an element of
+  /// `collection2`, varying the second element fastest.
+  fileprivate static func product<C1: Collection, C2: Collection>(
+    _ collection1: C1,
+    _ collection2: C2
+  ) -> [[any Sendable]] where C1.Element: Sendable, C2.Element: Sendable {
+    collection1.flatMap { value1 in collection2.map { value2 in [value1, value2] } }
+  }
+
   fileprivate static func argumentRowID(index: Int, values: [Any]) -> String {
     let labels = values.map { stableIDComponent(String(describing: $0)) }
       .filter { !$0.isEmpty }

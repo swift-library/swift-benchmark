@@ -12,13 +12,14 @@ struct BenchmarkRunnerTests {
     let counter = Counter()
     let suite = BenchmarkSuite(
       "Runner",
-      configuration: BenchmarkConfiguration(warmup: .iterations(2), iterations: .iterations(3))
+      configuration: BenchmarkConfiguration(
+        warmup: .iterations(2), iterations: .iterations(3), batching: .fixed(1))
     ) {
       Benchmark("Case") {
         counter.increment()
       }
     }
-    let runner = BenchmarkRunner(clock: StepClock(step: 10))
+    let runner = exactRunner(step: 10)
 
     let results = try await runner.run(suite)
 
@@ -36,7 +37,8 @@ struct BenchmarkRunnerTests {
     let measured = Counter()
     let suite = BenchmarkSuite(
       "Runner",
-      configuration: BenchmarkConfiguration(warmup: .iterations(1), iterations: .iterations(2))
+      configuration: BenchmarkConfiguration(
+        warmup: .iterations(1), iterations: .iterations(2), batching: .fixed(1))
     ) {
       Benchmark(
         "Dimensioned",
@@ -50,7 +52,7 @@ struct BenchmarkRunnerTests {
       }
     }
 
-    let results = try await BenchmarkRunner(clock: StepClock(step: 5)).run(suite)
+    let results = try await exactRunner(step: 5).run(suite)
     let rows = try #require(results.first?.measurement.rows)
     let expectedMeasuredTotal: Int = (10 * 3) + (100 * 3)
 
@@ -67,14 +69,15 @@ struct BenchmarkRunnerTests {
     let measured = Counter()
     let suite = BenchmarkSuite(
       "Arguments",
-      configuration: BenchmarkConfiguration(warmup: .iterations(1), iterations: .iterations(2))
+      configuration: BenchmarkConfiguration(
+        warmup: .iterations(1), iterations: .iterations(2), batching: .fixed(1))
     ) {
       Benchmark("Integer", arguments: [1, 2, 4]) { value in
         measured.increment(by: value)
       }
     }
 
-    let results = try await BenchmarkRunner(clock: StepClock(step: 5)).run(suite)
+    let results = try await exactRunner(step: 5).run(suite)
     let rows = try #require(results.first?.measurement.rows)
     let expectedMeasuredTotal: Int = (1 + 2 + 4) * 3
 
@@ -87,14 +90,15 @@ struct BenchmarkRunnerTests {
   func runnerProducesRowsWithoutCurvesForStringArguments() async throws {
     let suite = BenchmarkSuite(
       "Arguments",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("Files", arguments: ["small.md", "large.md"]) { file in
         blackHole(file)
       }
     }
 
-    let results = try await BenchmarkRunner(clock: StepClock(step: 5)).run(suite)
+    let results = try await exactRunner(step: 5).run(suite)
     let rows = try #require(results.first?.measurement.rows)
 
     #expect(rows.map(\.size?.rawValue) == [nil, nil])
@@ -110,14 +114,15 @@ struct BenchmarkRunnerTests {
 
     let suite = BenchmarkSuite(
       "Arguments",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("Raw", arguments: [Fixture.small, .large]) { fixture in
         blackHole(fixture)
       }
     }
 
-    let rows = try await BenchmarkRunner(clock: StepClock(step: 5)).run(suite)
+    let rows = try await exactRunner(step: 5).run(suite)
       .first?.measurement.rows
 
     #expect(rows?.map(\.size?.rawValue) == [10, 100])
@@ -127,7 +132,8 @@ struct BenchmarkRunnerTests {
   func runnerSupportsCartesianAndZippedArguments() async throws {
     let cartesian = BenchmarkSuite(
       "Arguments",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("Cartesian", arguments: [1, 2], ["a", "b"]) { number, string in
         blackHole((number, string))
@@ -147,7 +153,8 @@ struct BenchmarkRunnerTests {
   func planFiltersAndExpandsDimensionSteps() async throws {
     let suite = BenchmarkSuite(
       "Plan",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("Plain") {}
       Benchmark(
@@ -163,7 +170,7 @@ struct BenchmarkRunnerTests {
       suites: [suite],
       filter: BenchmarkRunner.Plan.Filter(suiteName: "Plan", caseName: "Dimensioned")
     )
-    let results = try await BenchmarkRunner(clock: StepClock(step: 7)).run(plan)
+    let results = try await exactRunner(step: 7).run(plan)
 
     #expect(plan.steps.map(\.caseName) == ["Dimensioned", "Dimensioned"])
     #expect(plan.steps.map(\.size?.rawValue) == [10, 100])
@@ -176,7 +183,8 @@ struct BenchmarkRunnerTests {
     let counter = Counter()
     let suite = BenchmarkSuite(
       "TraitPlan",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1)),
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1)),
       traits: [.tag("parser")]
     ) {
       Benchmark("Runs", traits: [.tag("fast")]) {
@@ -216,7 +224,7 @@ struct BenchmarkRunnerTests {
       suites: [suite],
       filter: BenchmarkRunner.Plan.Filter(casePattern: "Run*", tags: ["fast"])
     )
-    let results = try await BenchmarkRunner(clock: StepClock(step: 1)).run(filtered)
+    let results = try await exactRunner(step: 1).run(filtered)
     #expect(results.map(\.caseName) == ["Runs"])
     #expect(counter.value == 1)
   }
@@ -225,7 +233,8 @@ struct BenchmarkRunnerTests {
   func eventStreamRecordsLifecycleAndJSONLines() async throws {
     let suite = BenchmarkSuite(
       "Events",
-      configuration: BenchmarkConfiguration(warmup: .iterations(1), iterations: .iterations(1)),
+      configuration: BenchmarkConfiguration(
+        warmup: .iterations(1), iterations: .iterations(1), batching: .fixed(1)),
       traits: [.tag("evented")]
     ) {
       Benchmark("Case") {}
@@ -233,7 +242,7 @@ struct BenchmarkRunnerTests {
     let memory = Benchmark.Event.InMemoryRecorder()
     let jsonLines = Benchmark.Event.JSONLinesRecorder()
 
-    _ = try await BenchmarkRunner(clock: StepClock(step: 3)).run(
+    _ = try await exactRunner(step: 3).run(
       suite,
       eventRecorders: [memory, jsonLines]
     )
@@ -264,13 +273,14 @@ struct BenchmarkRunnerTests {
 
     let suite = BenchmarkSuite(
       "Runner",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(2))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(2), batching: .fixed(1))
     ) {
       Benchmark("Throws") {
         throw DummyError.boom
       }
     }
-    let runner = BenchmarkRunner(clock: StepClock(step: 1))
+    let runner = exactRunner(step: 1)
 
     do {
       _ = try await runner.run(suite)
@@ -288,7 +298,7 @@ struct BenchmarkRunnerTests {
     let counter = Counter()
     let suite = BenchmarkSuite(
       "Invalid",
-      configuration: BenchmarkConfiguration(iterations: .iterations(0))
+      configuration: BenchmarkConfiguration(iterations: .iterations(0), batching: .fixed(1))
     ) {
       Benchmark("NeverRuns") {
         counter.increment()
@@ -296,7 +306,7 @@ struct BenchmarkRunnerTests {
     }
 
     do {
-      _ = try await BenchmarkRunner(clock: StepClock(step: 1)).run(suite)
+      _ = try await exactRunner(step: 1).run(suite)
       Issue.record("Expected invalid configuration to throw")
     } catch {
       #expect(counter.value == 0)
@@ -314,13 +324,14 @@ struct BenchmarkRunnerTests {
           minIterations: 1,
           maxIterations: 10,
           minDurationNanoseconds: 25
-        )
+        ),
+        batching: .fixed(1)
       )
     ) {
       Benchmark("MinimumDuration") {}
     }
 
-    let results = try await BenchmarkRunner(clock: StepClock(step: 10)).run(suite)
+    let results = try await exactRunner(step: 10).run(suite)
 
     #expect(results.first?.measurement.samples.map { $0.value(for: .wallClock) } == [10, 10, 10])
   }
@@ -335,13 +346,14 @@ struct BenchmarkRunnerTests {
           minIterations: 2,
           maxIterations: 10,
           maxDurationNanoseconds: 15
-        )
+        ),
+        batching: .fixed(1)
       )
     ) {
       Benchmark("MaximumDuration") {}
     }
 
-    let results = try await BenchmarkRunner(clock: StepClock(step: 10)).run(suite)
+    let results = try await exactRunner(step: 10).run(suite)
 
     #expect(results.first?.measurement.samples.map { $0.value(for: .wallClock) } == [10, 10])
   }
@@ -362,13 +374,17 @@ struct BenchmarkRunnerTests {
     }
 
     do {
-      _ = try await BenchmarkRunner(clock: StepClock(step: 1)).run(suite)
+      _ = try await exactRunner(step: 1).run(suite)
       Issue.record("Expected invalid adaptive configuration to throw")
     } catch {
       #expect(counter.value == 0)
       #expect(String(describing: error).contains("Adaptive maxIterations"))
     }
   }
+}
+
+private func exactRunner(step: UInt64) -> BenchmarkRunner {
+  BenchmarkRunner(clock: StepClock(step: step), cpuClock: nil, countsAllocations: false)
 }
 
 private final class Counter: @unchecked Sendable {

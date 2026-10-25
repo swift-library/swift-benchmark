@@ -6,13 +6,16 @@ public struct BenchmarkConfiguration: Sendable, Equatable {
 
   public var warmup: WarmupPolicy
   public var iterations: IterationPolicy
+  public var batching: BatchingPolicy
 
   public init(
     warmup: WarmupPolicy = .iterations(1),
-    iterations: IterationPolicy = .iterations(10)
+    iterations: IterationPolicy = .iterations(10),
+    batching: BatchingPolicy = .automatic()
   ) {
     self.warmup = warmup
     self.iterations = iterations
+    self.batching = batching
   }
 
   public func validatedCounts() throws -> (warmup: Int, iterations: Int) {
@@ -24,7 +27,8 @@ public struct BenchmarkConfiguration: Sendable, Equatable {
   public func validatedExecutionPolicy() throws -> BenchmarkExecutionPolicy {
     BenchmarkExecutionPolicy(
       warmupCount: try warmup.validatedCount(),
-      iterations: try iterations.validatedPlan()
+      iterations: try iterations.validatedPlan(),
+      batching: try batching.validated()
     )
   }
 }
@@ -32,10 +36,54 @@ public struct BenchmarkConfiguration: Sendable, Equatable {
 public struct BenchmarkExecutionPolicy: Sendable, Equatable {
   public var warmupCount: Int
   public var iterations: IterationPlan
+  public var batching: BatchingPolicy
 
-  public init(warmupCount: Int, iterations: IterationPlan) {
+  public init(
+    warmupCount: Int,
+    iterations: IterationPlan,
+    batching: BatchingPolicy = .fixed(1)
+  ) {
     self.warmupCount = warmupCount
     self.iterations = iterations
+    self.batching = batching
+  }
+}
+
+/// How many consecutive calls of the workload one sample measures.
+///
+/// Batching keeps clock reads and per-sample overhead small relative to the
+/// measured time, so short workloads are measured accurately. Every metric is
+/// reported per call.
+public enum BatchingPolicy: Sendable, Equatable, CustomStringConvertible {
+  /// Chooses the batch size so a sample lasts at least `targetNanoseconds`,
+  /// calling the workload at most `maxBatchSize` times per sample.
+  case automatic(targetNanoseconds: UInt64 = 1_000_000, maxBatchSize: Int = 1_000_000)
+  /// Calls the workload `count` times per sample.
+  case fixed(Int)
+
+  public var description: String {
+    switch self {
+    case .automatic(let targetNanoseconds, let maxBatchSize):
+      return "automatic(targetNanoseconds: \(targetNanoseconds), maxBatchSize: \(maxBatchSize))"
+    case .fixed(let count):
+      return "fixed(\(count))"
+    }
+  }
+
+  func validated() throws -> BatchingPolicy {
+    switch self {
+    case .automatic(let targetNanoseconds, let maxBatchSize):
+      guard targetNanoseconds > 0, maxBatchSize > 0 else {
+        throw BenchmarkRunnerError.invalidConfiguration(
+          "Automatic batching needs a positive target duration and maximum batch size."
+        )
+      }
+    case .fixed(let count):
+      guard count > 0 else {
+        throw BenchmarkRunnerError.invalidConfiguration("Batch size must be positive.")
+      }
+    }
+    return self
   }
 }
 

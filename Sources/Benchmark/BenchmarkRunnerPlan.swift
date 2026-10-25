@@ -387,7 +387,7 @@ private struct ResolvedCase {
   var skipReason: String?
   var tags: [String]
   var issue: BenchmarkPlanningIssue?
-  var makeOperation: @Sendable (Benchmark.Scale?) async throws -> @Sendable () async throws -> Void
+  var makeOperation: @Sendable (Benchmark.Scale?) async throws -> BenchmarkWorkload
 
   init(
     suite: BenchmarkSuite,

@@ -21,7 +21,9 @@ struct AdapterTests {
       }
     }
     let adapter = BenchmarkTestingAdapter(
-      command: BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 10))))
+      command: BenchmarkCommand(
+        runner: BenchmarkRunner(clock: StepClock(step: 10), cpuClock: nil, countsAllocations: false)
+      ))
 
     let document = try await adapter.report(
       suites: [suite], metadata: .local(id: "run:adapter", packageIdentity: "swift-benchmark"))
@@ -50,7 +52,8 @@ struct AdapterTests {
     )
     let suite = BenchmarkSuite(
       "Adapters",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("Parse") {
         blackHole(1)
@@ -70,7 +73,8 @@ struct AdapterTests {
         )
       )
     ])
-    let command = BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 10)))
+    let command = BenchmarkCommand(
+      runner: BenchmarkRunner(clock: StepClock(step: 10), cpuClock: nil, countsAllocations: false))
     let testingAdapter = BenchmarkTestingAdapter(command: command)
     let xctestAdapter = BenchmarkXCTestAdapter(command: command)
 

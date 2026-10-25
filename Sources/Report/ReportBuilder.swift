@@ -110,7 +110,8 @@ public struct ReportBuilder: Sendable {
               sourceLocation: sourceLocation,
               configuration: BenchmarkConfigurationReport(
                 warmup: accumulator.configurationWarmup ?? "unknown",
-                iterations: accumulator.configurationIterations ?? "unknown"
+                iterations: accumulator.configurationIterations ?? "unknown",
+                batching: accumulator.configurationBatching ?? "unknown"
               ),
               tags: accumulator.tags,
               measurement: measurement,
@@ -200,6 +201,7 @@ private struct CaseAccumulator {
   var sourceLocation: BenchmarkSourceLocation?
   var configurationWarmup: String?
   var configurationIterations: String?
+  var configurationBatching: String?
   var metrics: [Benchmark.Metric] = []
   var rows: [Benchmark.ArgumentRow: [SampleReport]] = [:]
 
@@ -215,6 +217,9 @@ private struct CaseAccumulator {
     }
     if configurationIterations == nil {
       configurationIterations = context.configurationIterations
+    }
+    if configurationBatching == nil {
+      configurationBatching = context.configurationBatching
     }
   }
 }
