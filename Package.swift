@@ -18,13 +18,21 @@ let package = Package(
     .executable(name: "BenchmarkCLI", targets: ["BenchmarkCLI"]),
     .plugin(name: "BenchmarkPlugin", targets: ["BenchmarkPlugin"]),
   ],
+  traits: [
+    .trait(
+      name: "Macros",
+      description:
+        "Declares the Instruments macros, which build swift-syntax. Without it, Instruments offers only its runtime API."
+    ),
+    .default(enabledTraits: ["Macros"]),
+  ],
   dependencies: [
     .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0")
   ],
   targets: [
     .target(
       name: "Instruments",
-      dependencies: ["InstrumentsMacro"],
+      dependencies: [.target(name: "InstrumentsMacro", condition: .when(traits: ["Macros"]))],
       path: "Sources/Instruments"
     ),
     .macro(

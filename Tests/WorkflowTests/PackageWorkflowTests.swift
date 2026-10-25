@@ -816,6 +816,61 @@ struct PackageWorkflowTests {
   }
 
   @Test(.timeLimit(.minutes(10)))
+  func instrumentsBuildsWithoutSwiftSyntaxWhenMacrosAreDisabled() throws {
+    let package = URL(fileURLWithPath: scratchPath("fixture-instruments-runtime-package"))
+    let scratch = URL(fileURLWithPath: scratchPath("fixture-instruments-runtime-scratch"))
+    try? FileManager.default.removeItem(at: package)
+    try? FileManager.default.removeItem(at: scratch)
+    try writeFile(
+      """
+      // swift-tools-version: 6.3
+      import PackageDescription
+
+      let package = Package(
+        name: "InstrumentsRuntime",
+        platforms: [.macOS(.v15)],
+        dependencies: [
+          .package(
+            name: "swift-benchmark", path: \(swiftStringLiteral(repositoryRoot().path)), traits: [])
+        ],
+        targets: [
+          .executableTarget(
+            name: "InstrumentsRuntime",
+            dependencies: [.product(name: "Instruments", package: "swift-benchmark")]
+          )
+        ]
+      )
+      """,
+      to: package.appendingPathComponent("Package.swift")
+    )
+    try writeFile(
+      """
+      import Instruments
+
+      print(Instruments.current.span("work") { 21 * 2 })
+      """,
+      to: package.appendingPathComponent("Sources/InstrumentsRuntime/main.swift")
+    )
+    let swiftPackage = [
+      "swift", "build", "--package-path", package.path, "--scratch-path", scratch.path,
+    ]
+
+    _ = try runProcess(executable: "/usr/bin/env", arguments: swiftPackage)
+    let binPath = try runProcess(
+      executable: "/usr/bin/env", arguments: swiftPackage + ["--show-bin-path"]
+    )
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+    let run = try runProcess(
+      executable: URL(fileURLWithPath: binPath).appendingPathComponent("InstrumentsRuntime").path,
+      arguments: [])
+    let products = try FileManager.default.subpathsOfDirectory(atPath: binPath)
+
+    #expect(run.trimmingCharacters(in: .whitespacesAndNewlines) == "42")
+    #expect(products.contains { $0.hasPrefix("Instruments.") || $0.contains("/Instruments.") })
+    #expect(!products.contains { $0.contains("SwiftSyntax") || $0.contains("InstrumentsMacro") })
+  }
+
+  @Test(.timeLimit(.minutes(10)))
   func fixturePackageCommandReportsTestingBridgeDiagnostics() throws {
     let privatePackage = fixturePath("BenchmarkTestingPrivatePackage")
     let privateScratch = scratchPath("fixture-benchmark-testing-private")
