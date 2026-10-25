@@ -63,6 +63,14 @@ func writeCModuleDependencyPackage(at package: URL, explicitModuleMap: Bool) thr
     """,
     to: package.appendingPathComponent("Sources/CModuleDependency/CModuleDependency.c")
   )
+  // A vendored XCFramework slice the host must never load: clang rejects its
+  // module map.
+  try writeFile(
+    "module Stray {\n  not a module map\n}\n",
+    to: package.appendingPathComponent(
+      "Vendor/Stray.xcframework/ios-arm64/Headers/module.modulemap"
+    )
+  )
 }
 
 /// A package whose benchmarks call C, Objective-C and C++ targets, a static

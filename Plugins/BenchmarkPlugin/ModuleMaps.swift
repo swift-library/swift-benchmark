@@ -9,6 +9,10 @@ extension HostBuilder {
   /// depend on importable from the host's sources: each module map found in
   /// dependency checkouts, the targets' public headers, and their build
   /// directories, with its directory on the include path.
+  ///
+  /// Module maps inside an XCFramework are skipped: a binary target's slice
+  /// for this host comes in with its own headers, and the other slices are
+  /// for other platforms.
   func moduleMapImportArguments(discoveredTargetNames: [String]) -> [String] {
     let searchRoots =
       moduleMapCheckoutRoots() + moduleMapSourceRoots(forTargetNames: discoveredTargetNames)
@@ -26,7 +30,14 @@ extension HostBuilder {
       else {
         continue
       }
-      for case let file as URL in enumerator where file.pathExtension == "modulemap" {
+      for case let file as URL in enumerator {
+        if file.pathExtension == "xcframework" {
+          enumerator.skipDescendants()
+          continue
+        }
+        guard file.pathExtension == "modulemap" else {
+          continue
+        }
         if let moduleName = Self.moduleName(declaredIn: file) {
           moduleMapsByName[moduleName] = moduleMapsByName[moduleName] ?? file.path
         } else {
