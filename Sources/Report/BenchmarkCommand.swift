@@ -78,7 +78,8 @@ package struct BenchmarkCommand: Sendable {
   }
 
   /// Builds the report for measurements recorded by separate host processes,
-  /// in the order they ran; run metadata comes from the first.
+  /// in the order they ran. Run metadata comes from the first, and every
+  /// attribution is scoped to that run.
   package static func document(
     measurements: [HostMeasurement],
     baseline: BaselineDocument? = nil,
@@ -106,7 +107,11 @@ package struct BenchmarkCommand: Sendable {
       metadata: metadata,
       baseline: baseline,
       comparison: comparison,
-      attributions: measurements.flatMap(\.attributions),
+      attributions: measurements.flatMap(\.attributions).map { attribution in
+        var attribution = attribution
+        attribution.scope.runID = metadata.id
+        return attribution
+      },
       attachments: try await attachments(scopes: scopes, exporters: traceExporters)
     )
   }

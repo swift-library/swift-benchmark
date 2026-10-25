@@ -7,6 +7,19 @@ import Instruments
 import Report
 import Testing
 
+@BenchmarkSuite("Merged")
+struct MergedBenchmarks {
+  @Benchmark("First")
+  func first() {
+    blackHole(1)
+  }
+
+  @Benchmark("Second")
+  func second() {
+    blackHole(2)
+  }
+}
+
 @Suite("Benchmark Command", .serialized)
 struct BenchmarkCommandTests {
   @Test
@@ -32,6 +45,32 @@ struct BenchmarkCommandTests {
     #expect(report.name == "Measured")
     #expect(report.samples.map { $0.value(for: .wallClock) } == [100, 100])
     #expect(document.summary.caseCount == 1)
+  }
+
+  @Test
+  func mergedMeasurementsScopeEveryAttributionToTheReportsRun() async throws {
+    var measurements: [HostMeasurement] = []
+    for (index, caseName) in ["First", "Second"].enumerated() {
+      var metadata = RunMetadata.fixture()
+      metadata.id = ReportID(rawValue: "run:\(index)")
+      let output = try await BenchmarkHost.output(
+        discoveries: [MergedBenchmarks.self],
+        arguments: [
+          "measure", "--timeline", "--case", caseName, "--warmup", "0", "--iterations", "1",
+          "--batch-size", "1",
+        ],
+        metadata: metadata
+      )
+      measurements.append(try JSONDecoder().decode(HostMeasurement.self, from: output))
+    }
+
+    let document = try #require(try await BenchmarkCommand.document(measurements: measurements))
+    let cases = document.suites.flatMap(\.cases)
+
+    #expect(document.metadata.id == "run:0")
+    #expect(cases.count == 2)
+    #expect(cases.allSatisfy { !$0.attributions.isEmpty })
+    #expect(cases.flatMap(\.attributions).allSatisfy { $0.scope.runID == "run:0" })
   }
 
   @Test
