@@ -63,10 +63,13 @@ struct HostBuilder {
     let swiftModuleDirectory =
       FileManager.default.fileExists(atPath: modulesDirectory.path)
       ? modulesDirectory : buildDirectory
+    // Bridge closures run inside every measured batch, so they are optimized
+    // like the package they call.
+    let optimization = configuration == .release ? ["-O"] : []
 
     try runProcess(
       executable: swiftc,
-      arguments: [
+      arguments: optimization + [
         "-parse-as-library",
         "-enable-testing",
         "-module-cache-path",
