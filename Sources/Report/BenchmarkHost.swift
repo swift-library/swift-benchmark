@@ -4,20 +4,26 @@
 import Benchmark
 import Foundation
 
+/// One planned step, as a host lists it.
 public struct BenchmarkListEntry: Sendable, Equatable, Codable {
+  /// The step's stable identifier, which `measure --step` selects.
+  public var id: String
   public var suite: String
   public var caseName: String
   public var tags: [String]
   public var arguments: [Benchmark.ArgumentValue]
   public var dimensionSizes: [Int]
 
+  /// Creates an entry.
   public init(
+    id: String,
     suite: String,
     caseName: String,
     tags: [String] = [],
     arguments: [Benchmark.ArgumentValue] = [],
     dimensionSizes: [Int] = []
   ) {
+    self.id = id
     self.suite = suite
     self.caseName = caseName
     self.tags = tags
@@ -26,58 +32,92 @@ public struct BenchmarkListEntry: Sendable, Equatable, Codable {
   }
 }
 
-public enum BenchmarkHost {
-  package static let regressionFailureExitStatus: Int32 = 20
+/// The steps a host plans to measure, with the metadata of its process.
+package struct HostPlan: Sendable, Codable {
+  package var metadata: RunMetadata
+  package var steps: [BenchmarkListEntry]
 
+  package init(metadata: RunMetadata, steps: [BenchmarkListEntry]) {
+    self.metadata = metadata
+    self.steps = steps
+  }
+}
+
+/// What one host process measured: the run's event records with the
+/// metadata of the process that produced them.
+package struct HostMeasurement: Sendable, Codable {
+  package var metadata: RunMetadata
+  package var records: [Benchmark.Event.Stream.Record]
+  package var attributions: [TimelineAttribution]
+
+  package init(
+    metadata: RunMetadata,
+    records: [Benchmark.Event.Stream.Record],
+    attributions: [TimelineAttribution] = []
+  ) {
+    self.metadata = metadata
+    self.records = records
+    self.attributions = attributions
+  }
+}
+
+/// The executable side of the package workflow. The CLI runs a host built
+/// from the package's benchmark declarations: `list` to plan, then `measure`
+/// once per step so that each step has a process of its own. Comparison,
+/// gating and rendering stay in the CLI.
+public enum BenchmarkHost {
+  /// Runs the host command in `arguments`. Errors are written to standard
+  /// error and exit the process with status 1.
   public static func run(
     discoveries: [any _BenchmarkDiscovery.Type],
     arguments: [String] = Array(CommandLine.arguments.dropFirst()),
     metadata: RunMetadata = .local(id: "run:benchmark-host")
-  ) async throws {
-    let output: String
+  ) async {
     do {
-      output = try await render(
+      let (output, path) = try await execute(
         discoveries: discoveries, arguments: arguments, metadata: metadata)
-    } catch BenchmarkHostError.regressionFailure(let report) {
-      if !report.isEmpty {
-        print(report)
+      if let path {
+        try output.write(to: URL(fileURLWithPath: path))
+      } else {
+        FileHandle.standardOutput.write(output)
       }
-      exit(regressionFailureExitStatus)
-    }
-    if !output.isEmpty {
-      print(output)
+    } catch {
+      FileHandle.standardError.write(Data("benchmark-host: \(error)\n".utf8))
+      exit(1)
     }
   }
 
-  public static func render(
+  /// The JSON the host command in `arguments` produces: a `HostPlan` for
+  /// `list`, and a `HostMeasurement` for `measure`.
+  package static func output(
     discoveries: [any _BenchmarkDiscovery.Type],
     arguments: [String],
     metadata: RunMetadata = .local(id: "run:benchmark-host")
-  ) async throws -> String {
+  ) async throws -> Data {
+    try await execute(discoveries: discoveries, arguments: arguments, metadata: metadata).output
+  }
+
+  private static func execute(
+    discoveries: [any _BenchmarkDiscovery.Type],
+    arguments: [String],
+    metadata: RunMetadata
+  ) async throws -> (output: Data, path: String?) {
     guard let command = arguments.first else {
-      return help()
+      throw BenchmarkHostError.unknownCommand("")
     }
-
     let options = try BenchmarkHostOptions(Array(arguments.dropFirst()))
-    let discovery = BenchmarkDiscovery(discoveries)
-    let filter = BenchmarkRunner.Plan.Filter(
-      suiteName: options.value(for: "--suite"),
-      caseName: options.value(for: "--case"),
-      tags: options.values(for: "--tag")
-    )
-    var plan = try discovery.plan(filter: filter)
-    plan.steps = try plan.steps.map { step in
-      var step = step
-      step.configuration = try options.configuration(overriding: step.configuration)
-      return step
+    let plan = try options.plan(discoveries: discoveries)
+    guard !plan.steps.isEmpty else {
+      throw BenchmarkHostError.noBenchmarksSelected
     }
 
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
     switch command {
-    case "help", "--help", "-h":
-      return help()
     case "list":
-      let entries = plan.steps.map { step in
+      let steps = plan.steps.map { step in
         BenchmarkListEntry(
+          id: step.id,
           suite: step.suiteName,
           caseName: step.caseName,
           tags: step.tags,
@@ -85,81 +125,40 @@ public enum BenchmarkHost {
           dimensionSizes: step.size.map { [$0.rawValue] } ?? []
         )
       }
-      guard !entries.isEmpty else {
-        throw BenchmarkHostError.noBenchmarksSelected
-      }
-      if try options.format(default: .console) == .json {
-        return try encodeJSON(entries)
-      }
-      return entries.map { entry in
-        let tags = entry.tags.isEmpty ? "" : " tags=\(entry.tags.joined(separator: ","))"
-        let arguments =
-          entry.arguments.isEmpty
-          ? ""
-          : " arguments=\(entry.arguments.map(\.label).joined(separator: ","))"
-        let suffix = entry.dimensionSizes.isEmpty ? "" : " size=\(entry.dimensionSizes[0])"
-        return "\(entry.suite).\(entry.caseName)\(tags)\(arguments)\(suffix)"
-      }.joined(separator: "\n")
-    case "run", "check", "trace":
-      guard !plan.steps.isEmpty else {
-        throw BenchmarkHostError.noBenchmarksSelected
-      }
-      if command == "check" {
-        try CheckGate.validate(
-          buildConfiguration: metadata.buildConfiguration,
-          allowDebug: options.hasFlag("--allow-debug"))
-      }
-      let baseline = try options.value(for: "--baseline").map(BaselineDocument.read(path:))
-      let format = try options.format(default: .console)
-      let document = try await BenchmarkCommand().report(
-        plan: plan,
+      return (try encoder.encode(HostPlan(metadata: metadata, steps: steps)), options.outputPath)
+    case "measure":
+      let measurement = try await measure(
+        plan,
         metadata: metadata,
-        baseline: baseline,
-        comparison: try options.comparison(),
-        timelineCapture: command == "trace" || options.hasFlag("--timeline")
-          ? .benchmarkIterations : .disabled,
-        metricProviders: options.metricProviders(),
-        traceExporters: options.traceExporters(runID: metadata.id)
+        capturesTimeline: options.capturesTimeline,
+        isolated: options.isolated
       )
-      let emitted = try writeOrReturn(try format.render(document), options: options)
-      if command == "check" {
-        guard document.summary.failedRegressionCount == 0 && document.summary.failedBudgetCount == 0
-        else {
-          throw BenchmarkHostError.regressionFailure(output: emitted)
-        }
-      }
-      return emitted
+      return (try encoder.encode(measurement), options.outputPath)
     default:
       throw BenchmarkHostError.unknownCommand(command)
     }
   }
 
-  public static func help() -> String {
-    """
-    benchmark-host
-
-    Commands:
-      list [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json]
-      run [--suite <name>] [--case <name>] [--tag <tag>] [--warmup <n>] [--iterations <n>] [--batch-size <n>] [--adaptive] [--min-duration-ns <n>] [--max-duration-ns <n>] [--format console|json|speedscope] [--baseline <path>] [--statistic <name>] [--threshold [<metric>=]<value>] [--budget <metric>:<statistic>:<value>] [--output <path>] [--trace <path>] [--required-trace <path>]
-      check --baseline <path> [--allow-debug] [--suite <name>] [--case <name>] [--tag <tag>]
-      trace [same options as run, with timeline capture enabled]
-    """
-  }
-
-  private static func writeOrReturn(_ output: String, options: BenchmarkHostOptions) throws
-    -> String
-  {
-    if let outputPath = options.value(for: "--output") {
-      try output.write(to: URL(fileURLWithPath: outputPath), atomically: true, encoding: .utf8)
-      return options.hasFlag("--quiet") ? "" : output
-    }
-    return options.hasFlag("--quiet") ? "" : output
-  }
-
-  private static func encodeJSON<T: Encodable>(_ value: T) throws -> String {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    return String(decoding: try encoder.encode(value), as: UTF8.self)
+  private static func measure(
+    _ plan: BenchmarkRunner.Plan,
+    metadata: RunMetadata,
+    capturesTimeline: Bool,
+    isolated: Bool
+  ) async throws -> HostMeasurement {
+    let timelineObserver = capturesTimeline ? BenchmarkTimelineObserver() : nil
+    let events = Benchmark.Event.InMemoryRecorder()
+    let results = try await BenchmarkRunner(recordsPeakMemory: isolated).run(
+      plan,
+      observers: timelineObserver.map { [$0] } ?? [],
+      eventRecorders: [events]
+    )
+    let attributions =
+      timelineObserver.map {
+        TimelineCorrelator.attributions(
+          from: $0.recorder.snapshot(), runID: metadata.id, results: results)
+      } ?? []
+    return HostMeasurement(
+      metadata: metadata, records: await events.snapshot(), attributions: attributions)
   }
 }
 
@@ -167,134 +166,124 @@ public enum BenchmarkHostError: Error, CustomStringConvertible {
   case unknownCommand(String)
   case unexpectedArgument(String)
   case missingValue(String)
-  case invalidFormat(String)
   case invalidNumber(String, String)
+  case unknownStep(String)
   case noBenchmarksSelected
-  case regressionFailure(output: String)
 
   public var description: String {
     switch self {
     case .unknownCommand(let command):
-      return "Unknown benchmark host command '\(command)'."
+      return "Unknown benchmark host command '\(command)'; use list or measure."
     case .unexpectedArgument(let argument):
       return "Unexpected argument '\(argument)'."
     case .missingValue(let option):
       return "Missing value for \(option)."
-    case .invalidFormat(let format):
-      return "Invalid format '\(format)'."
     case .invalidNumber(let option, let value):
       return "Invalid number '\(value)' for \(option)."
+    case .unknownStep(let id):
+      return "No planned step has the identifier '\(id)'."
     case .noBenchmarksSelected:
       return "No benchmarks matched the requested filters."
-    case .regressionFailure:
-      return "Regression check failed."
     }
   }
 }
 
+/// The host's arguments: step selection, configuration overrides, and where
+/// to write the output.
 private struct BenchmarkHostOptions {
-  private static let flags: Set<String> = [
-    "--adaptive",
-    "--allow-debug",
-    "--quiet",
-    "--timeline",
+  private static let flags: Set<String> = ["--adaptive", "--isolated", "--timeline"]
+  private static let valueOptions: Set<String> = [
+    "--suite", "--case", "--tag", "--step", "--output",
+    "--warmup", "--iterations", "--batch-size",
+    "--min-iterations", "--max-iterations", "--min-duration-ns", "--max-duration-ns",
   ]
 
   private var values: [String: [String]] = [:]
   private var flags: Set<String> = []
 
-  init<S: Sequence>(_ arguments: S) throws where S.Element == String {
-    let arguments = Array(arguments)
+  init(_ arguments: [String]) throws {
     var index = arguments.startIndex
     while index < arguments.endIndex {
       let key = arguments[index]
-      guard key.hasPrefix("--") else {
-        throw BenchmarkHostError.unexpectedArgument(key)
-      }
       if Self.flags.contains(key) {
         flags.insert(key)
         index += 1
         continue
       }
+      guard Self.valueOptions.contains(key) else {
+        throw BenchmarkHostError.unexpectedArgument(key)
+      }
       let valueIndex = arguments.index(after: index)
-      guard valueIndex < arguments.endIndex else {
+      guard valueIndex < arguments.endIndex, !arguments[valueIndex].hasPrefix("--") else {
         throw BenchmarkHostError.missingValue(key)
       }
-      let value = arguments[valueIndex]
-      guard !value.hasPrefix("--") else {
-        throw BenchmarkHostError.missingValue(key)
-      }
-      values[key, default: []].append(value)
+      values[key, default: []].append(arguments[valueIndex])
       index = arguments.index(after: valueIndex)
     }
   }
 
-  func hasFlag(_ key: String) -> Bool {
-    flags.contains(key)
+  var outputPath: String? {
+    values["--output"]?.last
   }
 
-  func value(for key: String) -> String? {
-    values[key]?.last
+  var capturesTimeline: Bool {
+    flags.contains("--timeline")
   }
 
-  func values(for key: String) -> [String] {
-    values[key] ?? []
+  /// Whether this process measures nothing but the selected step, which
+  /// makes its peak memory attributable to that step.
+  var isolated: Bool {
+    flags.contains("--isolated")
   }
 
-  func format(default defaultFormat: ReportFormat = .console) throws -> ReportFormat {
-    guard let value = values["--format"]?.last else {
-      return defaultFormat
-    }
-    guard let format = ReportFormat(rawValue: value) else {
-      throw BenchmarkHostError.invalidFormat(value)
-    }
-    return format
-  }
-
-  func comparison() throws -> ComparisonPolicy {
-    try ComparisonArguments.policy(
-      statistic: value(for: "--statistic"),
-      thresholds: values(for: "--threshold"),
-      budgets: values(for: "--budget"),
-      caseBudgets: values(for: "--case-budget")
+  func plan(discoveries: [any _BenchmarkDiscovery.Type]) throws -> BenchmarkRunner.Plan {
+    let filter = BenchmarkRunner.Plan.Filter(
+      suiteName: values["--suite"]?.last,
+      caseName: values["--case"]?.last,
+      tags: values["--tag"] ?? []
     )
+    var plan = try BenchmarkDiscovery(discoveries).plan(filter: filter)
+    if let stepIDs = values["--step"] {
+      let known = Set(plan.steps.map(\.id))
+      if let unknown = stepIDs.first(where: { !known.contains($0) }) {
+        throw BenchmarkHostError.unknownStep(unknown)
+      }
+      plan.steps = plan.steps.filter { stepIDs.contains($0.id) }
+    }
+    plan.steps = try plan.steps.map { step in
+      var step = step
+      step.configuration = try configuration(overriding: step.configuration)
+      return step
+    }
+    return plan
   }
 
-  func configuration(overriding configuration: BenchmarkConfiguration) throws
+  private func configuration(overriding configuration: BenchmarkConfiguration) throws
     -> BenchmarkConfiguration
   {
     BenchmarkConfiguration(
       warmup: try warmup(default: configuration.warmup),
       iterations: try iterations(default: configuration.iterations),
-      batching: try batching(default: configuration.batching)
+      batching: try intValue(for: "--batch-size").map(BatchingPolicy.fixed)
+        ?? configuration.batching
     )
   }
 
-  func batching(default defaultPolicy: BatchingPolicy) throws -> BatchingPolicy {
-    guard let count = try intValue(for: "--batch-size") else {
+  private func warmup(default defaultPolicy: WarmupPolicy) throws -> WarmupPolicy {
+    guard let count = try intValue(for: "--warmup") else {
       return defaultPolicy
-    }
-    return .fixed(count)
-  }
-
-  func warmup(default defaultPolicy: WarmupPolicy) throws -> WarmupPolicy {
-    guard let value = value(for: "--warmup") else {
-      return defaultPolicy
-    }
-    guard let count = Int(value) else {
-      throw BenchmarkHostError.invalidNumber("--warmup", value)
     }
     return count == 0 ? .none : .iterations(count)
   }
 
-  func iterations(default defaultPolicy: IterationPolicy) throws -> IterationPolicy {
+  private func iterations(default defaultPolicy: IterationPolicy) throws -> IterationPolicy {
     let minDuration = try uint64Value(for: "--min-duration-ns")
     let maxDuration = try uint64Value(for: "--max-duration-ns")
     let minIterations = try intValue(for: "--min-iterations")
     let maxIterations = try intValue(for: "--max-iterations")
     let fixedIterations = try intValue(for: "--iterations")
-    if hasFlag("--adaptive") || minDuration != nil || maxDuration != nil || minIterations != nil
-      || maxIterations != nil
+    if flags.contains("--adaptive") || minDuration != nil || maxDuration != nil
+      || minIterations != nil || maxIterations != nil
     {
       return .adaptive(
         minIterations: minIterations ?? 1,
@@ -303,14 +292,11 @@ private struct BenchmarkHostOptions {
         maxDurationNanoseconds: maxDuration
       )
     }
-    guard let count = fixedIterations else {
-      return defaultPolicy
-    }
-    return .iterations(count)
+    return fixedIterations.map(IterationPolicy.iterations) ?? defaultPolicy
   }
 
-  func intValue(for key: String) throws -> Int? {
-    guard let value = value(for: key) else {
+  private func intValue(for key: String) throws -> Int? {
+    guard let value = values[key]?.last else {
       return nil
     }
     guard let integer = Int(value) else {
@@ -319,56 +305,13 @@ private struct BenchmarkHostOptions {
     return integer
   }
 
-  func uint64Value(for key: String) throws -> UInt64? {
-    guard let value = value(for: key) else {
+  private func uint64Value(for key: String) throws -> UInt64? {
+    guard let value = values[key]?.last else {
       return nil
     }
     guard let integer = UInt64(value) else {
       throw BenchmarkHostError.invalidNumber(key, value)
     }
     return integer
-  }
-
-  func metricProviders() -> [any MetricProvider] {
-    values(for: "--optional-diagnostic").map {
-      UnavailableMetricProvider(metricName: $0, reason: "Diagnostic unavailable from host request")
-    }
-      + values(for: "--required-diagnostic").map {
-        UnavailableMetricProvider(
-          metricName: $0,
-          reason: "Required diagnostic unavailable from host request",
-          requirement: .required
-        )
-      }
-  }
-
-  func traceExporters(runID: ReportID) -> [any TraceExporter] {
-    values(for: "--trace").map { traceExporter(path: $0, runID: runID, required: false) }
-      + values(for: "--required-trace").map {
-        traceExporter(path: $0, runID: runID, required: true)
-      }
-  }
-
-  private func traceExporter(path: String, runID: ReportID, required: Bool) -> TraceArtifactExporter
-  {
-    TraceArtifactExporter(
-      artifact: TraceArtifact(
-        tracePath: path,
-        command: value(for: "--trace-command").map { [$0] } ?? [],
-        metadata: traceMetadata()
-      ),
-      requirement: required ? .required : .optional
-    )
-  }
-
-  private func traceMetadata() -> [String: String] {
-    var metadata: [String: String] = [:]
-    if let tool = value(for: "--trace-tool") {
-      metadata["tool"] = tool
-    }
-    if let template = value(for: "--trace-template") {
-      metadata["template"] = template
-    }
-    return metadata
   }
 }

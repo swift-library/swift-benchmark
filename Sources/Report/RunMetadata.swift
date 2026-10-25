@@ -56,9 +56,11 @@ public struct RunMetadata: Sendable, Equatable, Codable {
 
   /// Metadata for a run in the current process.
   ///
-  /// Without an explicit `buildConfiguration`, the configuration comes from
-  /// `SWIFT_BENCHMARK_BUILD_CONFIGURATION`, which the command plugin sets, and
-  /// otherwise from whether this module was compiled with assertions enabled.
+  /// Without an explicit `buildConfiguration`, the configuration is the one
+  /// this module was compiled in, which is the configuration of the build
+  /// that produced the benchmark code. The Swift version is known only to
+  /// the release it belongs to; the package workflow replaces it with the
+  /// exact version of the compiler that built the host.
   public static func local(
     id: ReportID,
     packageIdentity: String = "swift-benchmark",
@@ -75,15 +77,15 @@ public struct RunMetadata: Sendable, Equatable, Codable {
       architecture: SystemArchitecture.current,
       osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
       generatedAt: generatedAt,
-      buildConfiguration: buildConfiguration
-        ?? ProcessInfo.processInfo.environment["SWIFT_BENCHMARK_BUILD_CONFIGURATION"]
-        ?? BuildConfigurationName.current,
+      buildConfiguration: buildConfiguration ?? BuildConfigurationName.current,
       device: MachineModel.current
     )
   }
 }
 
 enum SwiftCompilerVersion {
+  /// The compiler release this module was compiled with, as precisely as
+  /// conditional compilation can tell.
   static var current: String {
     #if compiler(>=6.5)
       "6.5 or later"

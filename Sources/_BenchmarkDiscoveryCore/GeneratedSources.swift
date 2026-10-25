@@ -144,8 +144,8 @@ func writeGeneratedBenchmarkHost(
 
     @main
     struct GeneratedBenchmarkHost {
-      static func main() async throws {
-        try await BenchmarkHost.run(discoveries: [
+      static func main() async {
+        await BenchmarkHost.run(discoveries: [
     \(discoveryList)
         ])
       }

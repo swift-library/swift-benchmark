@@ -19,7 +19,7 @@ struct FixtureBenchmarks {
 
 @main
 struct FixtureBenchmarkHost {
-  static func main() async throws {
-    try await BenchmarkHost.run(discoveries: [FixtureBenchmarks.self])
+  static func main() async {
+    await BenchmarkHost.run(discoveries: [FixtureBenchmarks.self])
   }
 }

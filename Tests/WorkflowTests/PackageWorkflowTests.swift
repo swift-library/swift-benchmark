@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
 // Copyright (c) 2020-present Xudong Xu
 
+import Benchmark
 import Foundation
 import Report
 import Testing
@@ -46,58 +47,69 @@ struct PackageWorkflowTests {
   }
 
   @Test(.timeLimit(.minutes(3)))
-  func tracedCommandsLaunchTheHostOnce() throws {
-    let directory = FileManager.default.temporaryDirectory
-      .appendingPathComponent("swift-benchmark-trace-\(UUID().uuidString)", isDirectory: true)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let launchesPath = directory.appendingPathComponent("launches").path
-    let hostURL = directory.appendingPathComponent("host")
-    let xcrunPath = directory.appendingPathComponent("xcrun").path
-    let reportPath = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .appendingPathComponent("ReportTests/Fixtures/report.json")
-      .path
-    try writeFile(
-      """
-      #!/bin/sh
-      echo "$*" >> '\(launchesPath)'
-      cat '\(reportPath)'
-      """,
-      to: hostURL
+  func runMeasuresEachStepInAHostProcessOfItsOwn() async throws {
+    let fake = try await FakeHost(buildConfiguration: "release")
+    defer { fake.remove() }
+
+    let run = try runProcess(
+      executable: try cliPath(),
+      arguments: ["run", "--host", fake.host.path, "--iterations", "3", "--format", "json"]
     )
-    try FileManager.default.setAttributes(
-      [.posixPermissions: 0o755], ofItemAtPath: hostURL.path)
+    let launches = try fake.launches()
+
+    #expect(launches.map { $0.split(separator: " ").first } == ["list", "measure", "measure"])
+    #expect(launches.dropFirst().allSatisfy { $0.contains("--isolated --iterations 3") })
+    #expect(Set(launches.dropFirst().map { $0.split(separator: " ")[2] }).count == 2)
+    #expect(run.contains("\"name\" : \"First\""))
+  }
+
+  @Test(.timeLimit(.minutes(3)))
+  func tracedCommandsMeasureEveryStepInOneHostProcess() async throws {
+    let fake = try await FakeHost(buildConfiguration: "debug")
+    defer { fake.remove() }
+    let xcrunPath = fake.directory.appendingPathComponent("xcrun").path
     try writeFakeXcrun(to: xcrunPath)
 
     let trace = try runProcess(
       executable: try cliPath(),
       arguments: [
-        "trace", "--host", hostURL.path, "--format", "json",
-        "--xctrace-output", directory.appendingPathComponent("trace.trace").path,
+        "trace", "--host", fake.host.path, "--format", "json",
+        "--xctrace-output", fake.directory.appendingPathComponent("trace.trace").path,
         "--xcrun", xcrunPath,
       ]
     )
     let check = try processResult(
       executable: try cliPath(),
       arguments: [
-        "check", "--allow-debug", "--host", hostURL.path, "--format", "json",
-        "--baseline", directory.appendingPathComponent("baseline.json").path,
-        "--xctrace-output", directory.appendingPathComponent("check.trace").path,
+        "check", "--allow-debug", "--host", fake.host.path, "--format", "json",
+        "--budget", "wallClock:median:-1",
+        "--xctrace-output", fake.directory.appendingPathComponent("check.trace").path,
         "--xcrun", xcrunPath,
       ]
     )
-    let launches = try String(contentsOfFile: launchesPath, encoding: .utf8)
-      .split(separator: "\n")
+    let launches = try fake.launches()
 
-    #expect(launches.count == 2)
-    #expect(launches.first?.hasPrefix("trace ") == true)
-    #expect(launches.last?.hasPrefix("run ") == true)
-    #expect(launches.allSatisfy { $0.hasSuffix("--format json") })
+    #expect(
+      launches.map { $0.split(separator: " ").first } == ["list", "measure", "list", "measure"])
+    #expect(launches[1].contains("--timeline"))
+    #expect(!launches[3].contains("--timeline"))
+    #expect(!launches.contains { $0.contains("--step") || $0.contains("--isolated") })
     #expect(trace.contains("\"Instruments trace\""))
     #expect(check.status == 20)
     #expect(check.output.contains("\"Instruments trace\""))
+  }
+
+  @Test(.timeLimit(.minutes(3)))
+  func checkRefusesDebugHostsBeforeMeasuring() async throws {
+    let fake = try await FakeHost(buildConfiguration: "debug")
+    defer { fake.remove() }
+
+    let check = try processResult(
+      executable: try cliPath(), arguments: ["check", "--host", fake.host.path])
+
+    #expect(check.status == 2)
+    #expect(check.errorOutput.contains("debug build"))
+    #expect(try fake.launches().map { $0.split(separator: " ").first } == ["list"])
   }
 
   @Test(.timeLimit(.minutes(10)))
@@ -778,6 +790,31 @@ struct PackageWorkflowTests {
     #expect(list.contains("\"caseName\" : \"CModuleNoop\""))
   }
 
+  @Test(.timeLimit(.minutes(15)))
+  func fixturePackageCommandLinksMixedLanguageResourceAndBinaryTargets() throws {
+    #if os(macOS)
+      let package = URL(fileURLWithPath: scratchPath("fixture-mixed-targets-package"))
+      let scratch = URL(fileURLWithPath: scratchPath("fixture-mixed-targets-scratch"))
+      try? FileManager.default.removeItem(at: package)
+      try? FileManager.default.removeItem(at: scratch)
+      try writeMixedTargetPackage(at: package, swiftBenchmarkRoot: repositoryRoot())
+
+      // No write permission beyond the plugin's own work directory: the
+      // host must build where the sandbox lets the plugin write.
+      let run = try runProcess(
+        executable: "/usr/bin/env",
+        arguments: [
+          "swift", "package", "-q", "--package-path", package.path, "--scratch-path", scratch.path,
+          "benchmark", "run", "--warmup", "0", "--iterations", "2", "--format", "json",
+        ]
+      )
+
+      #expect(run.contains("\"name\" : \"Total\""))
+      #expect(run.contains("\"name\" : \"sameLine\""))
+      #expect(run.contains("\"name\" : \"peakMemory\""))
+    #endif
+  }
+
   @Test(.timeLimit(.minutes(10)))
   func fixturePackageCommandReportsTestingBridgeDiagnostics() throws {
     let privatePackage = fixturePath("BenchmarkTestingPrivatePackage")
@@ -995,6 +1032,127 @@ struct PackageWorkflowTests {
     )
   }
 
+  /// A package whose benchmarks call C, Objective-C and C++ targets, a static
+  /// XCFramework and a resource bundle, plus a test-target benchmark whose
+  /// `@Test` attribute shares the function's line.
+  private func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) throws {
+    try writeFile(
+      """
+      // swift-tools-version: 6.3
+      import PackageDescription
+
+      let package = Package(
+        name: "MixedTargets",
+        platforms: [.macOS(.v15)],
+        dependencies: [
+          .package(name: "swift-benchmark", path: \(swiftStringLiteral(swiftBenchmarkRoot.path)))
+        ],
+        targets: [
+          .target(name: "CCounter"),
+          .target(name: "ObjCCounter"),
+          .target(name: "CxxCounter"),
+          .binaryTarget(name: "BinaryCounter", path: "BinaryCounter.xcframework"),
+          .target(
+            name: "MixedLibrary",
+            dependencies: [
+              "CCounter", "ObjCCounter", "CxxCounter", "BinaryCounter",
+              .product(name: "Benchmark", package: "swift-benchmark"),
+            ],
+            resources: [.process("Resources")]
+          ),
+          .testTarget(
+            name: "MixedTests",
+            dependencies: [
+              "MixedLibrary",
+              .product(name: "BenchmarkTesting", package: "swift-benchmark"),
+            ]
+          ),
+        ]
+      )
+      """,
+      to: package.appendingPathComponent("Package.swift")
+    )
+    let files = [
+      "Sources/CCounter/include/CCounter.h": "int c_counter_value(void);\n",
+      "Sources/CCounter/CCounter.c":
+        "#include \"CCounter.h\"\nint c_counter_value(void) { return 1; }\n",
+      "Sources/ObjCCounter/include/ObjCCounter.h":
+        "#import <Foundation/Foundation.h>\n@interface ObjCCounter : NSObject\n+ (NSInteger)value;\n@end\n",
+      "Sources/ObjCCounter/ObjCCounter.m":
+        "#import \"ObjCCounter.h\"\n@implementation ObjCCounter\n+ (NSInteger)value { return 2; }\n@end\n",
+      "Sources/CxxCounter/include/CxxCounter.h":
+        "#ifdef __cplusplus\nextern \"C\" {\n#endif\nint cxx_counter_value(void);\n#ifdef __cplusplus\n}\n#endif\n",
+      "Sources/CxxCounter/CxxCounter.cpp":
+        "#include \"CxxCounter.h\"\n#include <vector>\nint cxx_counter_value(void) { std::vector<int> v{1, 2}; return static_cast<int>(v.size()) + 1; }\n",
+      "Sources/MixedLibrary/Resources/value.txt": "4\n",
+      "Sources/MixedLibrary/Counters.swift": """
+      import BinaryCounter
+      import Benchmark
+      import CCounter
+      import CxxCounter
+      import Foundation
+      import ObjCCounter
+
+      public enum Counters {
+        public static func total() -> Int {
+          let url = Bundle.module.url(forResource: "value", withExtension: "txt")!
+          let text = try! String(contentsOf: url, encoding: .utf8)
+          let resource = Int(text.trimmingCharacters(in: .whitespacesAndNewlines))!
+          return Int(c_counter_value()) + ObjCCounter.value() + Int(cxx_counter_value())
+            + Int(binary_counter_value()) + resource
+        }
+      }
+
+      @BenchmarkSuite("Mixed")
+      struct MixedBenchmarks {
+        @Benchmark("Total")
+        func total() {
+          precondition(Counters.total() == 15)
+        }
+      }
+      """,
+      "Tests/MixedTests/SameLine.swift": """
+      import BenchmarkTesting
+      import MixedLibrary
+      import Testing
+
+      struct SameLineBenchmarks {
+        @Test(.benchmark()) func sameLine() { precondition(Counters.total() == 15) }
+      }
+      """,
+      "binary/include/BinaryCounter.h": "int binary_counter_value(void);\n",
+      "binary/include/module.modulemap":
+        "module BinaryCounter {\n  header \"BinaryCounter.h\"\n  export *\n}\n",
+      "binary/BinaryCounter.c":
+        "#include \"BinaryCounter.h\"\nint binary_counter_value(void) { return 5; }\n",
+    ]
+    for (path, contents) in files {
+      try writeFile(contents, to: package.appendingPathComponent(path))
+    }
+
+    let binary = package.appendingPathComponent("binary")
+    let object = binary.appendingPathComponent("BinaryCounter.o").path
+    let library = binary.appendingPathComponent("libBinaryCounter.a").path
+    _ = try runProcess(
+      executable: "/usr/bin/xcrun",
+      arguments: [
+        "clang", "-c", binary.appendingPathComponent("BinaryCounter.c").path, "-o", object,
+        "-I", binary.appendingPathComponent("include").path,
+        "-arch", "arm64", "-arch", "x86_64", "-mmacosx-version-min=15.0",
+      ]
+    )
+    _ = try runProcess(
+      executable: "/usr/bin/xcrun", arguments: ["libtool", "-static", "-o", library, object])
+    _ = try runProcess(
+      executable: "/usr/bin/xcrun",
+      arguments: [
+        "xcodebuild", "-create-xcframework", "-library", library,
+        "-headers", binary.appendingPathComponent("include").path,
+        "-output", package.appendingPathComponent("BinaryCounter.xcframework").path,
+      ]
+    )
+  }
+
   private func initializeGitRepository(at directory: URL) throws {
     _ = try runProcess(
       executable: "/usr/bin/env",
@@ -1144,5 +1302,73 @@ private struct PackageWorkflowError: Error, CustomStringConvertible {
 
   var description: String {
     "process failed with status \(status)\nstdout:\n\(output)\nstderr:\n\(errorOutput)"
+  }
+}
+
+/// A shell script that answers the host protocol with a plan and a
+/// measurement recorded in this process, and logs its arguments.
+private struct FakeHost {
+  let directory: URL
+  let host: URL
+  private let launchesURL: URL
+
+  init(buildConfiguration: String) async throws {
+    directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("swift-benchmark-fake-host-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    host = directory.appendingPathComponent("host")
+    launchesURL = directory.appendingPathComponent("launches")
+    let planURL = directory.appendingPathComponent("plan.json")
+    let measurementURL = directory.appendingPathComponent("measurement.json")
+    var metadata = RunMetadata.local(id: "run:fake-host")
+    metadata.buildConfiguration = buildConfiguration
+    try await BenchmarkHost.output(
+      discoveries: [FakeHostDiscovery.self], arguments: ["list"], metadata: metadata
+    ).write(to: planURL)
+    try await BenchmarkHost.output(
+      discoveries: [FakeHostDiscovery.self], arguments: ["measure"], metadata: metadata
+    ).write(to: measurementURL)
+    try """
+    #!/bin/sh
+    echo "$*" >> '\(launchesURL.path)'
+    command="$1"
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "--output" ]; then output="$2"; fi
+      shift
+    done
+    if [ "$command" = list ]; then
+      cp '\(planURL.path)' "$output"
+    else
+      cp '\(measurementURL.path)' "$output"
+    fi
+    """.write(to: host, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: host.path)
+  }
+
+  /// The arguments of each launch, in order.
+  func launches() throws -> [String] {
+    try String(contentsOf: launchesURL, encoding: .utf8)
+      .split(separator: "\n")
+      .map(String.init)
+  }
+
+  func remove() {
+    try? FileManager.default.removeItem(at: directory)
+  }
+}
+
+private enum FakeHostDiscovery: _BenchmarkDiscovery {
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static var __benchmarkSuites: [BenchmarkSuite] {
+    [
+      BenchmarkSuite(
+        "FakeHost",
+        configuration: BenchmarkConfiguration(
+          warmup: .none, iterations: .iterations(1), batching: .fixed(1))
+      ) {
+        Benchmark("First") { blackHole(1) }
+        Benchmark("Second") { blackHole(2) }
+      }
+    ]
   }
 }

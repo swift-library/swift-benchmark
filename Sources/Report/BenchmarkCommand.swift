@@ -145,28 +145,13 @@ public struct BenchmarkCommand: Sendable {
       )
     }
 
-    for result in results {
-      let scope = ReportScope(
-        runID: metadata.id,
-        suiteID: ReportIDFactory.suite(result.suiteName),
-        caseID: ReportIDFactory.benchmarkCase(
-          suiteName: result.suiteName,
-          caseName: result.caseName
-        )
-      )
-      for provider in metricProviders {
-        let metrics = await provider.metrics(for: scope)
-        try BenchmarkCommand.validate(metrics: metrics, requirement: provider.requirement)
-        collectedDiagnostics.append(contentsOf: metrics)
-      }
-      for exporter in traceExporters {
-        let exported = await exporter.attachments(for: scope)
-        if exporter.requirement == .required, exported.isEmpty {
-          throw BenchmarkCommandError.requiredAttachmentUnavailable(scope: scope)
-        }
-        collectedAttachments.append(contentsOf: exported)
-      }
-    }
+    let collected = try await Self.collect(
+      scopes: results.map { caseScope(runID: metadata.id, $0.suiteName, $0.caseName) },
+      metricProviders: metricProviders,
+      traceExporters: traceExporters
+    )
+    collectedDiagnostics += collected.diagnostics
+    collectedAttachments += collected.attachments
 
     let document = await reportRecorder.document(
       metadata: metadata,
@@ -180,6 +165,70 @@ public struct BenchmarkCommand: Sendable {
       await observer.runDidFinish(scope: runScope)
     }
     return document
+  }
+
+  /// Builds the report for measurements recorded by separate host processes,
+  /// in the order they ran; run metadata comes from the first.
+  package static func document(
+    measurements: [HostMeasurement],
+    baseline: BaselineDocument? = nil,
+    comparison: ComparisonPolicy = .default,
+    metricProviders: [any MetricProvider] = [],
+    traceExporters: [any TraceExporter] = []
+  ) async throws -> ReportDocument? {
+    guard let metadata = measurements.first?.metadata else {
+      return nil
+    }
+    let records = measurements.flatMap(\.records).enumerated().map { index, record in
+      Benchmark.Event.Stream.Record(sequence: index, kind: record.kind, context: record.context)
+    }
+    var scopes: [ReportScope] = []
+    for record in records {
+      guard let suiteName = record.context.suiteName, let caseName = record.context.caseName
+      else {
+        continue
+      }
+      let scope = caseScope(runID: metadata.id, suiteName, caseName)
+      if !scopes.contains(scope) {
+        scopes.append(scope)
+      }
+    }
+    let collected = try await collect(
+      scopes: scopes, metricProviders: metricProviders, traceExporters: traceExporters)
+    return ReportBuilder(records: records).document(
+      metadata: metadata,
+      baseline: baseline,
+      comparison: comparison,
+      attributions: measurements.flatMap(\.attributions),
+      diagnostics: collected.diagnostics,
+      attachments: collected.attachments
+    )
+  }
+
+  /// Asks every provider and exporter about each case, failing when a
+  /// required one has nothing.
+  private static func collect(
+    scopes: [ReportScope],
+    metricProviders: [any MetricProvider],
+    traceExporters: [any TraceExporter]
+  ) async throws -> (diagnostics: [DiagnosticMetric], attachments: [DiagnosticAttachment]) {
+    var diagnostics: [DiagnosticMetric] = []
+    var attachments: [DiagnosticAttachment] = []
+    for scope in scopes {
+      for provider in metricProviders {
+        let metrics = await provider.metrics(for: scope)
+        try validate(metrics: metrics, requirement: provider.requirement)
+        diagnostics.append(contentsOf: metrics)
+      }
+      for exporter in traceExporters {
+        let exported = await exporter.attachments(for: scope)
+        if exporter.requirement == .required, exported.isEmpty {
+          throw BenchmarkCommandError.requiredAttachmentUnavailable(scope: scope)
+        }
+        attachments.append(contentsOf: exported)
+      }
+    }
+    return (diagnostics, attachments)
   }
 
   private static func validate(
@@ -207,4 +256,12 @@ public enum BenchmarkCommandError: Error, CustomStringConvertible {
       return "Required diagnostic attachment is unavailable for scope \(scope)."
     }
   }
+}
+
+private func caseScope(runID: ReportID, _ suiteName: String, _ caseName: String) -> ReportScope {
+  ReportScope(
+    runID: runID,
+    suiteID: ReportIDFactory.suite(suiteName),
+    caseID: ReportIDFactory.benchmarkCase(suiteName: suiteName, caseName: caseName)
+  )
 }
