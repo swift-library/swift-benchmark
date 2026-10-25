@@ -38,339 +38,137 @@ struct PluginWorkflowTests {
 
     let list = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "list",
-        "--tag",
-        "fast",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["list", "--tag", "fast", "--format", "json"],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     _ = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "run",
-        "--tag",
-        "testingBridge",
-        "--format",
-        "json",
-        "--output",
-        testingReportPath,
-        "--quiet",
-      ]
+      arguments: swiftPackageBenchmark(
+        [
+          "run", "--tag", "testingBridge", "--format", "json", "--output", testingReportPath,
+          "--quiet",
+        ],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     _ = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "baseline",
-        "write",
-        "--input",
-        testingReportPath,
-        "--output",
-        testingBaselinePath,
-        "--quiet",
-      ]
+      arguments: swiftPackageBenchmark(
+        [
+          "baseline", "write", "--input", testingReportPath, "--output", testingBaselinePath,
+          "--quiet",
+        ],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     let testingCheck = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "check",
-        "--allow-debug",
-        "--tag",
-        "testingBridge",
-        "--baseline",
-        testingBaselinePath,
-        "--threshold",
-        "1000000%",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        [
+          "check", "--allow-debug", "--tag", "testingBridge", "--baseline", testingBaselinePath,
+          "--threshold", "1000000%", "--format", "json",
+        ],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     let testingDiff = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "diff",
-        "--input",
-        testingReportPath,
-        "--baseline",
-        testingBaselinePath,
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        [
+          "diff", "--input", testingReportPath, "--baseline", testingBaselinePath, "--format",
+          "json",
+        ],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     let testingTrace = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "trace",
-        "--tag",
-        "testingBridge",
-        "--format",
-        "json",
-        "--xctrace-output",
-        testingTracePath,
-        "--xcrun",
-        fakeXcrunPath,
-      ]
+      arguments: swiftPackageBenchmark(
+        [
+          "trace", "--tag", "testingBridge", "--format", "json", "--xctrace-output",
+          testingTracePath, "--xcrun", fakeXcrunPath,
+        ],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     let allList = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "list",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["list", "--format", "json"],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     let testingList = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "list",
-        "--tag",
-        "testingBridge",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["list", "--tag", "testingBridge", "--format", "json"],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     let standaloneList = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "list",
-        "--tag",
-        "standalone",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["list", "--tag", "standalone", "--format", "json"],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     let run = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "run",
-        "--tag",
-        "library",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["run", "--tag", "library", "--format", "json"],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     let testingRun = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "run",
-        "--tag",
-        "testingBridge",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["run", "--tag", "testingBridge", "--format", "json"],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     _ = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "run",
-        "--tag",
-        "library",
-        "--format",
-        "json",
-        "--output",
-        reportPath,
-        "--quiet",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["run", "--tag", "library", "--format", "json", "--output", reportPath, "--quiet"],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     _ = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "baseline",
-        "write",
-        "--input",
-        reportPath,
-        "--output",
-        baselinePath,
-        "--quiet",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["baseline", "write", "--input", reportPath, "--output", baselinePath, "--quiet"],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     let check = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "check",
-        "--allow-debug",
-        "--tag",
-        "library",
-        "--baseline",
-        baselinePath,
-        "--threshold",
-        "1000000%",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        [
+          "check", "--allow-debug", "--tag", "library", "--baseline", baselinePath, "--threshold",
+          "1000000%", "--format", "json",
+        ],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     let diff = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "diff",
-        "--input",
-        reportPath,
-        "--baseline",
-        baselinePath,
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["diff", "--input", reportPath, "--baseline", baselinePath, "--format", "json"],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     let failedCheck = try processResult(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift", "package", "-q", "--package-path", fixturePath, "--scratch-path", scratchPath,
-        "--allow-writing-to-directory", scratchPath, "benchmark", "check", "--allow-debug", "--tag",
-        "library",
-        "--baseline", baselinePath, "--budget", "wallClock:mean:-1", "--format", "json",
-        "--output", failedReportPath, "--quiet",
-      ]
+      arguments: swiftPackageBenchmark(
+        [
+          "check", "--allow-debug", "--tag", "library", "--baseline", baselinePath,
+          "--budget", "wallClock:mean:-1", "--format", "json", "--output", failedReportPath,
+          "--quiet",
+        ],
+        package: fixturePath, scratch: scratchPath
+      )
     )
     let failedReport = try JSONDecoder().decode(
       ReportDocument.self, from: Data(contentsOf: URL(fileURLWithPath: failedReportPath)))
@@ -382,27 +180,13 @@ struct PluginWorkflowTests {
     let testingRows = testingReport.suites.flatMap(\.cases).flatMap(\.measurement.rows)
     let trace = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "trace",
-        "--tag",
-        "library",
-        "--format",
-        "json",
-        "--xctrace-output",
-        tracePath,
-        "--xcrun",
-        fakeXcrunPath,
-      ]
+      arguments: swiftPackageBenchmark(
+        [
+          "trace", "--tag", "library", "--format", "json", "--xctrace-output", tracePath, "--xcrun",
+          fakeXcrunPath,
+        ],
+        package: fixturePath, scratch: scratchPath
+      )
     )
 
     #expect(list.contains("\"suite\" : \"LibraryFixture\""))
@@ -474,74 +258,25 @@ struct PluginWorkflowTests {
 
     _ = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--configuration",
-        "debug",
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "list",
-        "--tag",
-        "fast",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["list", "--tag", "fast", "--format", "json"],
+        package: fixturePath, scratch: scratchPath, configuration: "debug"
+      )
     )
 
     let list = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--configuration",
-        "release",
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "list",
-        "--tag",
-        "fast",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["list", "--tag", "fast", "--format", "json"],
+        package: fixturePath, scratch: scratchPath, configuration: "release"
+      )
     )
     let run = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        fixturePath,
-        "--scratch-path",
-        scratchPath,
-        "--configuration",
-        "release",
-        "--allow-writing-to-directory",
-        scratchPath,
-        "benchmark",
-        "run",
-        "--tag",
-        "fast",
-        "--warmup",
-        "0",
-        "--iterations",
-        "1",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["run", "--tag", "fast", "--warmup", "0", "--iterations", "1", "--format", "json"],
+        package: fixturePath, scratch: scratchPath, configuration: "release"
+      )
     )
 
     #expect(list.contains("\"suite\" : \"LibraryFixture\""))
@@ -578,23 +313,10 @@ struct PluginWorkflowTests {
 
     let list = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        package.path,
-        "--scratch-path",
-        scratch.path,
-        "--allow-writing-to-directory",
-        scratch.path,
-        "benchmark",
-        "list",
-        "--tag",
-        "cModule",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["list", "--tag", "cModule", "--format", "json"],
+        package: package.path, scratch: scratch.path
+      )
     )
 
     #expect(list.contains("\"suite\" : \"CModuleFixture\""))
@@ -637,21 +359,10 @@ struct PluginWorkflowTests {
     )
     let privateFailure = try runProcessFailure(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        privatePackage,
-        "--scratch-path",
-        privateScratch,
-        "--allow-writing-to-directory",
-        privateScratch,
-        "benchmark",
-        "list",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["list", "--format", "json"],
+        package: privatePackage, scratch: privateScratch
+      )
     )
 
     let argumentsPackage = fixturePath("BenchmarkTestingArgumentsPackage")
@@ -663,21 +374,10 @@ struct PluginWorkflowTests {
     )
     let argumentsList = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift",
-        "package",
-        "-q",
-        "--package-path",
-        argumentsPackage,
-        "--scratch-path",
-        argumentsScratch,
-        "--allow-writing-to-directory",
-        argumentsScratch,
-        "benchmark",
-        "list",
-        "--format",
-        "json",
-      ]
+      arguments: swiftPackageBenchmark(
+        ["list", "--format", "json"],
+        package: argumentsPackage, scratch: argumentsScratch
+      )
     )
 
     #expect(privateFailure.contains("private/fileprivate benchmark declarations cannot be bridged"))

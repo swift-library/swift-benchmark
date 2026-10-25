@@ -3,6 +3,19 @@
 
 import Foundation
 
+/// The arguments of `swift package benchmark <arguments>` for the package at
+/// `package`, building in `scratch`, which the plugin may also write to.
+func swiftPackageBenchmark(
+  _ arguments: [String],
+  package: String,
+  scratch: String,
+  configuration: String? = nil
+) -> [String] {
+  ["swift", "package", "-q", "--package-path", package, "--scratch-path", scratch]
+    + (configuration.map { ["--configuration", $0] } ?? [])
+    + ["--allow-writing-to-directory", scratch, "benchmark"] + arguments
+}
+
 func runProcess(executable: String, arguments: [String]) throws -> String {
   let result = try processResult(executable: executable, arguments: arguments)
   guard result.status == 0 else {
