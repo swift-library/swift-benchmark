@@ -56,7 +56,12 @@ public struct BaselineDocument: Sendable, Equatable, Codable {
 
   /// Reads a baseline JSON file written by the `baseline write` command.
   package static func read(path: String) throws -> BaselineDocument {
-    let data = try Data(contentsOf: URL(fileURLWithPath: path))
+    let data: Data
+    do {
+      data = try Data(contentsOf: URL(fileURLWithPath: path))
+    } catch {
+      throw BaselineReadError.unavailable(path: path, reason: error.localizedDescription)
+    }
     do {
       return try JSONDecoder().decode(BaselineDocument.self, from: data)
     } catch is DecodingError {
@@ -66,10 +71,13 @@ public struct BaselineDocument: Sendable, Equatable, Codable {
 }
 
 package enum BaselineReadError: Error, CustomStringConvertible, Equatable {
+  case unavailable(path: String, reason: String)
   case unreadable(path: String)
 
   package var description: String {
     switch self {
+    case .unavailable(let path, let reason):
+      return "Cannot read baseline '\(path)': \(reason)"
     case .unreadable(let path):
       return
         "'\(path)' is not a baseline this swift-benchmark can read. Record it again with the baseline write command."

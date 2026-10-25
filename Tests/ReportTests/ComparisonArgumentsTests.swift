@@ -72,4 +72,18 @@ struct ComparisonArgumentsTests {
       try BaselineDocument.read(path: url.path)
     }
   }
+
+  @Test
+  func missingBaselineIsReportedAsUnavailable() throws {
+    let path = "/nonexistent/baseline.json"
+
+    let error = #expect(throws: BaselineReadError.self) {
+      try BaselineDocument.read(path: path)
+    }
+
+    guard case .unavailable(path, _) = error else {
+      Issue.record("Expected an unavailable baseline, got \(String(describing: error))")
+      return
+    }
+  }
 }

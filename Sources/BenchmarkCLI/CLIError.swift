@@ -18,6 +18,9 @@ enum CLIError: Error, CustomStringConvertible {
   case invalidFormat(String, allowed: [String])
   case noBenchmarksSelected
   case hostFailure(status: Int32, stderr: String)
+  /// The host rejected the request or its configuration.
+  case hostRejected(stderr: String)
+  case unreadableInput(path: String, reason: String)
   case regressionFailure(output: String)
 
   var exitCode: CLIExitCode {
@@ -60,6 +63,11 @@ enum CLIError: Error, CustomStringConvertible {
       return message.isEmpty
         ? "Benchmark host exited with status \(status)."
         : "Benchmark host exited with status \(status): \(message)"
+    case .hostRejected(let stderr):
+      return "Benchmark host rejected the request: "
+        + stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+    case .unreadableInput(let path, let reason):
+      return "Cannot read report '\(path)': \(reason)"
     case .regressionFailure:
       return "Regression check failed."
     }

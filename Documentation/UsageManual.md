@@ -181,8 +181,9 @@ direction, which is up for times, counts and bytes, and down for a custom
 metric declared `.higherIsBetter`.
 
 `check` exits `0` when nothing regressed or exceeded a budget, `20` for a
-regression or budget failure, `2` for invalid configuration, `3` when a host
-fails, and `30` when a required trace is missing or recording one fails. It
+regression or budget failure, `2` for invalid options, configuration or input
+files, including configuration the host rejects, `3` when a host fails, and
+`30` when a required trace is missing or recording one fails. It
 refuses to judge a debug build, because debug times and counts do not
 represent release performance; pass `--allow-debug` to check one anyway.
 

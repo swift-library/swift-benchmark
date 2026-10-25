@@ -42,8 +42,10 @@
 - **Breaking**: Report's public API keeps the report model, comparison
   policies, baselines, `ReportRecorder`, `ReportBuilder`, timeline attribution
   and `BenchmarkHost.run(discoveries:arguments:metadata:)`. `BenchmarkHost.run`
-  no longer throws. The benchmark command, report renderers and formats, the
-  host protocol, xctrace recording and trace exporters are no longer public.
+  no longer throws; it exits with status 2 for an invalid request or
+  configuration and 1 for any other failure. The benchmark command, report
+  renderers and formats, the host protocol, xctrace recording and trace
+  exporters are no longer public.
 - **Breaking**: Step, row and report identifiers keep suite and case names as
   written, with punctuation percent-encoded, so names that differ only in case
   or punctuation stay distinct. An argument row is identified by its values'

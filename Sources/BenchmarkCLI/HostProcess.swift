@@ -47,6 +47,9 @@ struct HostProcess {
 
     let errorOutput = errorCapture.string()
     guard process.terminationReason == .exit, process.terminationStatus == 0 else {
+      if process.terminationReason == .exit, process.terminationStatus == 2 {
+        throw CLIError.hostRejected(stderr: errorOutput)
+      }
       throw CLIError.hostFailure(status: process.terminationStatus, stderr: errorOutput)
     }
     FileHandle.standardError.write(Data(errorOutput.utf8))

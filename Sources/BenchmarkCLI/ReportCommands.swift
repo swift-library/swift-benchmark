@@ -53,8 +53,12 @@ enum ReportCommands {
   }
 
   private static func readReport(_ path: String) throws -> ReportDocument {
-    try JSONDecoder().decode(
-      ReportDocument.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
+    do {
+      return try JSONDecoder().decode(
+        ReportDocument.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
+    } catch {
+      throw CLIError.unreadableInput(path: path, reason: error.localizedDescription)
+    }
   }
 }
 

@@ -72,7 +72,8 @@ package struct HostMeasurement: Sendable, Codable {
 public enum BenchmarkHost {
   /// Answers the CLI's request in `arguments` for the benchmarks that
   /// `discoveries` declare. Errors are written to standard error and exit
-  /// the process with status 1.
+  /// the process with status 2 for an invalid request or configuration, and
+  /// with status 1 for any other failure.
   public static func run(
     discoveries: [any _BenchmarkDiscovery.Type],
     arguments: [String] = Array(CommandLine.arguments.dropFirst()),
@@ -88,7 +89,18 @@ public enum BenchmarkHost {
       }
     } catch {
       FileHandle.standardError.write(Data("benchmark-host: \(error)\n".utf8))
-      exit(1)
+      exit(isInvalidRequest(error) ? 2 : 1)
+    }
+  }
+
+  private static func isInvalidRequest(_ error: any Error) -> Bool {
+    switch error {
+    case is BenchmarkHostError, BenchmarkRunnerError.invalidConfiguration:
+      return true
+    case BenchmarkRunnerError.caseFailed(_, _, .configuration, _):
+      return true
+    default:
+      return false
     }
   }
 

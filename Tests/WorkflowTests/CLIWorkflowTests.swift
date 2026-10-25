@@ -41,9 +41,12 @@ struct CLIWorkflowTests {
     let help = try runProcess(executable: cliPath(), arguments: ["--help"])
     let invalidCommand = try processResult(
       executable: cliPath(), arguments: ["invalid-command"])
+    let missingInput = try processResult(
+      executable: cliPath(), arguments: ["render", "--input", "/nonexistent/report.json"])
 
     #expect(help.contains("Commands:"))
     #expect(invalidCommand.status == 2)
+    #expect(missingInput.status == 2)
   }
 
   @Test(.timeLimit(.minutes(3)))
@@ -187,6 +190,17 @@ struct CLIWorkflowTests {
         "json",
       ]
     )
+    let invalidConfiguration = try processResult(
+      executable: cli,
+      arguments: ["run", "--host", hostPath, "--case", "Noop", "--iterations", "nope"]
+    )
+    let missingBaseline = try processResult(
+      executable: cli,
+      arguments: [
+        "check", "--allow-debug", "--host", hostPath, "--case", "Noop", "--baseline",
+        "/nonexistent/baseline.json",
+      ]
+    )
     // Each step runs in a host process of its own, so no other work shares
     // the counting pass and the counts are exact.
     let allocations = try JSONDecoder().decode(
@@ -217,6 +231,9 @@ struct CLIWorkflowTests {
     #expect(run.contains("\"name\" : \"Noop\""))
     #expect(run.contains("\"measurement\""))
     #expect(failedCheck.status == 20)
+    #expect(invalidConfiguration.status == 2)
+    #expect(invalidConfiguration.errorOutput.contains("Invalid number 'nope' for --iterations"))
+    #expect(missingBaseline.status == 2)
     #expect(failedCheck.output.contains("\"verdict\" : \"failed\""))
     #expect(failedCheck.errorOutput.contains("Regression check failed."))
   }
