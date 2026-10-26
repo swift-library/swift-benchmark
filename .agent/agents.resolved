@@ -1,0 +1,47 @@
+{
+  "instructions": {
+    "chatgpt": {},
+    "sections": [
+      {
+        "hash": "sha256:360b6ec8216f18d10ecfb79da4448121c18ae21ee27e6451ecb17fc2d2d16256",
+        "name": "guide",
+        "path": ".agent/instructions/guide.md",
+        "source": "."
+      },
+      {
+        "hash": "sha256:dc4797e1b91682166d42990cd831c2a9b42d51057713289fd1f5da4dfcfd1964",
+        "name": "shared/swift-package-route",
+        "path": ".agent/instructions/shared/swift-package-route.md",
+        "revision": "609b4d97b47e0b70f70f028306f1d25ae077ed11",
+        "source": "github.com/swift-library/.github"
+      },
+      {
+        "hash": "sha256:06ab95f59b0d66b15a7d7bd34888321cb7056a05a63698f56a429a92e0520f3f",
+        "name": "shared/code-review-rules",
+        "path": ".agent/instructions/shared/code-review-rules.md",
+        "revision": "609b4d97b47e0b70f70f028306f1d25ae077ed11",
+        "source": "github.com/swift-library/.github"
+      }
+    ],
+    "targets": {
+      "AGENTS.md": {
+        "agents": ["claude-code", "codex"],
+        "blockHash": "sha256:a1f52dd05c36eba896a28d67e0b3de5e07b2ac317542862e5733296731f4b024",
+        "created": false,
+        "headingOffset": 0
+      }
+    }
+  },
+  "skills": {},
+  "sources": {
+    "github.com/swift-library/.github": {
+      "kind": "git",
+      "path": ".agent",
+      "requirement": {
+        "branch": "master"
+      },
+      "url": "https://github.com/swift-library/.github"
+    }
+  },
+  "version": 1
+}
