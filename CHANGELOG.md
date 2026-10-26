@@ -13,8 +13,9 @@
   own records its peak memory.
   `Sample`, measurement rows, statistics, baselines, budgets, verdict causes
   and Dimension curves are keyed by metric, and Report JSON no longer carries
-  `schemaVersion`. Baselines written by 0.1.x cannot be read; record them
-  again.
+  `schemaVersion`. Reports and baselines written by 0.1.x cannot be read:
+  decoding a report fails with an error that says to generate it again, and
+  the CLI says to record a baseline again.
 - Short workloads are timed in batches: automatic batching grows each
   sample's call count until it lasts the target duration and reports per-call
   values. `BatchingPolicy` configures it and `--batch-size` fixes it.

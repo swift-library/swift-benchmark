@@ -56,6 +56,8 @@ enum ReportCommands {
     do {
       return try JSONDecoder().decode(
         ReportDocument.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
+    } catch DecodingError.dataCorrupted(let context) {
+      throw CLIError.unreadableInput(path: path, reason: context.debugDescription)
     } catch {
       throw CLIError.unreadableInput(path: path, reason: error.localizedDescription)
     }

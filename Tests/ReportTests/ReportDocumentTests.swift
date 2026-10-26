@@ -123,6 +123,22 @@ struct ReportDocumentTests {
   }
 
   @Test
+  func reportThisVersionCannotReadAsksToGenerateItAgain() throws {
+    let earlierReport = Data(#"{"schemaVersion": 1, "suites": []}"#.utf8)
+
+    let error = #expect(throws: DecodingError.self) {
+      try JSONDecoder().decode(ReportDocument.self, from: earlierReport)
+    }
+
+    guard case .dataCorrupted(let context) = error else {
+      Issue.record("Expected corrupted data, got \(String(describing: error))")
+      return
+    }
+    #expect(context.debugDescription.contains("generate it again"))
+    #expect(context.underlyingError != nil)
+  }
+
+  @Test
   func zeroBaselineJSONRoundTrip() throws {
     let document = ReportDocument(
       metadata: .fixture(),

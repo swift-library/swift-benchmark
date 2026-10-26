@@ -18,6 +18,31 @@ public struct ReportDocument: Sendable, Equatable, Codable {
     self.summary = ReportSummary(suites: suites, runWarnings: warnings)
   }
 
+  private enum CodingKeys: String, CodingKey {
+    case metadata, suites, warnings, summary
+  }
+
+  /// Decodes a report. A document this version cannot read, such as one an
+  /// earlier version wrote, fails with an error that says to generate it
+  /// again; the decoding failure is its underlying error.
+  public init(from decoder: any Decoder) throws {
+    do {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      metadata = try container.decode(RunMetadata.self, forKey: .metadata)
+      suites = try container.decode([SuiteReport].self, forKey: .suites)
+      warnings = try container.decode([ReportWarning].self, forKey: .warnings)
+      summary = try container.decode(ReportSummary.self, forKey: .summary)
+    } catch let error as DecodingError {
+      throw DecodingError.dataCorrupted(
+        DecodingError.Context(
+          codingPath: decoder.codingPath,
+          debugDescription:
+            "This is not a report this version of swift-benchmark can read; generate it again.",
+          underlyingError: error
+        ))
+    }
+  }
+
   public init(
     metadata: RunMetadata,
     results: [BenchmarkResult],
