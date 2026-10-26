@@ -271,6 +271,28 @@ struct CLIWorkflowTests {
     let spawned = try await counted("RunTrue")
     // Inputs from setup are made and freed outside the counted calls.
     let prepared = try await counted("SetupAllocates")
+    let leakSites = try await JSONDecoder().decode(
+      ReportDocument.self,
+      from: Data(
+        runProcess(
+          executable: cli,
+          arguments: [
+            "run", "--host", hostPath, "--interposer", interposerPath(), "--allocation-sites",
+            "--case", "Leak16Bytes", "--warmup", "0", "--iterations", "1", "--format", "json",
+          ]
+        ).utf8)
+    ).suites.first?.cases.first?.measurement.rows.first?.allocationSites
+    let sitesWithoutInterposer = try await processResult(
+      executable: cli,
+      arguments: ["run", "--host", hostPath, "--allocation-sites", "--case", "Leak16Bytes"]
+    )
+    let sitesInTrace = try await processResult(
+      executable: cli,
+      arguments: [
+        "trace", "--host", hostPath, "--interposer", interposerPath(), "--allocation-sites",
+        "--xctrace-output", scratchPath + "/sites.trace", "--case", "Leak16Bytes",
+      ]
+    )
 
     let touched = try await JSONDecoder().decode(
       ReportDocument.self,
@@ -310,6 +332,15 @@ struct CLIWorkflowTests {
     #expect(prepared?.statistics(for: .heapAllocations)?.median == 0)
     #expect(prepared?.statistics(for: .heapNetAllocations)?.median == 0)
     #expect(prepared?.statistics(for: .swiftAllocations)?.median == 0)
+    let leakStack = try #require(leakSites?.stacks.first)
+    #expect(leakSites?.stacks.count == 1)
+    #expect(leakStack.allocations == leakSites?.calls)
+    #expect(leakStack.bytes == 16 * (leakSites?.calls ?? 0))
+    #expect(leakStack.frames.contains { $0.contains("leak16Bytes") })
+    #expect(!leakStack.frames.contains { $0.contains("BenchmarkWorkload") })
+    #expect(sitesWithoutInterposer.status == 2)
+    #expect(sitesWithoutInterposer.errorOutput.contains("--allocation-sites requires --interposer"))
+    #expect(sitesInTrace.status == 2)
     #expect(list.contains("\"suite\" : \"Fixture\""))
     #expect(list.contains("\"caseName\" : \"Noop\""))
     #expect(run.contains("\"wallClock\""))

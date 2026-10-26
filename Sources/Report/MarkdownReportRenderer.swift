@@ -6,7 +6,7 @@ import Foundation
 
 /// Renders a report as GitHub Markdown for pull request comments: the
 /// verdict, warnings, then a table of baseline comparisons, or of medians
-/// without a baseline, failed budgets and complexity fits. JSON stays the
+/// without a baseline, failed budgets, allocation sites and complexity fits. JSON stays the
 /// report's data format; this layout can change.
 package enum MarkdownReportRenderer {
   package static func render(_ document: ReportDocument) -> String {
@@ -77,6 +77,26 @@ package enum MarkdownReportRenderer {
         lines.append(
           "- \(escaped(caseName(suite, report))): \(metric.name) \(budget.policy.statistic.rawValue) \(actual), limit \(formatValue(budget.policy.limit, unit: metric.unit))"
         )
+      }
+    }
+
+    let siteRows = cases.flatMap { suite, report in
+      report.measurement.rows.compactMap { row in
+        row.allocationSites.map { (suite, report, row, $0) }
+      }
+    }
+    if !siteRows.isEmpty {
+      lines += [
+        "", "### Allocation sites", "",
+        "| Case | Row | Allocations per call | Bytes per call | Site |",
+        "| --- | --- | ---: | ---: | --- |",
+      ]
+      for (suite, report, row, sites) in siteRows {
+        for stack in sites.stacks.prefix(3) {
+          lines.append(
+            "| \(escaped(caseName(suite, report))) | \(escaped(row.label ?? "")) | \(formatValue(stack.allocationsPerCall(of: sites), unit: .count)) | \(formatValue(stack.bytesPerCall(of: sites), unit: .bytes)) | \(escaped(stack.summary())) |"
+          )
+        }
       }
     }
 

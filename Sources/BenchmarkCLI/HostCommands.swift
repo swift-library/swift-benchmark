@@ -39,6 +39,13 @@ enum HostCommands {
     }
 
     let timeline = command == "trace" || options.hasFlag("--timeline") ? ["--timeline"] : []
+    let sites = options.hasFlag("--allocation-sites") ? ["--allocation-sites"] : []
+    if !sites.isEmpty, host.interposerPath == nil {
+      throw CLIError.optionRequires("--allocation-sites", "--interposer")
+    }
+    if !sites.isEmpty, options.value(for: "--xctrace-output") != nil {
+      throw CLIError.conflictingOptions("--allocation-sites", "--xctrace-output")
+    }
     var traceExporters = options.traceExporters()
     var measurements: [HostMeasurement]
     if let traceOutput = options.value(for: "--xctrace-output") {
@@ -52,7 +59,8 @@ enum HostCommands {
       traceExporters.append(TraceArtifactExporter(artifact: traced.artifact))
     } else {
       measurements = try plan.steps.map { step in
-        try host.measureStep(step.id, options.configurationArguments + timeline)
+        try host.measureStep(
+          step.id, options.configurationArguments + timeline, countingArguments: sites)
       }
     }
     if let swiftVersion = options.value(for: "--swift-version") {

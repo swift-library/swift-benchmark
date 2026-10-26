@@ -129,10 +129,11 @@ extension BenchmarkRunner {
       )
     }
 
+    var allocationSites: Benchmark.AllocationSites?
     if countsAllocations || countsOnly {
       let values: [Benchmark.Metric: Double]
       do {
-        values = try await countAllocations(workload, batchSize: batchSize)
+        (values, allocationSites) = try await countAllocations(workload, batchSize: batchSize)
       } catch {
         await recordIssue(
           error, step: step, iteration: nil, phase: .counting, eventRecorders: eventRecorders)
@@ -145,7 +146,8 @@ extension BenchmarkRunner {
         await record(
           kind: .sampleRecorded,
           context: Benchmark.Event.Context(
-            step: step, iteration: sample.iteration, phase: .counting, sample: sample),
+            step: step, iteration: sample.iteration, phase: .counting, sample: sample,
+            allocationSites: allocationSites),
           eventRecorders: eventRecorders
         )
       }
@@ -173,7 +175,8 @@ extension BenchmarkRunner {
       id: step.argumentRow?.id,
       size: step.size,
       arguments: step.arguments,
-      samples: samples
+      samples: samples,
+      allocationSites: allocationSites
     )
   }
 
@@ -204,16 +207,17 @@ extension BenchmarkRunner {
 
   /// Counts one batch of `batchSize` calls: Swift runtime allocations and
   /// reference counting, and heap allocations where the interposer library is
-  /// loaded, each divided by the batch size. Empty where nothing counts.
+  /// loaded, each divided by the batch size, with the allocations' sites when
+  /// recording them. The values are empty where nothing counts.
   private func countAllocations(
     _ workload: BenchmarkWorkload,
     batchSize: Int
-  ) async throws -> [Benchmark.Metric: Double] {
+  ) async throws -> (values: [Benchmark.Metric: Double], sites: Benchmark.AllocationSites?) {
     let interposer = InterposerCounters.loaded
     var hooked: RuntimeCounters.Counts?
     var interposed: InterposerCounters.Counts?
     try await workload.callMeasured(batchSize) { calls in
-      interposer?.start()
+      interposer?.start(recordingSites: false)
       do {
         hooked = try await RuntimeCounters.counting(calls)
       } catch {
@@ -238,7 +242,25 @@ extension BenchmarkRunner {
       values[.heapNetAllocations] =
         (Double(interposed.heapAllocations) - Double(interposed.heapFrees)) / calls
     }
-    return values
+    guard recordsAllocationSites, let interposer else {
+      return (values, nil)
+    }
+    // A separate batch records the sites, without the runtime hooks, whose
+    // counting functions would otherwise sit inside every Swift allocation's
+    // stack.
+    var recordedStacks: [InterposerCounters.RecordedStack] = []
+    try await workload.callMeasured(batchSize) { calls in
+      interposer.start(recordingSites: true)
+      do {
+        try await calls()
+      } catch {
+        interposer.stop()
+        throw error
+      }
+      interposer.stop()
+      recordedStacks = interposer.recordedStacks()
+    }
+    return (values, Benchmark.AllocationSites(calls: batchSize, recorded: recordedStacks))
   }
 
   /// Chooses how many calls each sample measures. Automatic batching grows

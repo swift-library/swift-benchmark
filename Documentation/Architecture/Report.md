@@ -54,7 +54,8 @@ The public model:
   verdict causes and case warnings.
 - `Report.Measurement` and `Report.Measurement.Row`: the Codable projection of
   `Benchmark.Measurement`; each row has its size or argument row identity, raw
-  `SampleReport`s, the metrics it measured, and recomputed statistics.
+  `SampleReport`s, the metrics it measured, recomputed statistics and, when
+  recorded, its `Benchmark.AllocationSites`.
 - `Report.Statistics` and `Report.Statistic`: count, min, max, mean, median,
   standard deviation, p90, p95, p99 and mild and severe outlier counts of one
   metric, and the selector for one of them.
@@ -150,7 +151,9 @@ interquartile ranges outside the quartiles, with the range counted as at least
 
 `ReportDocument: Codable` JSON is the stable exchange contract for machines,
 agents and CI. Report also renders the console summary, a Markdown summary for
-pull request comments and speedscope timeline exports for the CLI; those
+pull request comments and speedscope exports for the CLI, with timelines as
+evented profiles and allocation sites as sampled profiles weighted by
+allocations and by bytes per call; those
 renderers are package-internal, read the same document and add no facts of
 their own, and their layout is not a contract. HTML, CSV and other
 presentations belong in templates or tools over the JSON, not in Report.

@@ -27,17 +27,22 @@ extension Benchmark.Measurement {
     public var size: Benchmark.Scale?
     public var arguments: [Benchmark.ArgumentValue]
     public var samples: [Sample]
+    /// Where the counted batch's heap allocations came from, when the runner
+    /// recorded them.
+    public var allocationSites: Benchmark.AllocationSites?
 
     public init(
       id: String? = nil,
       size: Benchmark.Scale?,
       arguments: [Benchmark.ArgumentValue] = [],
-      samples: [Sample]
+      samples: [Sample],
+      allocationSites: Benchmark.AllocationSites? = nil
     ) {
       self.id = id
       self.size = size
       self.arguments = arguments
       self.samples = samples
+      self.allocationSites = allocationSites
     }
   }
 }

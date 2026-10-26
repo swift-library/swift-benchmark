@@ -15,6 +15,9 @@ enum CLIError: Error, CustomStringConvertible {
   case unexpectedArgument(String)
   case missingValue(String)
   case missingOption(String)
+  /// The first option needs the second.
+  case optionRequires(String, String)
+  case conflictingOptions(String, String)
   case invalidFormat(String, allowed: [String])
   case noBenchmarksSelected
   case hostFailure(status: Int32, stderr: String)
@@ -54,6 +57,10 @@ enum CLIError: Error, CustomStringConvertible {
       return "Missing value for \(option)."
     case .missingOption(let option):
       return "Missing required option \(option)."
+    case .optionRequires(let option, let required):
+      return "\(option) requires \(required)."
+    case .conflictingOptions(let first, let second):
+      return "\(first) cannot be combined with \(second)."
     case .invalidFormat(let format, let allowed):
       return "Invalid format '\(format)'. Use \(allowed.joined(separator: ", "))."
     case .noBenchmarksSelected:

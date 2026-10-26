@@ -14,11 +14,13 @@
 #include "_BenchmarkInterposer.h"
 
 #include <dlfcn.h>
+#include <execinfo.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 
 #define BENCHMARK_INTERPOSER_COUNTERS 7
 
@@ -40,10 +42,88 @@ static inline void add(benchmark_interposer_counter counter, uint64_t value) {
   atomic_fetch_add_explicit(&counts[counter], value, memory_order_relaxed);
 }
 
+// Allocation sites: an open-addressing table of call stacks, mapped once and
+// never freed, so recording a site allocates nothing through this library.
+// Stacks are captured before taking the table's lock, so a thread that holds
+// the loader's lock while allocating cannot deadlock with one that unwinds.
+
+#define BENCHMARK_INTERPOSER_SITE_DEPTH 32
+#define BENCHMARK_INTERPOSER_SITE_SLOTS 16384
+
+typedef struct {
+  uint64_t hash;
+  uint64_t allocations;
+  uint64_t bytes;
+  uint32_t depth;
+  void *frames[BENCHMARK_INTERPOSER_SITE_DEPTH];
+} site;
+
+static site *sites;
+static _Atomic bool recording_sites;
+/// Whether the last start recorded sites, which the table then holds.
+static bool sites_recorded;
+static atomic_flag sites_lock = ATOMIC_FLAG_INIT;
+/// The image this library was loaded from, whose frames sites leave out.
+static void *own_image;
+
+#if defined(__linux__)
+// Set while this thread records a site: what unwinding allocates is neither
+// counted nor recorded, and cannot recurse into the recorder.
+static __thread bool recording_this_thread __attribute__((tls_model("initial-exec")));
+#endif
+
+static void record_site(size_t size) {
+  void *frames[BENCHMARK_INTERPOSER_SITE_DEPTH + 8];
+  int captured = backtrace(frames, BENCHMARK_INTERPOSER_SITE_DEPTH + 8);
+  int first = 0;
+  Dl_info info;
+  while (first < captured && dladdr(frames[first], &info) != 0 && info.dli_fbase == own_image) {
+    first++;
+  }
+  uint32_t depth = (uint32_t)(captured - first);
+  if (depth > BENCHMARK_INTERPOSER_SITE_DEPTH) {
+    depth = BENCHMARK_INTERPOSER_SITE_DEPTH;
+  }
+  // FNV-1a over the return addresses.
+  uint64_t hash = 0xcbf29ce484222325ULL;
+  for (uint32_t index = 0; index < depth; index++) {
+    hash ^= (uint64_t)(uintptr_t)frames[first + index];
+    hash *= 0x100000001b3ULL;
+  }
+  hash |= 1;  // An empty slot has hash 0.
+
+  while (atomic_flag_test_and_set_explicit(&sites_lock, memory_order_acquire)) {
+  }
+  for (uint32_t probe = 0; probe < BENCHMARK_INTERPOSER_SITE_SLOTS; probe++) {
+    site *slot = &sites[(hash + probe) % BENCHMARK_INTERPOSER_SITE_SLOTS];
+    if (slot->hash == 0) {
+      slot->hash = hash;
+      slot->depth = depth;
+      memcpy(slot->frames, &frames[first], depth * sizeof(void *));
+    } else if (slot->hash != hash || slot->depth != depth
+               || memcmp(slot->frames, &frames[first], depth * sizeof(void *)) != 0) {
+      continue;
+    }
+    slot->allocations += 1;
+    slot->bytes += size;
+    break;
+  }
+  atomic_flag_clear_explicit(&sites_lock, memory_order_release);
+}
+
 static inline void record_allocation(const void *result, size_t size) {
   if (result != NULL) {
     add(benchmark_interposer_heap_allocations, 1);
     add(benchmark_interposer_heap_allocated_bytes, size);
+    if (atomic_load_explicit(&recording_sites, memory_order_relaxed)) {
+#if defined(__linux__)
+      recording_this_thread = true;
+      record_site(size);
+      recording_this_thread = false;
+#else
+      record_site(size);
+#endif
+    }
   }
 }
 
@@ -106,15 +186,52 @@ __attribute__((constructor)) static void remove_from_environment(void) {
   }
 }
 
-void benchmark_interposer_start(void) {
+void benchmark_interposer_start(uint32_t options) {
   for (int counter = 0; counter < BENCHMARK_INTERPOSER_COUNTERS; counter++) {
     atomic_store_explicit(&counts[counter], 0, memory_order_relaxed);
   }
+  bool records_sites = (options & benchmark_interposer_records_sites) != 0;
+  if (records_sites) {
+    size_t length = sizeof(site) * BENCHMARK_INTERPOSER_SITE_SLOTS;
+    if (sites == NULL) {
+      void *table = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+      sites = table == MAP_FAILED ? NULL : table;
+      Dl_info info;
+      if (dladdr((const void *)&record_site, &info) != 0) {
+        own_image = info.dli_fbase;
+      }
+    } else {
+      memset(sites, 0, length);
+    }
+    // The first unwind can load libraries and allocate; do it before counting.
+    void *frame;
+    backtrace(&frame, 1);
+  }
+  sites_recorded = records_sites && sites != NULL;
+  atomic_store(&recording_sites, sites_recorded);
   atomic_store(&counting, true);
+}
+
+uint32_t benchmark_interposer_site_slots(void) {
+  return sites_recorded ? BENCHMARK_INTERPOSER_SITE_SLOTS : 0;
+}
+
+uint32_t benchmark_interposer_site(
+  uint32_t index, void **frames, uint32_t capacity, uint64_t *allocations, uint64_t *bytes) {
+  if (!sites_recorded || index >= BENCHMARK_INTERPOSER_SITE_SLOTS || sites[index].hash == 0) {
+    return 0;
+  }
+  const site *slot = &sites[index];
+  uint32_t depth = slot->depth < capacity ? slot->depth : capacity;
+  memcpy(frames, slot->frames, depth * sizeof(void *));
+  *allocations = slot->allocations;
+  *bytes = slot->bytes;
+  return depth;
 }
 
 void benchmark_interposer_stop(void) {
   atomic_store(&counting, false);
+  atomic_store(&recording_sites, false);
 }
 
 uint64_t benchmark_interposer_count(benchmark_interposer_counter counter) {
@@ -455,7 +572,7 @@ extern void *__libc_valloc(size_t size);
 extern void *__libc_pvalloc(size_t size);
 
 static inline bool is_counting(void) {
-  return atomic_load_explicit(&counting, memory_order_relaxed);
+  return atomic_load_explicit(&counting, memory_order_relaxed) && !recording_this_thread;
 }
 
 void *malloc(size_t size) {

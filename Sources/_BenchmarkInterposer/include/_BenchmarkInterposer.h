@@ -27,8 +27,15 @@ typedef enum {
   benchmark_interposer_swift_releases = 6,
 } benchmark_interposer_counter;
 
-/// Resets every count to zero and starts counting.
-void benchmark_interposer_start(void);
+/// Options for ``benchmark_interposer_start``.
+typedef enum {
+  /// Also records the call stack of every counted allocation by site.
+  benchmark_interposer_records_sites = 1,
+} benchmark_interposer_option;
+
+/// Resets every count, and the sites when recording them, and starts
+/// counting. `options` combines `benchmark_interposer_option` values.
+void benchmark_interposer_start(uint32_t options);
 
 /// Stops counting. The counts keep their values until the next start.
 void benchmark_interposer_stop(void);
@@ -36,5 +43,16 @@ void benchmark_interposer_stop(void);
 /// The value of `counter` since the last start, or `UINT64_MAX` where this
 /// platform's interposer does not count it.
 uint64_t benchmark_interposer_count(benchmark_interposer_counter counter);
+
+/// The number of site slots to read with ``benchmark_interposer_site``, or 0
+/// when the last start recorded no sites.
+uint32_t benchmark_interposer_site_slots(void);
+
+/// The site in slot `index`: copies up to `capacity` return addresses,
+/// innermost first, into `frames` and returns how many it copied, with the
+/// allocations and requested bytes counted at the site. Returns 0 for an empty
+/// slot. A table full of distinct sites records no further ones.
+uint32_t benchmark_interposer_site(
+  uint32_t index, void **frames, uint32_t capacity, uint64_t *allocations, uint64_t *bytes);
 
 #endif

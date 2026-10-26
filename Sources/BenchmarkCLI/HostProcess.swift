@@ -25,18 +25,21 @@ struct HostProcess {
 
   /// Measures one step: in one process, or, given the interposer, timed in
   /// one process and counted in another that loads the interposer and calls
-  /// the step in batches of the timed size.
-  func measureStep(_ stepID: String, _ arguments: [String]) throws -> HostMeasurement {
+  /// the step in batches of the timed size. `countingArguments` go only to
+  /// the process that counts.
+  func measureStep(
+    _ stepID: String, _ arguments: [String], countingArguments: [String] = []
+  ) throws -> HostMeasurement {
     let step = ["--step", stepID, "--isolated"]
     guard let interposerPath else {
-      return try measure(step + arguments)
+      return try measure(step + arguments + countingArguments)
     }
     var timing = try measure(step + arguments + ["--timing-only"])
     guard let batchSize = timing.timedBatchSize(ofStep: stepID) else {
       return timing
     }
     let counting: HostMeasurement = try invoke(
-      ["measure"] + step + arguments.filter { $0 != "--timeline" }
+      ["measure"] + step + arguments.filter { $0 != "--timeline" } + countingArguments
         + ["--counting-only", "--batch-size", String(batchSize)],
       injecting: interposerPath
     )

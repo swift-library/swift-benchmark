@@ -90,7 +90,8 @@ public struct ReportBuilder: Sendable {
                     size: row.scale,
                     arguments: row.arguments,
                     samples: rowAccumulator.samples.sorted { $0.iteration < $1.iteration },
-                    metrics: rowAccumulator.metrics
+                    metrics: rowAccumulator.metrics,
+                    allocationSites: rowAccumulator.allocationSites
                   )
                 }
             )
@@ -185,7 +186,7 @@ public struct ReportBuilder: Sendable {
       )
       let order = cases[key]?.rows.count ?? 0
       cases[key]?.rows[row, default: RowAccumulator(order: order)]
-        .add(sample, metrics: record.context.metrics)
+        .add(sample, metrics: record.context.metrics, sites: record.context.allocationSites)
     }
     return cases.filter { !$0.value.rows.isEmpty }
   }
@@ -231,9 +232,15 @@ private struct RowAccumulator {
   var order: Int
   var samples: [SampleReport] = []
   var metrics: [Benchmark.Metric] = []
+  var allocationSites: Benchmark.AllocationSites?
 
-  mutating func add(_ sample: SampleReport, metrics sampleMetrics: [Benchmark.Metric]) {
+  mutating func add(
+    _ sample: SampleReport,
+    metrics sampleMetrics: [Benchmark.Metric],
+    sites: Benchmark.AllocationSites?
+  ) {
     samples.append(sample)
     metrics = Report.mergedMetrics([metrics, sampleMetrics])
+    allocationSites = sites ?? allocationSites
   }
 }

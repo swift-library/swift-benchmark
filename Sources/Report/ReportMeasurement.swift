@@ -265,6 +265,8 @@ extension Report.Measurement {
     public var statistics: [String: Report.Statistics]
     /// Statistics per unit of ``size``, keyed by metric name; `nil` without a size.
     public var amortized: [String: Report.Statistics]?
+    /// Where the counted batch's heap allocations came from, when recorded.
+    public var allocationSites: Benchmark.AllocationSites?
 
     /// Creates a row and computes its statistics, and its amortized
     /// statistics when it has a size.
@@ -273,7 +275,8 @@ extension Report.Measurement {
       size: Benchmark.Scale?,
       arguments: [Benchmark.ArgumentValue] = [],
       samples: [SampleReport],
-      metrics: [Benchmark.Metric]
+      metrics: [Benchmark.Metric],
+      allocationSites: Benchmark.AllocationSites? = nil
     ) {
       let metrics = Report.mergedMetrics([metrics])
       var statistics: [String: Report.Statistics] = [:]
@@ -290,6 +293,7 @@ extension Report.Measurement {
       self.samples = samples
       self.statistics = statistics
       self.amortized = size.map { size in statistics.mapValues { $0.amortized(by: size) } }
+      self.allocationSites = allocationSites
     }
 
     /// The row's statistics for `metric`, or `nil` when no sample measured it.
@@ -305,6 +309,7 @@ extension Report.Measurement {
       case samples
       case statistics
       case amortized
+      case allocationSites
     }
 
     /// Decodes a row. Statistics are recomputed from the samples, so a decoded
@@ -317,7 +322,9 @@ extension Report.Measurement {
         arguments: try container.decodeIfPresent(
           [Benchmark.ArgumentValue].self, forKey: .arguments) ?? [],
         samples: try container.decode([SampleReport].self, forKey: .samples),
-        metrics: try container.decode([Benchmark.Metric].self, forKey: .metrics)
+        metrics: try container.decode([Benchmark.Metric].self, forKey: .metrics),
+        allocationSites: try container.decodeIfPresent(
+          Benchmark.AllocationSites.self, forKey: .allocationSites)
       )
     }
 
@@ -330,6 +337,7 @@ extension Report.Measurement {
       try container.encode(samples, forKey: .samples)
       try container.encode(statistics, forKey: .statistics)
       try container.encodeIfPresent(amortized, forKey: .amortized)
+      try container.encodeIfPresent(allocationSites, forKey: .allocationSites)
     }
   }
 }

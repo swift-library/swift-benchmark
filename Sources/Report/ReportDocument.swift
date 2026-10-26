@@ -183,7 +183,8 @@ public struct ReportDocument: Sendable, Equatable, Codable {
                 uniqueKeysWithValues: sample.values.map { ($0.key.name, $0.value) })
             )
           },
-          metrics: Array(Set(row.samples.flatMap(\.values.keys)))
+          metrics: Array(Set(row.samples.flatMap(\.values.keys))),
+          allocationSites: row.allocationSites
         )
       }
     )

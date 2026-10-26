@@ -39,6 +39,17 @@ package enum ConsoleReportRenderer {
         for warning in report.warnings {
           lines.append("  warning: \(warning.message)")
         }
+        for row in report.measurement.rows {
+          guard let sites = row.allocationSites else {
+            continue
+          }
+          let rowPrefix = row.label.map { "\($0): " } ?? ""
+          for stack in sites.stacks.prefix(3) {
+            lines.append(
+              "  \(rowPrefix)\(formatValue(stack.allocationsPerCall(of: sites), unit: .count)) allocations, \(formatValue(stack.bytesPerCall(of: sites), unit: .bytes)) per call at \(stack.summary())"
+            )
+          }
+        }
       }
     }
     return lines.joined(separator: "\n")
@@ -84,7 +95,7 @@ package enum SpeedscopeReportRenderer {
   }
 }
 
-private struct SpeedscopeFile: Codable {
+private struct SpeedscopeFile: Encodable {
   var schema: String
   var shared: SpeedscopeShared
   var profiles: [SpeedscopeProfile]
@@ -98,16 +109,31 @@ private struct SpeedscopeFile: Codable {
   }
 }
 
-private struct SpeedscopeShared: Codable {
+private struct SpeedscopeShared: Encodable {
   var frames: [SpeedscopeFrame]
 }
 
-private struct SpeedscopeFrame: Codable {
+private struct SpeedscopeFrame: Encodable {
   var name: String
 }
 
-private struct SpeedscopeProfile: Codable {
-  var type: String
+/// A timeline of spans, or call stacks weighted by allocations or bytes.
+private enum SpeedscopeProfile: Encodable {
+  case evented(SpeedscopeEventedProfile)
+  case sampled(SpeedscopeSampledProfile)
+
+  func encode(to encoder: any Encoder) throws {
+    switch self {
+    case .evented(let profile):
+      try profile.encode(to: encoder)
+    case .sampled(let profile):
+      try profile.encode(to: encoder)
+    }
+  }
+}
+
+private struct SpeedscopeEventedProfile: Encodable {
+  var type = "evented"
   var name: String
   var unit: String
   var startValue: UInt64
@@ -115,7 +141,18 @@ private struct SpeedscopeProfile: Codable {
   var events: [SpeedscopeEvent]
 }
 
-private struct SpeedscopeEvent: Codable {
+/// Stacks of frame indexes, outermost first, each with its weight.
+private struct SpeedscopeSampledProfile: Encodable {
+  var type = "sampled"
+  var name: String
+  var unit: String
+  var startValue: Double = 0
+  var endValue: Double
+  var samples: [[Int]]
+  var weights: [Double]
+}
+
+private struct SpeedscopeEvent: Encodable {
   var type: String
   var frame: Int
   var at: UInt64
@@ -149,20 +186,43 @@ private struct SpeedscopeBuilder {
             events.append(SpeedscopeEvent(type: "C", frame: frame, at: end - minStart))
           }
           profiles.append(
-            SpeedscopeProfile(
-              type: "evented",
-              name: profileName(suite: suite.name, report: report.name, attribution: attribution),
-              unit: "nanoseconds",
-              startValue: 0,
-              endValue: maxEnd - minStart,
-              events: events.sorted { lhs, rhs in
-                if lhs.at == rhs.at {
-                  return lhs.type == "C" && rhs.type == "O"
+            .evented(
+              SpeedscopeEventedProfile(
+                name: profileName(
+                  suite: suite.name, report: report.name, attribution: attribution),
+                unit: "nanoseconds",
+                startValue: 0,
+                endValue: maxEnd - minStart,
+                events: events.sorted { lhs, rhs in
+                  if lhs.at == rhs.at {
+                    return lhs.type == "C" && rhs.type == "O"
+                  }
+                  return lhs.at < rhs.at
                 }
-                return lhs.at < rhs.at
-              }
-            )
+              ))
           )
+        }
+        for row in report.measurement.rows {
+          guard let sites = row.allocationSites, !sites.stacks.isEmpty else {
+            continue
+          }
+          let name = "\(suite.name).\(report.name)" + (row.label.map { " \($0)" } ?? "")
+          let samples = sites.stacks.map { $0.frames.reversed().map { frameIndex(for: $0) } }
+          for (kind, unit, weights) in [
+            ("allocations", "none", sites.stacks.map { $0.allocationsPerCall(of: sites) }),
+            ("allocated bytes", "bytes", sites.stacks.map { $0.bytesPerCall(of: sites) }),
+          ] {
+            profiles.append(
+              .sampled(
+                SpeedscopeSampledProfile(
+                  name: "\(name) \(kind) per call",
+                  unit: unit,
+                  endValue: weights.reduce(0, +),
+                  samples: samples,
+                  weights: weights
+                ))
+            )
+          }
         }
       }
     }
@@ -191,5 +251,33 @@ private struct SpeedscopeBuilder {
       return "\(suite).\(report) \(sampleID.rawValue)"
     }
     return "\(suite).\(report)"
+  }
+}
+
+extension Benchmark.AllocationStack {
+  /// Prefixes of frames inside the Swift runtime's allocation path and the
+  /// system allocator, which every stack shares.
+  private static let allocatorFramePrefixes = [
+    "swift::", "swift_", "_swift_", "malloc", "_malloc", "calloc", "realloc", "operator new",
+    "__libc_", "objc_", "_objc_",
+  ]
+
+  /// Up to `limit` frames, innermost first, starting at the innermost one
+  /// outside the Swift runtime's allocation path and the system allocator.
+  func summary(frames limit: Int = 2) -> String {
+    let start =
+      frames.firstIndex { frame in
+        !Self.allocatorFramePrefixes.contains { frame.hasPrefix($0) }
+      } ?? 0
+    let shown = frames[start...].prefix(limit)
+    return shown.isEmpty ? "(unknown)" : shown.joined(separator: " ← ")
+  }
+
+  func allocationsPerCall(of sites: Benchmark.AllocationSites) -> Double {
+    Double(allocations) / Double(max(sites.calls, 1))
+  }
+
+  func bytesPerCall(of sites: Benchmark.AllocationSites) -> Double {
+    Double(bytes) / Double(max(sites.calls, 1))
   }
 }

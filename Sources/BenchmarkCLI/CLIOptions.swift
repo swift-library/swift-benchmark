@@ -7,6 +7,7 @@ import Report
 struct CLIOptions {
   private static let flags: Set<String> = [
     "--adaptive",
+    "--allocation-sites",
     "--allow-debug",
     "--fail-on-regression",
     "--quiet",

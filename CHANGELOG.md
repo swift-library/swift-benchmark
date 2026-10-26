@@ -13,6 +13,9 @@
   and a counting process that loads it; `--interposer` passes the library to
   the CLI with your own host. On Linux the counting process also records the
   Swift allocation and reference-counting metrics.
+- `--allocation-sites` records where heap allocations come from: each row
+  lists its call stacks with allocations and bytes, in JSON, the console and
+  Markdown summaries, and speedscope flame graphs.
 - Batch loops no longer allocate in unoptimized builds, so counts of a debug
   build include only the workload's own allocations.
 - `setup:` on `@Benchmark` and the `Benchmark` initializers makes a fresh input

@@ -111,6 +111,27 @@ test process, records no heap metrics. The library removes itself from the
 front of the variable that loaded it, so the processes a benchmark starts do
 not inherit it.
 
+### Allocation Sites
+
+With `--allocation-sites`, the counting process records where allocations come
+from in one more batch after the counting pass, without the Swift runtime
+hooks, whose counting functions would otherwise sit inside every Swift
+allocation's stack. The interposer captures each counted allocation's return
+addresses with `backtrace`, leaving out its own frames, and adds them to an
+open-addressing table of 16,384 stacks of up to 32 frames, mapped once and
+never freed; a full table records no further distinct stacks. Stacks are
+captured before the table's lock is taken. On Linux a thread-local flag keeps
+what unwinding allocates out of the counts and the table, and the first unwind
+runs before counting starts.
+
+The runner symbolicates the addresses with `dladdr`, demangles Swift names
+with the runtime's demangler and C++ names with `__cxa_demangle` when the
+process has loaded it, drops the frames from the first runner frame down,
+merges stacks that become equal, and keeps the 50 with the most allocations
+as `Benchmark.AllocationSites` on the row: the batch's call count and each
+stack's allocations and requested bytes. Symbols come from the host's symbol
+tables, so a stripped host shows image offsets.
+
 The runner's own batch loops count down in `while` loops: a range loop
 allocates in unoptimized builds, and the counting pass would charge those
 allocations to the workload. Allocations of the workload itself are counted as
@@ -182,3 +203,6 @@ otherwise is judged by default.
   allocations, and a workload that starts a process (package workflow tests).
 - Timing and counting processes record only their own metrics, and the CLI
   adds counting samples to the timed row of their step (`BenchmarkHostTests`).
+- Allocation sites name the allocating benchmark function with exact totals
+  and leave out the runner (package workflow tests), and reach the JSON,
+  console, Markdown and speedscope outputs (`ReportDocumentTests`).

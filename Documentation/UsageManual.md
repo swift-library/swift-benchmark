@@ -326,6 +326,22 @@ Outside the counting process, such as in tests, the heap metrics are left out,
 and on Linux the Swift counts too. A counting process counts allocations as the
 build produces them, so a debug build can count more than a release build.
 
+To see where the allocations come from, add `--allocation-sites` to `run` or
+`check`. The counting process records the call stack of every allocation in one
+more batch, and the report lists each row's stacks, most allocations first, up
+to 50, with allocations and bytes per call:
+
+```bash
+swift package --allow-writing-to-directory .build benchmark run \
+  --tag parser --allocation-sites --format speedscope --output .build/allocations.speedscope.json
+```
+
+The console and Markdown formats show the top stacks from the first frame
+outside the Swift runtime and the system allocator; the speedscope format
+opens them as flame graphs weighted by allocations and by bytes. Stacks name
+functions from the host's symbol tables; inlined functions appear as their
+callers. Recording sites is slower, so it is off unless requested.
+
 `peakMemory` needs a process that measures nothing else, because platforms
 report only the highest footprint over the process lifetime. The package
 workflow runs every step in a host process of its own and records it there; a

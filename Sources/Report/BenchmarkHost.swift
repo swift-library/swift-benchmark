@@ -191,6 +191,7 @@ public enum BenchmarkHost {
         recordsPeakMemory: options.isolated && !options.countsOnly
       )
       runner.countsOnly = options.countsOnly
+      runner.recordsAllocationSites = options.recordsAllocationSites
       let measurement = try await measure(
         plan,
         runner: runner,
@@ -266,6 +267,7 @@ package enum BenchmarkHostError: Error, CustomStringConvertible {
 private struct BenchmarkHostOptions {
   private static let flags: Set<String> = [
     "--adaptive", "--isolated", "--timeline", "--timing-only", "--counting-only",
+    "--allocation-sites",
   ]
   private static let valueOptions: Set<String> = [
     "--suite", "--case", "--tag", "--step", "--output",
@@ -319,6 +321,11 @@ private struct BenchmarkHostOptions {
   /// Whether this process only counts the steps' allocations.
   var countsOnly: Bool {
     flags.contains("--counting-only")
+  }
+
+  /// Whether counting records where allocations come from.
+  var recordsAllocationSites: Bool {
+    flags.contains("--allocation-sites")
   }
 
   func plan(discoveries: [any _BenchmarkDiscovery.Type]) throws -> BenchmarkRunner.Plan {

@@ -85,6 +85,7 @@ struct BenchmarkCLI {
       --version
       --host <path>
       --interposer <path>   (the allocation-counting library; the command plugin passes it)
+      --allocation-sites   (record where heap allocations come from; needs --interposer)
       --swift-version <text>   (the compiler that built the host, for run metadata)
       --statistic min|max|mean|median|standardDeviation|p90|p95|p99   (default median)
       --threshold <n>% | <metric>=<n>%|<amount>   (default 10%)

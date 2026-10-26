@@ -19,6 +19,9 @@ public struct BenchmarkRunner: Sendable {
   /// counting pass twice and records the second. A counting host process
   /// measures this way.
   package var countsOnly = false
+  /// Whether the counting pass records where heap allocations come from. Only
+  /// a process with the interposer library loaded records them.
+  package var recordsAllocationSites = false
 
   /// Creates a runner. The defaults measure wall-clock time, CPU time,
   /// process events and allocation counts, and leave out peak memory.
