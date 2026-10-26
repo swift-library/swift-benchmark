@@ -75,7 +75,8 @@ func writeCModuleDependencyPackage(at package: URL, explicitModuleMap: Bool) thr
 
 /// A package whose benchmarks call C, Objective-C and C++ targets, a static
 /// XCFramework and a resource bundle, plus a test-target benchmark whose
-/// `@Test` attribute shares the function's line.
+/// `@Test` attribute shares the function's line, and a test target without
+/// benchmarks that does not compile, which the plugin must not build.
 func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) throws {
   try writeFile(
     """
@@ -108,6 +109,7 @@ func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) throws {
             .product(name: "BenchmarkTesting", package: "swift-benchmark"),
           ]
         ),
+        .testTarget(name: "UnrelatedTests"),
       ]
     )
     """,
@@ -161,6 +163,7 @@ func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) throws {
       @Test(.benchmark()) func sameLine() { precondition(Counters.total() == 15) }
     }
     """,
+    "Tests/UnrelatedTests/Unrelated.swift": "let unbuilt: Int = \"not an Int\"\n",
     "binary/include/BinaryCounter.h": "int binary_counter_value(void);\n",
     "binary/include/module.modulemap":
       "module BinaryCounter {\n  header \"BinaryCounter.h\"\n  export *\n}\n",

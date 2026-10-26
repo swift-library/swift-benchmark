@@ -40,9 +40,19 @@ struct HostBuilder {
       logging: .concise,
       echoLogs: false
     )
-    let build = try packageManager.build(.all(includingTests: true), parameters: parameters)
-    guard build.succeeded else {
-      throw PluginError.buildFailed(build.logText)
+    // Only targets that declare benchmarks are built, with their
+    // dependencies; other targets, such as UI tests, are left alone. A
+    // release build compiles test targets for testing, which the bridge's
+    // `@testable import` needs, only when it builds every test target.
+    let subsets: [PackageManager.BuildSubset] =
+      configuration == .release && plan.requiresSwiftTesting
+      ? [.all(includingTests: true)]
+      : plan.discoveredTargetNames.map { .target($0) }
+    for subset in subsets {
+      let build = try packageManager.build(subset, parameters: parameters)
+      guard build.succeeded else {
+        throw PluginError.buildFailed(build.logText)
+      }
     }
     _ = try? packageManager.build(.target("Report"), parameters: parameters)
 

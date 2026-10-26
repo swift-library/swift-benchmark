@@ -69,6 +69,9 @@
   resource bundles and link XCFramework binary targets and the C++ standard
   library. `SWIFT_BENCHMARK_DISCOVERY_BACKEND` and
   `SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH` are removed.
+- The plugin builds only the targets that declare benchmarks and their
+  dependencies, except a release run of test-target benchmarks, which builds
+  every test target.
 - A release host is compiled with optimization, so generated testing bridges
   run optimized inside measured batches, and the plugin no longer loads module
   maps from inside XCFrameworks.
