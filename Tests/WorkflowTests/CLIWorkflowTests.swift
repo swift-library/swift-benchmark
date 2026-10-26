@@ -43,10 +43,18 @@ struct CLIWorkflowTests {
       executable: cliPath(), arguments: ["invalid-command"])
     let missingInput = try await processResult(
       executable: cliPath(), arguments: ["render", "--input", "/nonexistent/report.json"])
+    let earlierReport = FileManager.default.temporaryDirectory
+      .appendingPathComponent("swift-benchmark-earlier-report-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: earlierReport) }
+    try Data(#"{"schemaVersion": 1, "suites": []}"#.utf8).write(to: earlierReport)
+    let unreadableInput = try await processResult(
+      executable: cliPath(), arguments: ["render", "--input", earlierReport.path])
 
     #expect(help.contains("Commands:"))
     #expect(invalidCommand.status == 2)
     #expect(missingInput.status == 2)
+    #expect(unreadableInput.status == 2)
+    #expect(unreadableInput.errorOutput.contains("generate it again"))
   }
 
   @Test(.timeLimit(.minutes(3)))
