@@ -104,6 +104,10 @@ The [usage manual](Documentation/UsageManual.md) covers native and Swift Testing
 
 - Swift 6.3 or later; Swift 6.0 through 6.2 use 0.1.x
 - iOS 18 or later, macOS 15 or later
+- With Swift 6.3 (Xcode 26), run the command plugin as
+  `swift package --disable-experimental-prebuilts benchmark ...`. SwiftPM 6.3
+  cannot build the plugin's SwiftSyntax tool beside macros that use SwiftSyntax
+  prebuilts; Swift 6.4 needs no flag.
 
 Each release supports the three most recent major versions of each declared
 platform, currently iOS 18, 26, and 27, and macOS 15, 26, and 27. The

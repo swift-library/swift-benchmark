@@ -105,6 +105,11 @@ record/accessor path is owned by Swift Testing. The generated thunks and
   verified by CI. If CI reproduces `no such module 'SwiftParser'` there, the
   fallback is SwiftSyntax by default with a self-contained scanner for that
   toolchain, recorded here with the evidence.
+- Revised 2026-10-26, after CI: Xcode 26.6 reproduces
+  `no such module 'SwiftParser'`. Instead of the scanner fallback, Swift 6.3
+  users pass `--disable-experimental-prebuilts`, SwiftPM's documented
+  workaround; with it the full plugin workflow test suite passes on Xcode 26.6
+  in CI. One scanner remains, and Swift 6.4 needs no flag.
 - The generated host may need Swift Testing runtime link/import arguments. Two
   layouts are accepted: toolchain `usr/lib/swift/macosx/testing` and Xcode
   `MacOSX.platform/Developer/Library/Frameworks/Testing.framework`. Missing

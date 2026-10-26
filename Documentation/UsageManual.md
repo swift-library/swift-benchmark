@@ -146,6 +146,14 @@ swift package benchmark list --tag parser --format json
 swift package --configuration release --allow-writing-to-directory .build benchmark run --tag parser --quiet --format json --output .build/parser-report.json
 ```
 
+With Swift 6.3 (Xcode 26), pass `--disable-experimental-prebuilts` to every
+plugin command, for example
+`swift package --disable-experimental-prebuilts benchmark list`. SwiftPM 6.3
+cannot build the plugin's SwiftSyntax tool beside macros built from SwiftSyntax
+prebuilts and fails with `no such module 'SwiftParser'`; with the flag,
+SwiftSyntax builds from source, which makes the first build slower. Swift 6.4
+needs no flag.
+
 The plugin parses the package's Swift sources with SwiftSyntax to find
 declarations; it does not run the tests to discover them. Each listed step is
 one case, or one argument row or Dimension size of a case.

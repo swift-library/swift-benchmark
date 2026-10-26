@@ -65,9 +65,12 @@
   runtime API without building swift-syntax for it, with Swift 6.4 or later.
 - The command plugin discovers declarations with SwiftSyntax alone, including
   `@Test` attributes on the function's line and members of extensions, and
-  compiles the host with SwiftPM's toolchain. Hosts find the package's
-  resource bundles and link XCFramework binary targets and the C++ standard
-  library. `SWIFT_BENCHMARK_DISCOVERY_BACKEND` and
+  compiles the host with SwiftPM's toolchain. With Swift 6.3, run it with
+  `swift package --disable-experimental-prebuilts benchmark ...`, because
+  SwiftPM 6.3 cannot build its SwiftSyntax tool beside macros that use
+  SwiftSyntax prebuilts. Hosts find the package's resource bundles and link
+  XCFramework binary targets and the C++ standard library.
+  `SWIFT_BENCHMARK_DISCOVERY_BACKEND` and
   `SWIFT_BENCHMARK_SWIFTSYNTAX_TOOL_PATH` are removed.
 - The plugin builds only the targets that declare benchmarks and their
   dependencies, except a release run of test-target benchmarks, which builds
