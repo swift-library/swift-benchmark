@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/swift-library/swift-benchmark/actions/workflows/ci.yml"><img src="https://github.com/swift-library/swift-benchmark/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
   <img src="https://img.shields.io/badge/Swift-6.3%2B-F05138?style=flat" alt="Swift 6.3+">
-  <img src="https://img.shields.io/badge/platforms-iOS%2018%2B%20%7C%20macOS%2015%2B-lightgrey?style=flat" alt="Platforms: iOS 18+ | macOS 15+">
+  <img src="https://img.shields.io/badge/platforms-iOS%2018%2B%20%7C%20macOS%2015%2B%20%7C%20Linux-lightgrey?style=flat" alt="Platforms: iOS 18+ | macOS 15+ | Linux">
   <a href="LICENSE.txt"><img src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat" alt="License: Apache-2.0 WITH Swift-exception"></a>
 </p>
 

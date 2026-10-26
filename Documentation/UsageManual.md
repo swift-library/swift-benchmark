@@ -190,19 +190,19 @@ swift package --configuration release --allow-writing-to-directory .build benchm
 
 Every metric that both the run and the baseline measured is compared, row by
 row: each argument row or Dimension size is compared with the same row of the
-baseline. The operating system metrics described under [Metrics](#metrics) are
-compared only when a threshold names them. An argument row is identified by the
-descriptions of its values, not by its position, so reordering arguments keeps
-rows matched; give argument values distinct descriptions, because rows whose
-values describe the same are numbered in order. A metric regresses when it moves
-past the threshold in its worse direction, which is up for times, counts and
-bytes, and down for a custom metric declared `.higherIsBetter`, and the change
-is significant: each comparison carries a 95% confidence interval of the
-difference, estimated by resampling both runs' samples, and a change whose
-interval includes zero can be noise, so it passes. The interval is reproducible:
-the same samples always give the same interval. Metrics with one value per row,
-such as the heap and Swift allocation counts, have no interval, so their
-threshold alone judges them.
+baseline. Metrics not compared by default, such as the operating system metrics
+described under [Metrics](#metrics), are compared only when a threshold names
+them. An argument row is identified by the descriptions of its values, not by
+its position, so reordering arguments keeps rows matched; give argument values
+distinct descriptions, because rows whose values describe the same are numbered
+in order. A metric regresses when it moves past the threshold in its worse
+direction, which is up for times, counts and bytes, and down for a custom metric
+declared `.higherIsBetter`, and the change is significant: each comparison
+carries a 95% confidence interval of the difference, estimated by resampling
+both runs' samples, and a change whose interval includes zero can be noise, so
+it passes. The interval is reproducible: the same samples always give the same
+interval. Metrics with one value per row, such as the heap and Swift allocation
+counts, have no interval, so their threshold alone judges them.
 
 `check` exits `0` when nothing regressed or exceeded a budget, `20` for a
 regression or budget failure, `2` for invalid options, configuration or input
@@ -521,7 +521,8 @@ struct SortingBenchmarks {
 ```
 
 The runner makes every input of a batch before measuring the batch and frees
-them after it, so neither the setup nor freeing the inputs is timed or counted.
+them after it, so neither the setup nor freeing the inputs is timed or counted,
+and values recorded with `Benchmark.record(_:for:)` meanwhile are ignored.
 Programmatic benchmarks take the same shape:
 `Benchmark("Sort", setup: { (0..<1_000).shuffled() }) { values in values.sort() }`.
 A batch holds one input per call in memory at once. Swift Testing bridge

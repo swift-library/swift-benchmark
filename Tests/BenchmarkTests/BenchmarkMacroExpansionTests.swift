@@ -57,6 +57,8 @@ struct BenchmarkMacroExpansionTests {
     )
   }
 
+  // `sort` writes `inout` and its type on separate lines, because setup
+  // recognizes the parameter from the syntax tree, not from its text.
   @Test
   func benchmarkSuiteLowersSetupIntoPerCallInputs() {
     assertMacroExpansion(
@@ -127,6 +129,13 @@ struct BenchmarkMacroExpansionTests {
 
         struct SortingBenchmarks {
           func sort(_ values: [Int]) {}
+
+          public static var __benchmarkSuites: [BenchmarkSuite] {
+            [
+              BenchmarkSuite("Sorting", traits: []) {
+              }
+            ]
+          }
         }
 
         public enum __BenchmarkDiscovery_SortingBenchmarks: _BenchmarkDiscovery {
@@ -141,7 +150,7 @@ struct BenchmarkMacroExpansionTests {
       diagnostics: [
         MacroDiagnostic(
           message: "@Benchmark 'sort' with setup: must take its input as one inout parameter.",
-          line: 1, column: 1)
+          line: 3, column: 3)
       ],
       macros: macros
     )
@@ -161,6 +170,13 @@ struct BenchmarkMacroExpansionTests {
 
         struct SortingBenchmarks {
           func sort(_ values: inout [Int]) {}
+
+          public static var __benchmarkSuites: [BenchmarkSuite] {
+            [
+              BenchmarkSuite("Sorting", traits: []) {
+              }
+            ]
+          }
         }
 
         public enum __BenchmarkDiscovery_SortingBenchmarks: _BenchmarkDiscovery {
@@ -174,7 +190,7 @@ struct BenchmarkMacroExpansionTests {
         """,
       diagnostics: [
         MacroDiagnostic(
-          message: "@Benchmark 'sort' cannot combine setup: with arguments:.", line: 1, column: 1)
+          message: "@Benchmark 'sort' cannot combine setup: with arguments:.", line: 3, column: 3)
       ],
       macros: macros
     )

@@ -146,6 +146,35 @@ struct ReportStatisticsTests {
   }
 
   @Test
+  func markdownListsComplexityOfComparedMetricsOnly() {
+    let document = ReportDocument(
+      metadata: metadata,
+      results: [
+        BenchmarkResult(
+          suiteName: "Growth",
+          caseName: "Sizes",
+          configuration: .default,
+          measurement: Measurement(
+            rows: [10, 100, 1_000].map { size in
+              Measurement.Row(
+                size: Benchmark.Scale(size),
+                samples: [
+                  Sample(
+                    iteration: 0,
+                    values: [.wallClock: Double(size), .contextSwitches: Double(size)])
+                ])
+            })
+        )
+      ]
+    )
+
+    let markdown = MarkdownReportRenderer.render(document)
+
+    #expect(markdown.contains("| Growth › Sizes | wallClock | O(n) |"))
+    #expect(!markdown.contains("| Growth › Sizes | contextSwitches |"))
+  }
+
+  @Test
   func markdownSummarizesComparisonsForPullRequests() throws {
     let compared = ReportDocument(
       metadata: metadata,

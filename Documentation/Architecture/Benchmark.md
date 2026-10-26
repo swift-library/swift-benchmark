@@ -173,15 +173,14 @@ BenchmarkRunner(clock:cpuClock:countsProcessEvents:countsAllocations:recordsPeak
 ```
 
 For each measuring step the runner validates the configuration, makes the
-workload, runs warmup calls, calibrates the batch size, records one timed
-sample per measured iteration, then a counting sample and, when enabled, a peak
-memory sample (see `Metrics.md`). A host process the CLI starts for timing
-skips the counting sample; one it starts for counting records only the
-counting sample, after a first counting pass that warms what counting
-allocates once. Steps run serially, and a process-wide
-measurement gate keeps steps of concurrent runners from overlapping. Thrown
-errors are preserved with suite, case and phase context and never become
-samples. Skips and planning failures are explicit plan actions.
+workload, runs warmup calls, calibrates the batch size, records one timed sample
+per measured iteration, then a counting sample and, when enabled, a peak memory
+sample (see `Metrics.md`). A host process the CLI starts for timing skips the
+counting sample; one it starts for counting records only the counting sample,
+after a first counting pass that warms what counting allocates once. Steps run
+serially, and a process-wide measurement gate keeps steps of concurrent runners
+from overlapping. Thrown errors are preserved with suite, case and phase context
+and never become samples. Skips and planning failures are explicit plan actions.
 
 Default policies: warmup `.iterations(1)`, measured iterations
 `.iterations(10)`, and automatic batching with a 1 ms target. Warmup counts must

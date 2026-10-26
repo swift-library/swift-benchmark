@@ -46,8 +46,7 @@ Shared CI tests and builds release with two compilers: the minimum, Xcode
 the `xcode-27` runner. Xcode 27.1, the last entry, also builds the
 documentation, builds Report, BenchmarkTesting and BenchmarkXCTest for generic
 iOS, and runs the CLI/plugin version command. A Swift 6.3 Linux image tests the
-package; the command plugin workflow is Apple-only, so its tests are skipped
-there. The latest SDKs check API availability against the deployment floors at
+package, including the command plugin workflow. The latest SDKs check API availability against the deployment floors at
 compile time; CI does not run on older systems.
 
 ## Validation

@@ -37,9 +37,32 @@
 
 static _Atomic bool counting;
 static _Atomic uint64_t counts[BENCHMARK_INTERPOSER_COUNTERS];
+/// Threads updating the counts or the site table. Stopping waits until none
+/// is, so nothing changes from the moment `benchmark_interposer_stop` returns.
+static _Atomic uint32_t writers;
 
 static inline void add(benchmark_interposer_counter counter, uint64_t value) {
   atomic_fetch_add_explicit(&counts[counter], value, memory_order_relaxed);
+}
+
+/// Registers the calling thread as a writer when counting is on. Registering
+/// before checking again pairs with stopping, which clears `counting` before
+/// waiting for writers: one of the two sees the other. A `true` result needs a
+/// matching `end_update`.
+static inline bool begin_update(void) {
+  if (!atomic_load_explicit(&counting, memory_order_relaxed)) {
+    return false;
+  }
+  atomic_fetch_add(&writers, 1);
+  if (atomic_load(&counting)) {
+    return true;
+  }
+  atomic_fetch_sub(&writers, 1);
+  return false;
+}
+
+static inline void end_update(void) {
+  atomic_fetch_sub(&writers, 1);
 }
 
 // Allocation sites: an open-addressing table of call stacks, mapped once and
@@ -60,9 +83,6 @@ typedef struct {
 
 static site *sites;
 static _Atomic bool recording_sites;
-/// Threads inside `record_site`. Stopping waits until none is, so the table
-/// holds still from the moment `benchmark_interposer_stop` returns.
-static _Atomic uint32_t site_writers;
 /// Whether the last start recorded sites, which the table then holds.
 static bool sites_recorded;
 static atomic_flag sites_lock = ATOMIC_FLAG_INIT;
@@ -115,31 +135,29 @@ static void record_site(size_t size) {
 }
 
 static inline void record_allocation(const void *result, size_t size) {
-  if (result != NULL) {
-    add(benchmark_interposer_heap_allocations, 1);
-    add(benchmark_interposer_heap_allocated_bytes, size);
-    if (atomic_load_explicit(&recording_sites, memory_order_relaxed)) {
-      // Registering before checking again pairs with stopping, which clears
-      // the flag before waiting for writers: one of the two sees the other.
-      atomic_fetch_add(&site_writers, 1);
-      if (atomic_load(&recording_sites)) {
-#if defined(__linux__)
-        recording_this_thread = true;
-        record_site(size);
-        recording_this_thread = false;
-#else
-        record_site(size);
-#endif
-      }
-      atomic_fetch_sub(&site_writers, 1);
-    }
+  if (result == NULL || !begin_update()) {
+    return;
   }
+  add(benchmark_interposer_heap_allocations, 1);
+  add(benchmark_interposer_heap_allocated_bytes, size);
+  if (atomic_load_explicit(&recording_sites, memory_order_relaxed)) {
+#if defined(__linux__)
+    recording_this_thread = true;
+    record_site(size);
+    recording_this_thread = false;
+#else
+    record_site(size);
+#endif
+  }
+  end_update();
 }
 
 static inline void record_free(const void *pointer) {
-  if (pointer != NULL) {
-    add(benchmark_interposer_heap_frees, 1);
+  if (pointer == NULL || !begin_update()) {
+    return;
   }
+  add(benchmark_interposer_heap_frees, 1);
+  end_update();
 }
 
 /// A reallocation counts as an allocation of the new size and a free of the
@@ -241,7 +259,7 @@ uint32_t benchmark_interposer_site(
 void benchmark_interposer_stop(void) {
   atomic_store(&counting, false);
   atomic_store(&recording_sites, false);
-  while (atomic_load(&site_writers) != 0) {
+  while (atomic_load(&writers) != 0) {
   }
 }
 
@@ -587,6 +605,13 @@ static inline bool is_counting(void) {
   return atomic_load_explicit(&counting, memory_order_relaxed) && !recording_this_thread;
 }
 
+static inline void count_swift(benchmark_interposer_counter counter, uint64_t value) {
+  if (!recording_this_thread && begin_update()) {
+    add(counter, value);
+    end_update();
+  }
+}
+
 void *malloc(size_t size) {
   void *result = __libc_malloc(size);
   if (is_counting()) record_allocation(result, size);
@@ -675,9 +700,10 @@ static void *next_function(void *_Atomic *slot, const char *name) {
 
 void *swift_allocObject(const void *metadata, size_t size, size_t alignment_mask) {
   static void *_Atomic next;
-  if (is_counting()) {
+  if (!recording_this_thread && begin_update()) {
     add(benchmark_interposer_swift_allocations, 1);
     add(benchmark_interposer_swift_allocated_bytes, size);
+    end_update();
   }
   return ((swift_alloc_object_function)next_function(&next, "swift_allocObject"))(
     metadata, size, alignment_mask);
@@ -685,25 +711,25 @@ void *swift_allocObject(const void *metadata, size_t size, size_t alignment_mask
 
 void *swift_retain(void *object) {
   static void *_Atomic next;
-  if (is_counting()) add(benchmark_interposer_swift_retains, 1);
+  count_swift(benchmark_interposer_swift_retains, 1);
   return ((swift_retain_function)next_function(&next, "swift_retain"))(object);
 }
 
 void swift_release(void *object) {
   static void *_Atomic next;
-  if (is_counting()) add(benchmark_interposer_swift_releases, 1);
+  count_swift(benchmark_interposer_swift_releases, 1);
   ((swift_release_function)next_function(&next, "swift_release"))(object);
 }
 
 void *swift_retain_n(void *object, uint32_t count) {
   static void *_Atomic next;
-  if (is_counting()) add(benchmark_interposer_swift_retains, count);
+  count_swift(benchmark_interposer_swift_retains, count);
   return ((swift_retain_n_function)next_function(&next, "swift_retain_n"))(object, count);
 }
 
 void swift_release_n(void *object, uint32_t count) {
   static void *_Atomic next;
-  if (is_counting()) add(benchmark_interposer_swift_releases, count);
+  count_swift(benchmark_interposer_swift_releases, count);
   ((swift_release_n_function)next_function(&next, "swift_release_n"))(object, count);
 }
 

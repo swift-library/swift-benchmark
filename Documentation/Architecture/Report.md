@@ -110,12 +110,11 @@ the order the steps ran, and one builder produces the document.
 ## Comparison
 
 Comparisons are made per row: each argument row or Dimension size of a case is
-compared with the row of the baseline case that has the same identity. Every
+compared with the row of the baseline case that has the same identity. Each
 metric both rows measured is compared using the policy's statistic, median by
-default, when it is compared by default or a threshold names it:
-`Benchmark.Metric.isComparedByDefault` leaves out context switches, page faults,
-system calls and disk bytes, which stay in the rows' values but get no
-comparison unless named. A metric regresses when it moves past its threshold,
+default, when its `Benchmark.Metric.isComparedByDefault` is set or a threshold
+names it. Context switches, page faults, system calls and disk bytes have it
+unset, so they stay in the rows' values but get no comparison unless named. A metric regresses when it moves past its threshold,
 10% by default, in its worse direction, which the measured metric's direction
 decides, and the change is significant. Thresholds are relative percentages or
 absolute amounts in the metric's unit and can differ per metric.

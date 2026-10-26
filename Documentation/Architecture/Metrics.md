@@ -166,9 +166,8 @@ A workload records values with `Benchmark.record(_:for:)`. Each timed sample
 sums the values recorded during its batch and divides by the batch size. The
 first descriptor recorded for a name decides its unit, direction and
 `isComparedByDefault`, and values recorded under a built-in metric's name are
-ignored. Custom metrics flow into
-statistics, baselines, thresholds and budgets like built-in ones; command-line
-amounts for them are plain numbers.
+ignored. Custom metrics flow into statistics, baselines, thresholds and budgets
+like built-in ones; command-line amounts for them are plain numbers.
 
 ## Batching
 

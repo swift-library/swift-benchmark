@@ -3,6 +3,7 @@
 
 import Foundation
 import SwiftCompilerPlugin
+import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
@@ -24,7 +25,7 @@ public struct BenchmarkSuiteMacro: MemberMacro, ExtensionMacro, PeerMacro {
   ) throws -> [DeclSyntax] {
     let suiteName = suiteNameExpression(from: node, declaration: declaration)
     let suiteTraits = traitArrayExpression(from: node)
-    let benchmarkExpressions = try declaration.memberBlock.members.compactMap {
+    let benchmarkExpressions = declaration.memberBlock.members.compactMap {
       member -> String? in
       guard let function = member.decl.as(FunctionDeclSyntax.self),
         hasBenchmarkAttribute(function)
@@ -37,15 +38,20 @@ public struct BenchmarkSuiteMacro: MemberMacro, ExtensionMacro, PeerMacro {
       let target = isStatic(function) ? "Self." : "Self()."
       let parameters = Array(function.signature.parameterClause.parameters)
       if let benchmarkAttribute, let setup = parsedMacroArguments(from: benchmarkAttribute).setup {
-        return try preparedBenchmarkExpression(
-          caseName: caseName,
-          caseTraits: caseTraits,
-          attribute: benchmarkAttribute,
-          setup: setup.trimmedDescription,
-          target: target,
-          function: function,
-          parameters: parameters
-        )
+        do throws(MacroExpansionErrorMessage) {
+          return try preparedBenchmarkExpression(
+            caseName: caseName,
+            caseTraits: caseTraits,
+            attribute: benchmarkAttribute,
+            setup: setup.trimmedDescription,
+            target: target,
+            function: function,
+            parameters: parameters
+          )
+        } catch {
+          context.diagnose(Diagnostic(node: benchmarkAttribute, message: error))
+          return nil
+        }
       }
       if let benchmarkAttribute,
         let arguments = argumentExpressions(from: benchmarkAttribute),
@@ -226,8 +232,7 @@ private func parameterizedBenchmarkExpression(
 }
 
 /// A benchmark whose method takes its per-call input as one `inout`
-/// parameter, which `setup` makes. Any other shape is a compile error rather
-/// than a benchmark left out.
+/// parameter, which `setup` makes. Any other shape is diagnosed.
 private func preparedBenchmarkExpression(
   caseName: String,
   caseTraits: String,
@@ -236,7 +241,7 @@ private func preparedBenchmarkExpression(
   target: String,
   function: FunctionDeclSyntax,
   parameters: [FunctionParameterSyntax]
-) throws -> String {
+) throws(MacroExpansionErrorMessage) -> String {
   if parsedMacroArguments(from: attribute).arguments != nil {
     throw MacroExpansionErrorMessage(
       "@Benchmark '\(function.name.text)' cannot combine setup: with arguments:.")

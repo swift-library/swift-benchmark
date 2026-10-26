@@ -17,6 +17,7 @@ enum CLIError: Error, CustomStringConvertible {
   case missingOption(String)
   /// The first option needs the second.
   case optionRequires(String, String)
+  /// The two options cannot be used together.
   case conflictingOptions(String, String)
   /// The library passed with `--interposer` counted no allocations.
   case interposerCountedNothing(path: String)
@@ -65,7 +66,7 @@ enum CLIError: Error, CustomStringConvertible {
       return "\(first) cannot be combined with \(second)."
     case .interposerCountedNothing(let path):
       return
-        "The library at \(path) counted no allocations; pass the _BenchmarkInterposer library built for this platform."
+        "The library at \(path) counted no allocations. Pass the _BenchmarkInterposer library built for this platform; on Linux, heap counting needs glibc."
     case .invalidFormat(let format, let allowed):
       return "Invalid format '\(format)'. Use \(allowed.joined(separator: ", "))."
     case .noBenchmarksSelected:

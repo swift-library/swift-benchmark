@@ -43,8 +43,8 @@
 - `--format markdown` renders a report summary for pull request comments.
 - Batch loops no longer allocate in unoptimized builds, so counts of a debug
   build include only the workload's own allocations.
-- The command plugin's package workflow runs on Linux, without Objective-C and
-  XCFramework binary targets.
+- The command plugin's package workflow runs on Linux with glibc, without
+  Objective-C and XCFramework binary targets.
 
 ## 0.2.0
 
