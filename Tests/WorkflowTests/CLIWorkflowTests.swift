@@ -269,6 +269,8 @@ struct CLIWorkflowTests {
     let leaked = try await counted("Leak16Bytes")
     // A process the benchmark starts does not inherit the interposer.
     let spawned = try await counted("RunTrue")
+    // Inputs from setup are made and freed outside the counted calls.
+    let prepared = try await counted("SetupAllocates")
 
     let touched = try await JSONDecoder().decode(
       ReportDocument.self,
@@ -305,6 +307,9 @@ struct CLIWorkflowTests {
     #expect(leaked?.statistics(for: .heapAllocatedBytes)?.median == 16)
     #expect(leaked?.statistics(for: .heapNetAllocations)?.median == 1)
     #expect(spawned?.statistics(for: .heapAllocations) != nil)
+    #expect(prepared?.statistics(for: .heapAllocations)?.median == 0)
+    #expect(prepared?.statistics(for: .heapNetAllocations)?.median == 0)
+    #expect(prepared?.statistics(for: .swiftAllocations)?.median == 0)
     #expect(list.contains("\"suite\" : \"Fixture\""))
     #expect(list.contains("\"caseName\" : \"Noop\""))
     #expect(run.contains("\"wallClock\""))

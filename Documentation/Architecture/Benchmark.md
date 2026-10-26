@@ -152,6 +152,15 @@ points. Non-`Void` workload overloads route returned values through
 `blackHole`. Argument and Dimension setup runs when a row's workload is made,
 before warmup, and is not measured.
 
+A workload with per-call setup, declared with `setup:` on `@Benchmark` or the
+`Benchmark` initializers, takes a fresh input on every call. Before each
+measured batch, whether warmup, calibration, a timed sample or the counting
+pass, the runner makes one input per call into a buffer; the calls take the
+inputs `inout` by index, and the buffer is released after the batch's clocks
+and counters are read. Setup and freeing the inputs are therefore neither
+timed nor counted. Per-call setup is available for plain and Dimension
+benchmarks; Swift Testing bridge benchmarks take no inputs.
+
 ## Runner
 
 A declaration API alone is not Benchmark. The runner executes workloads

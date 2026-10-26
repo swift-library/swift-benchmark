@@ -29,6 +29,15 @@ struct FixtureBenchmarks {
     blackHole(UnsafeMutableRawPointer.allocate(byteCount: 16, alignment: 8))
   }
 
+  @Benchmark("SetupAllocates", setup: Self.makeProbe)
+  func setupAllocates(_ probe: inout AllocationProbe) {
+    probe.value += 1
+  }
+
+  static func makeProbe() -> AllocationProbe {
+    AllocationProbe()
+  }
+
   @Benchmark("RunTrue")
   func runTrue() throws {
     let process = Process()

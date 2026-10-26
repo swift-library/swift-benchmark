@@ -48,6 +48,17 @@ public struct BenchmarkSuiteMacro: MemberMacro, ExtensionMacro, PeerMacro {
           parameters: parameters
         )
       }
+      if let benchmarkAttribute, let setup = parsedMacroArguments(from: benchmarkAttribute).setup {
+        return preparedBenchmarkExpression(
+          caseName: caseName,
+          caseTraits: caseTraits,
+          dimension: dimensionExpression(from: benchmarkAttribute),
+          setup: setup.trimmedDescription,
+          target: target,
+          function: function,
+          parameters: parameters
+        )
+      }
       if parameters.isEmpty {
         let invocation =
           "\(throwingPrefix(function))\(asyncPrefix(function))\(target)\(function.name.text)()"
@@ -213,6 +224,34 @@ private func parameterizedBenchmarkExpression(
     """
 }
 
+/// A benchmark whose method takes its per-call input as one `inout`
+/// parameter, which `setup` makes.
+private func preparedBenchmarkExpression(
+  caseName: String,
+  caseTraits: String,
+  dimension: String?,
+  setup: String,
+  target: String,
+  function: FunctionDeclSyntax,
+  parameters: [FunctionParameterSyntax]
+) -> String? {
+  guard parameters.count == 1,
+    parameters[0].type.trimmedDescription.hasPrefix("inout ")
+  else {
+    return nil
+  }
+  let parameter = parameters[0]
+  let valueName = localParameterName(parameter)
+  let invocation =
+    "\(throwingPrefix(function))\(asyncPrefix(function))\(target)\(function.name.text)(\(callLabel(parameter))&\(valueName))"
+  let dimensionArgument = dimension.map { "dimension: \($0), " } ?? ""
+  return """
+        Benchmark(\(caseName), \(dimensionArgument)traits: \(caseTraits), setup: \(setup)) { \(valueName) in
+          \(invocation)
+        }
+    """
+}
+
 private func argumentExpressions(from attribute: AttributeSyntax) -> [String]? {
   parsedMacroArguments(from: attribute).arguments.map { $0.map(\.trimmedDescription) }
 }
@@ -221,6 +260,7 @@ private struct ParsedMacroArguments {
   var name: ExprSyntax?
   var traits: [ExprSyntax]
   var arguments: [ExprSyntax]?
+  var setup: ExprSyntax?
 }
 
 private func parsedMacroArguments(from attribute: AttributeSyntax) -> ParsedMacroArguments {
@@ -231,9 +271,14 @@ private func parsedMacroArguments(from attribute: AttributeSyntax) -> ParsedMacr
   case .argumentList(let list):
     var expressions: [ExprSyntax] = []
     var argumentExpressions: [ExprSyntax]?
+    var setup: ExprSyntax?
     var name: ExprSyntax?
     var sawName = false
     for element in list {
+      if element.label?.text == "setup" {
+        setup = element.expression
+        continue
+      }
       if element.label?.text == "arguments" {
         argumentExpressions = [element.expression]
         continue
@@ -252,7 +297,8 @@ private func parsedMacroArguments(from attribute: AttributeSyntax) -> ParsedMacr
     if !sawName {
       name = nil
     }
-    return ParsedMacroArguments(name: name, traits: expressions, arguments: argumentExpressions)
+    return ParsedMacroArguments(
+      name: name, traits: expressions, arguments: argumentExpressions, setup: setup)
   default:
     return ParsedMacroArguments(name: nil, traits: [], arguments: nil)
   }

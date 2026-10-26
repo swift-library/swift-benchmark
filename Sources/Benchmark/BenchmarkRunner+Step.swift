@@ -210,18 +210,19 @@ extension BenchmarkRunner {
     batchSize: Int
   ) async throws -> [Benchmark.Metric: Double] {
     let interposer = InterposerCounters.loaded
-    interposer?.start()
-    let hooked: RuntimeCounters.Counts?
-    do {
-      hooked = try await RuntimeCounters.counting {
-        try await workload.callRepeatedly(batchSize)
+    var hooked: RuntimeCounters.Counts?
+    var interposed: InterposerCounters.Counts?
+    try await workload.callMeasured(batchSize) { calls in
+      interposer?.start()
+      do {
+        hooked = try await RuntimeCounters.counting(calls)
+      } catch {
+        interposer?.stop()
+        throw error
       }
-    } catch {
       interposer?.stop()
-      throw error
+      interposed = interposer?.counts()
     }
-    interposer?.stop()
-    let interposed = interposer?.counts()
 
     let calls = Double(batchSize)
     var values: [Benchmark.Metric: Double] = [:]

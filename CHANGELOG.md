@@ -15,6 +15,9 @@
   Swift allocation and reference-counting metrics.
 - Batch loops no longer allocate in unoptimized builds, so counts of a debug
   build include only the workload's own allocations.
+- `setup:` on `@Benchmark` and the `Benchmark` initializers makes a fresh input
+  for every call outside the timed and counted calls, for plain and Dimension
+  benchmarks.
 - **Breaking**: a regression must also be significant. Each baseline
   comparison carries a reproducible 95% bootstrap confidence interval of its
   difference and its `significance`; a change whose interval includes zero

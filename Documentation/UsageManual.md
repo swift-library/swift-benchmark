@@ -474,6 +474,34 @@ tell the growth models apart best.
 The `.dimension(sizes:)` trait is another way to declare scale rows for native
 benchmarks; it lowers to the same `Benchmark.Scale` rows.
 
+## Per-Call Setup
+
+When every call needs a fresh input, such as an unsorted array for a sort,
+make it with `setup:`. The method takes the input as its one `inout`
+parameter; `setup` names a static function that makes it, from the row's size
+when the benchmark has a `.dimension` trait:
+
+```swift
+@BenchmarkSuite("Sorting")
+struct SortingBenchmarks {
+  @Benchmark("Sort", .dimension(sizes: [100, 10_000]), setup: Self.shuffled)
+  func sort(_ values: inout [Int]) {
+    values.sort()
+  }
+
+  static func shuffled(_ size: Benchmark.Scale) -> [Int] {
+    (0..<size.rawValue).shuffled()
+  }
+}
+```
+
+The runner makes every input of a batch before measuring the batch and frees
+them after it, so neither the setup nor freeing the inputs is timed or counted.
+Programmatic benchmarks take the same shape:
+`Benchmark("Sort", setup: { (0..<1_000).shuffled() }) { values in values.sort() }`.
+A batch holds one input per call in memory at once. Swift Testing bridge
+benchmarks have no per-call setup.
+
 ## ReportDocument
 
 `ReportDocument` is the durable machine-readable truth:

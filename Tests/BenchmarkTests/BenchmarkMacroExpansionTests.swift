@@ -58,6 +58,60 @@ struct BenchmarkMacroExpansionTests {
   }
 
   @Test
+  func benchmarkSuiteLowersSetupIntoPerCallInputs() {
+    assertMacroExpansion(
+      """
+      @BenchmarkSuite("Sorting")
+      struct SortingBenchmarks {
+        @Benchmark("Sort", setup: Self.shuffled)
+        func sort(_ values: inout [Int]) {
+          values.sort()
+        }
+
+        @Benchmark("Sort sized", .dimension(sizes: [10, 100]), setup: Self.shuffled(_:))
+        static func sortSized(values: inout [Int]) throws {
+          values.sort()
+        }
+      }
+      """,
+      expandedSource: """
+
+        struct SortingBenchmarks {
+          func sort(_ values: inout [Int]) {
+            values.sort()
+          }
+          static func sortSized(values: inout [Int]) throws {
+            values.sort()
+          }
+
+          public static var __benchmarkSuites: [BenchmarkSuite] {
+            [
+              BenchmarkSuite("Sorting", traits: []) {
+              Benchmark("Sort", traits: [], setup: Self.shuffled) { values in
+                Self().sort(&values)
+              }
+              Benchmark("Sort sized", dimension: Benchmark.Dimension(sizes: [10, 100]), traits: [.dimension(sizes: [10, 100])], setup: Self.shuffled(_:)) { values in
+                try Self.sortSized(values: &values)
+              }
+                }
+            ]
+          }
+        }
+
+        public enum __BenchmarkDiscovery_SortingBenchmarks: _BenchmarkDiscovery {
+          public static var __benchmarkSuites: [BenchmarkSuite] {
+            SortingBenchmarks.__benchmarkSuites
+          }
+        }
+
+        extension SortingBenchmarks: _BenchmarkDiscovery {
+        }
+        """,
+      macros: macros
+    )
+  }
+
+  @Test
   func benchmarkSuiteLowersTraitsIntoDiscoverySuites() {
     assertMacroExpansion(
       """
