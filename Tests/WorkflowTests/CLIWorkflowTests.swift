@@ -232,12 +232,12 @@ struct CLIWorkflowTests {
       #expect((touched?.statistics(for: .peakMemory)?.median ?? 0) >= Double(48 << 20))
     #endif
     #if canImport(Darwin)
-      #expect(allocations?.statistics(for: .allocations)?.median == 1_000)
-      #expect(allocations?.statistics(for: .allocatedBytes)?.median == 24_000)
+      #expect(allocations?.statistics(for: .swiftAllocations)?.median == 1_000)
+      #expect(allocations?.statistics(for: .swiftAllocatedBytes)?.median == 24_000)
     #else
       // A runtime without the instrumentation hooks leaves the counts out;
       // counts it reports must still be exact.
-      if let counted = allocations?.statistics(for: .allocations) {
+      if let counted = allocations?.statistics(for: .swiftAllocations) {
         #expect(counted.median == 1_000)
       }
     #endif

@@ -25,10 +25,10 @@ Built-in metrics:
 | --- | --- | --- |
 | `wallClock` | nanoseconds | The runner's clock around each timed batch |
 | `cpuTime` | nanoseconds | Process user plus system CPU time, `getrusage(RUSAGE_SELF)`, read outside the wall clock around the same batch |
-| `allocations` | count | Swift heap allocations in the counting pass |
-| `allocatedBytes` | bytes | Sizes those allocations requested |
-| `retains` | count | Swift strong retains, including `retain_n` counts, in the counting pass |
-| `releases` | count | Swift strong releases, including `release_n` counts, in the counting pass |
+| `swiftAllocations` | count | Swift runtime heap allocations in the counting pass |
+| `swiftAllocatedBytes` | bytes | Sizes those allocations requested |
+| `swiftRetains` | count | Swift strong retains, including `retain_n` counts, in the counting pass |
+| `swiftReleases` | count | Swift strong releases, including `release_n` counts, in the counting pass |
 | `peakMemory` | bytes | Growth of the process's footprint peak above the footprint at the start of the step |
 
 ## Step Measurement

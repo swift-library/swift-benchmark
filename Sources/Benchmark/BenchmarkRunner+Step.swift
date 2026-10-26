@@ -135,10 +135,10 @@ extension BenchmarkRunner {
           iteration: samples.count,
           batchSize: batchSize,
           values: [
-            .allocations: Double(counts.allocations) / calls,
-            .allocatedBytes: Double(counts.allocatedBytes) / calls,
-            .retains: Double(counts.retains) / calls,
-            .releases: Double(counts.releases) / calls,
+            .swiftAllocations: Double(counts.allocations) / calls,
+            .swiftAllocatedBytes: Double(counts.allocatedBytes) / calls,
+            .swiftRetains: Double(counts.retains) / calls,
+            .swiftReleases: Double(counts.releases) / calls,
           ]
         )
         samples.append(sample)

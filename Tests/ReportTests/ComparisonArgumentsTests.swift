@@ -22,16 +22,16 @@ struct ComparisonArgumentsTests {
   func thresholdsAndBudgetsParseUnitsPerMetric() throws {
     let policy = try ComparisonArguments.policy(
       statistic: "p95",
-      thresholds: ["5%", "wallClock=250us", "allocations=0"],
+      thresholds: ["5%", "wallClock=250us", "swiftAllocations=0"],
       budgets: ["wallClock:p95:2ms"],
-      caseBudgets: ["Parser:Parse Document:allocatedBytes:median:4KiB"]
+      caseBudgets: ["Parser:Parse Document:swiftAllocatedBytes:median:4KiB"]
     )
 
     #expect(policy.statistic == .p95)
     #expect(policy.threshold == .relativePercentage(5))
     #expect(policy.threshold(for: .wallClock) == .absolute(250_000))
     #expect(
-      policy.threshold(for: Benchmark.Metric(name: "allocations", unit: .count)) == .absolute(0))
+      policy.threshold(for: .swiftAllocations) == .absolute(0))
     #expect(policy.budgets.map(\.limit) == [2_000_000, 4_096])
     #expect(policy.budgets.last?.caseName == "Parse Document")
     #expect(policy.budgets.last?.metric.unit == .bytes)

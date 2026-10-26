@@ -7,9 +7,11 @@
   6.2 remain on 0.1.x.
 - **Breaking**: Benchmarks measure several metrics. Timed samples record
   wall-clock and CPU time and values a workload records with
-  `Benchmark.record(_:for:)`; a separate counting pass records Swift heap
-  allocations, allocated bytes, retains and releases where the Swift runtime
-  exposes its instrumentation hooks; and a step measured in a process of its
+  `Benchmark.record(_:for:)`; a separate counting pass records Swift runtime
+  heap allocations, allocated bytes, retains and releases (`swiftAllocations`,
+  `swiftAllocatedBytes`, `swiftRetains`, `swiftReleases`; C `malloc` and
+  Objective-C allocations are not counted) where the Swift runtime exposes its
+  instrumentation hooks; and a step measured in a process of its
   own records its peak memory.
   `Sample`, measurement rows, statistics, baselines, budgets, verdict causes
   and Dimension curves are keyed by metric, and Report JSON no longer carries

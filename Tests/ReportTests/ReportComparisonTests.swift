@@ -182,7 +182,7 @@ struct ReportComparisonTests {
   func everySharedMetricIsComparedAndDirectionDecidesRegression() throws {
     let throughput = Benchmark.Metric(
       name: "throughput", unit: .count, direction: .higherIsBetter)
-    let allocations = Benchmark.Metric(name: "allocations", unit: .count)
+    let allocations = Benchmark.Metric.swiftAllocations
     let result = BenchmarkResult(
       suiteName: "Parser",
       caseName: "Tokenize",
@@ -228,7 +228,7 @@ struct ReportComparisonTests {
       ],
       comparison: ComparisonPolicy(budgets: [
         BudgetPolicy(
-          metric: Benchmark.Metric(name: "allocations", unit: .count),
+          metric: .swiftAllocations,
           statistic: .median,
           limit: 0
         )

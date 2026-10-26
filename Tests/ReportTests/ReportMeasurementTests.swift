@@ -10,14 +10,14 @@ import Testing
 struct ReportMeasurementTests {
   @Test
   func statisticsAreComputedPerMetricFromSamples() throws {
-    let allocations = Benchmark.Metric(name: "allocations", unit: .count)
+    let allocations = Benchmark.Metric.swiftAllocations
     let samples = [10.0, 20, 30, 40].enumerated().map { index, wallClock in
       SampleReport(
         id: ReportID(rawValue: "sample:metrics.\(index)"),
         iterationID: ReportID(rawValue: "iteration:metrics.\(index)"),
         iteration: index,
         values: index == 0
-          ? ["wallClock": wallClock] : ["wallClock": wallClock, "allocations": 3]
+          ? ["wallClock": wallClock] : ["wallClock": wallClock, "swiftAllocations": 3]
       )
     }
     let measurement = Report.Measurement(
@@ -31,7 +31,7 @@ struct ReportMeasurementTests {
     #expect(wallClock.median == 25)
     #expect(wallClock.p90 == 37)
     #expect(measurement.statistics(for: allocations)?.count == 3)
-    #expect(measurement.metrics.map(\.name) == ["allocations", "wallClock"])
+    #expect(measurement.metrics.map(\.name) == ["swiftAllocations", "wallClock"])
   }
 
   @Test

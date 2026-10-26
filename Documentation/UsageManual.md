@@ -212,7 +212,7 @@ Use a budget when no saved baseline is desired:
 swift package --configuration release --allow-writing-to-directory .build benchmark run \
   --tag parser \
   --budget wallClock:p95:5ms \
-  --budget allocations:median:10 \
+  --budget swiftAllocations:median:10 \
   --format json \
   --output .build/parser-budget-report.json
 ```
@@ -269,10 +269,10 @@ the platform and runtime provide them; the notes after the table say when:
 | --- | --- | --- |
 | `wallClock` | nanoseconds | Elapsed time of each timed sample |
 | `cpuTime` | nanoseconds | User plus system CPU time of the process during each timed sample |
-| `allocations` | count | Swift heap allocations, in a counting pass after the timed samples |
-| `allocatedBytes` | bytes | Bytes those allocations requested |
-| `retains` | count | Swift strong retains in the counting pass |
-| `releases` | count | Swift strong releases in the counting pass |
+| `swiftAllocations` | count | Swift runtime heap allocations, in a counting pass after the timed samples |
+| `swiftAllocatedBytes` | bytes | Bytes those allocations requested |
+| `swiftRetains` | count | Swift strong retains in the counting pass |
+| `swiftReleases` | count | Swift strong releases in the counting pass |
 | `peakMemory` | bytes | How far the process's memory footprint rose above its level at the start of the step; one value per step |
 
 Timing and counting are separate: the timed samples run without the counting
@@ -782,7 +782,7 @@ BenchmarkTesting declarations.
 - Use fixed iterations by default; opt into adaptive or duration policies only
   when the workload needs it, and keep at least five samples for comparisons.
 - Pick the metric and statistic that define a regression for your workload,
-  such as p95 wall-clock time or median allocations.
+  such as p95 wall-clock time or median Swift allocations.
 - Use `arguments` for input rows; integer arguments produce `Benchmark.Scale`
   curves.
 - Store baselines under a reviewed path such as `Benchmarks/*.json`, recorded

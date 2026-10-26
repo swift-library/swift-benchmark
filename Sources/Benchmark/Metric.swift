@@ -67,21 +67,23 @@ extension Benchmark {
     /// User plus system CPU time of the whole process per call.
     public static let cpuTime = Metric(name: "cpuTime", unit: .nanoseconds)
 
-    /// Swift heap objects allocated per call, by any thread of the process.
+    /// Swift heap objects the Swift runtime allocated per call, by any thread of
+    /// the process.
     ///
     /// Counted in a separate pass after the timed samples, so counting does not
-    /// slow the timed calls. Allocations made directly through `malloc` or by
-    /// Objective-C are not counted.
-    public static let allocations = Metric(name: "allocations", unit: .count)
+    /// slow the timed calls. Only allocations through the Swift runtime count:
+    /// memory a C or C++ library allocates with `malloc`, and Objective-C
+    /// objects, are not included.
+    public static let swiftAllocations = Metric(name: "swiftAllocations", unit: .count)
 
-    /// Bytes requested by the Swift heap allocations counted in ``allocations``.
-    public static let allocatedBytes = Metric(name: "allocatedBytes", unit: .bytes)
+    /// Bytes requested by the allocations counted in ``swiftAllocations``.
+    public static let swiftAllocatedBytes = Metric(name: "swiftAllocatedBytes", unit: .bytes)
 
-    /// Swift strong retains per call, counted with ``allocations``.
-    public static let retains = Metric(name: "retains", unit: .count)
+    /// Swift strong retains per call, counted with ``swiftAllocations``.
+    public static let swiftRetains = Metric(name: "swiftRetains", unit: .count)
 
-    /// Swift strong releases per call, counted with ``allocations``.
-    public static let releases = Metric(name: "releases", unit: .count)
+    /// Swift strong releases per call, counted with ``swiftAllocations``.
+    public static let swiftReleases = Metric(name: "swiftReleases", unit: .count)
 
     /// How far the process's physical memory footprint rose above its level at
     /// the start of the step, recorded once per step.
@@ -94,7 +96,8 @@ extension Benchmark {
 
     /// The metrics the runner measures without user code.
     public static let builtIn: [Metric] = [
-      .wallClock, .cpuTime, .allocations, .allocatedBytes, .retains, .releases, .peakMemory,
+      .wallClock, .cpuTime, .swiftAllocations, .swiftAllocatedBytes, .swiftRetains,
+      .swiftReleases, .peakMemory,
     ]
   }
 }
