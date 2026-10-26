@@ -160,10 +160,10 @@ one case, or one argument row or Dimension size of a case.
 
 The plugin builds only the targets that declare benchmarks, with their
 dependencies, so unrelated targets such as UI tests are not compiled. A
-release run of benchmarks declared in a test target is the exception: SwiftPM
-compiles test targets for testing in release only when it builds all of them,
-so that run builds every test target. Declaring production benchmarks in a
-library target avoids it.
+release run in a package that declares benchmarks in any test target is the
+exception, whatever the run selects: SwiftPM compiles test targets for testing
+in release only when it builds all of them, so that run builds every test
+target. Declaring the package's benchmarks in library targets avoids it.
 
 ### 3. Gate CI With Baselines
 
