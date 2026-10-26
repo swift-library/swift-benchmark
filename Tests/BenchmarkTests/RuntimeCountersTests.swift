@@ -21,6 +21,7 @@ struct RuntimeCountersTests {
         _ = try await RuntimeCounters.counting {}
       }
     }
+    allocator.stop()
     let observed = Observations()
     let suite = BenchmarkSuite(
       "Switch",
@@ -33,7 +34,6 @@ struct RuntimeCountersTests {
     }
 
     _ = try await BenchmarkRunner(cpuClock: nil, countsAllocations: false).run(suite)
-    allocator.stop()
 
     // A test process starts with the switch off.
     #expect(observed.values == [false, false, false])
