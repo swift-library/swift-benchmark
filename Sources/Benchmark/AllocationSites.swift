@@ -138,8 +138,6 @@ extension Benchmark.AllocationSites {
   }
 }
 
-/// The Swift runtime's demangler: it returns a `malloc`ed string, or `nil`
-/// for a name that is not a Swift symbol.
 /// The C++ ABI's demangler, found where the process loaded the C++ runtime:
 /// it returns a `malloc`ed string, or `nil` for a name it cannot demangle.
 private enum CxxDemangler {
@@ -154,6 +152,8 @@ private enum CxxDemangler {
   }
 }
 
+/// The Swift runtime's demangler: it returns a `malloc`ed string, or `nil`
+/// for a name that is not a Swift symbol.
 @_silgen_name("swift_demangle")
 private func swiftDemangle(
   _ mangledName: UnsafePointer<CChar>,

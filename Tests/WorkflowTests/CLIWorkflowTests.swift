@@ -102,6 +102,20 @@ struct CLIWorkflowTests {
   }
 
   @Test(.timeLimit(.minutes(3)))
+  func anInterposerThatCountsNothingFailsTheRun() async throws {
+    let fake = try await FakeHost(buildConfiguration: "release", countsHeap: false)
+    defer { fake.remove() }
+
+    let run = try await processResult(
+      executable: try cliPath(),
+      arguments: ["run", "--host", fake.host.path, "--interposer", interposerPath()]
+    )
+
+    #expect(run.status == 2)
+    #expect(run.errorOutput.contains("counted no allocations"))
+  }
+
+  @Test(.timeLimit(.minutes(3)))
   func tracedCommandsMeasureEveryStepInOneHostProcess() async throws {
     let fake = try await FakeHost(buildConfiguration: "debug")
     defer { fake.remove() }
@@ -282,6 +296,17 @@ struct CLIWorkflowTests {
           ]
         ).utf8)
     ).suites.first?.cases.first?.measurement.rows.first?.allocationSites
+    let batchSites = try await JSONDecoder().decode(
+      ReportDocument.self,
+      from: Data(
+        runProcess(
+          executable: cli,
+          arguments: [
+            "run", "--host", hostPath, "--interposer", interposerPath(), "--allocation-sites",
+            "--case", "BatchMalloc", "--warmup", "0", "--iterations", "1", "--format", "json",
+          ]
+        ).utf8)
+    ).suites.first?.cases.first?.measurement
     let sitesWithoutInterposer = try await processResult(
       executable: cli,
       arguments: ["run", "--host", hostPath, "--allocation-sites", "--case", "Leak16Bytes"]
@@ -338,9 +363,20 @@ struct CLIWorkflowTests {
     #expect(leakStack.bytes == 16 * (leakSites?.calls ?? 0))
     #expect(leakStack.frames.contains { $0.contains("leak16Bytes") })
     #expect(!leakStack.frames.contains { $0.contains("BenchmarkWorkload") })
+    #if canImport(Darwin)
+      // Each block of a batch allocation is counted, and recorded at its site.
+      let batchStack = batchSites?.rows.first?.allocationSites?.stacks.first
+      #expect(batchSites?.statistics(for: .heapAllocations)?.median == 4)
+      #expect(batchSites?.statistics(for: .heapNetAllocations)?.median == 0)
+      #expect(batchStack?.frames.contains { $0.contains("batchMalloc") } == true)
+      #expect(batchStack?.allocations == 4 * (batchSites?.rows.first?.allocationSites?.calls ?? 0))
+    #endif
     #expect(sitesWithoutInterposer.status == 2)
     #expect(sitesWithoutInterposer.errorOutput.contains("--allocation-sites requires --interposer"))
     #expect(sitesInTrace.status == 2)
+    #expect(
+      sitesInTrace.errorOutput.contains(
+        "--allocation-sites cannot be combined with --xctrace-output"))
     #expect(list.contains("\"suite\" : \"Fixture\""))
     #expect(list.contains("\"caseName\" : \"Noop\""))
     #expect(run.contains("\"wallClock\""))

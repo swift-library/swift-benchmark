@@ -22,7 +22,8 @@ restate those rules.
 Compatibility includes public Swift APIs and macros, discovery and plugin
 behavior, CLI options and exit codes, Report JSON, and compiler/platform requirements.
 
-Core APIs compile for the declared Apple platforms and on Linux. Xctrace
+Core APIs compile for the declared Apple platforms and on Linux, and the
+command plugin's package workflow runs on macOS and Linux. Xctrace
 orchestration uses a desktop host; other platforms receive a
 command-unavailable result from the default process runner. Portable recording
 fallbacks retain their documented behavior, and metrics a platform cannot

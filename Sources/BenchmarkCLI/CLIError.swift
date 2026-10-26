@@ -18,6 +18,8 @@ enum CLIError: Error, CustomStringConvertible {
   /// The first option needs the second.
   case optionRequires(String, String)
   case conflictingOptions(String, String)
+  /// The library passed with `--interposer` counted no allocations.
+  case interposerCountedNothing(path: String)
   case invalidFormat(String, allowed: [String])
   case noBenchmarksSelected
   case hostFailure(status: Int32, stderr: String)
@@ -61,6 +63,9 @@ enum CLIError: Error, CustomStringConvertible {
       return "\(option) requires \(required)."
     case .conflictingOptions(let first, let second):
       return "\(first) cannot be combined with \(second)."
+    case .interposerCountedNothing(let path):
+      return
+        "The library at \(path) counted no allocations; pass the _BenchmarkInterposer library built for this platform."
     case .invalidFormat(let format, let allowed):
       return "Invalid format '\(format)'. Use \(allowed.joined(separator: ", "))."
     case .noBenchmarksSelected:

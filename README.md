@@ -32,7 +32,7 @@
 
 ## Overview
 
-Each benchmark step is timed for wall-clock and CPU time, then counted for Swift allocations, retains and releases on Apple platforms. The package workflow measures each step in a process of its own, which also records the step's peak memory, and short workloads are timed in calibrated batches. Choose the metric and statistic that define a regression and compare runs with a saved baseline: a p95 budget can fail even when the median passes, the report records a typed verdict for CI, and it warns when a comparison is unreliable, such as a debug build, a baseline from another machine, or samples too noisy for the threshold. The [usage manual](Documentation/UsageManual.md) covers measurement policies, instrumentation, and platform limits.
+Each benchmark step is timed in calibrated batches for wall-clock and CPU time, instructions and cycles, then counted. The package workflow measures each step in a process of its own, which records its peak memory, and counts it in a second process that sees every heap allocation, from Swift, C, C++ and Objective-C, and can show where they come from, alongside Swift retains and releases. Choose the metric and statistic that define a regression and compare runs with a saved baseline: a change fails only past its threshold and beyond what noise explains, a p95 budget can fail even when the median passes, the report records a typed verdict for CI and a Markdown summary for pull requests, and it warns when a comparison is unreliable, such as a debug build, a baseline from another machine, outliers, or samples too noisy for the threshold. The [usage manual](Documentation/UsageManual.md) covers measurement policies, instrumentation, and platform limits.
 
 ## Quick look
 
@@ -104,6 +104,7 @@ The [usage manual](Documentation/UsageManual.md) covers native and Swift Testing
 
 - Swift 6.3 or later; Swift 6.0 through 6.2 use 0.1.x
 - iOS 18 or later, macOS 15 or later
+- Linux with glibc, for the libraries and the command plugin
 - With Swift 6.3 (Xcode 26), run the command plugin as
   `swift package --disable-experimental-prebuilts benchmark ...`. SwiftPM 6.3
   cannot build the plugin's SwiftSyntax tool beside macros that use SwiftSyntax

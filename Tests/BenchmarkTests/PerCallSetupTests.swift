@@ -74,6 +74,33 @@ struct PerCallSetupTests {
   }
 
   @Test
+  func valuesSetupRecordsAreNotTheWorkloads() async throws {
+    let parsed = Benchmark.Metric(name: "parsedItems", unit: .count)
+    let suite = BenchmarkSuite(
+      "Setup",
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(2), batching: .fixed(3))
+    ) {
+      Benchmark(
+        "Recording setup",
+        setup: { () -> Int in
+          Benchmark.record(100, for: parsed)
+          return 1
+        }
+      ) { value in
+        Benchmark.record(Double(value), for: parsed)
+      }
+    }
+
+    let results = try await BenchmarkRunner(
+      cpuClock: nil, countsProcessEvents: false, countsAllocations: false
+    ).run(suite)
+    let values = results.first?.measurement.samples.compactMap { $0.value(for: parsed) }
+
+    #expect(values == [1, 1])
+  }
+
+  @Test
   func setupFailuresFailTheCase() async throws {
     let suite = BenchmarkSuite(
       "Setup",

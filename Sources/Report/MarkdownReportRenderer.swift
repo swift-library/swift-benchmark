@@ -6,8 +6,9 @@ import Foundation
 
 /// Renders a report as GitHub Markdown for pull request comments: the
 /// verdict, warnings, then a table of baseline comparisons, or of medians
-/// without a baseline, failed budgets, allocation sites and complexity fits. JSON stays the
-/// report's data format; this layout can change.
+/// without a baseline, failed budgets, allocation sites, and complexity fits
+/// of the metrics compared by default. JSON stays the report's data format;
+/// this layout can change.
 package enum MarkdownReportRenderer {
   package static func render(_ document: ReportDocument) -> String {
     let summary = document.summary
@@ -101,7 +102,9 @@ package enum MarkdownReportRenderer {
     }
 
     let fits = cases.flatMap { suite, report in
-      report.dimensionCurves.filter { $0.statistic == .median }.compactMap { curve in
+      report.dimensionCurves.filter {
+        $0.statistic == .median && $0.metric.isComparedByDefault
+      }.compactMap { curve in
         curve.complexity.map { (suite, report, curve, $0) }
       }
     }

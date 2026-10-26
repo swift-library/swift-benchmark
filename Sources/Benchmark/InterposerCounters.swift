@@ -23,6 +23,21 @@ struct InterposerCounters: Sendable {
     var bytes: Int
   }
 
+  /// The library's `benchmark_interposer_counter` values, from
+  /// `_BenchmarkInterposer.h`.
+  private enum Counter: UInt32 {
+    case heapAllocations = 0
+    case heapAllocatedBytes = 1
+    case heapFrees = 2
+    case swiftAllocations = 3
+    case swiftAllocatedBytes = 4
+    case swiftRetains = 5
+    case swiftReleases = 6
+  }
+
+  /// The library's `benchmark_interposer_records_sites` option.
+  private static let recordsSites: UInt32 = 1
+
   private typealias StartFunction = @convention(c) (UInt32) -> Void
   private typealias StopFunction = @convention(c) () -> Void
   private typealias CountFunction = @convention(c) (UInt32) -> UInt64
@@ -62,8 +77,7 @@ struct InterposerCounters: Sendable {
   /// call stack of each allocation when `recordingSites` is set. Callers
   /// hold the ``MeasurementGate`` until ``stop()``.
   func start(recordingSites: Bool) {
-    // The library's `benchmark_interposer_records_sites` option.
-    startFunction(recordingSites ? 1 : 0)
+    startFunction(recordingSites ? Self.recordsSites : 0)
   }
 
   /// Stops counting; the counts keep their values until the next start.
@@ -74,27 +88,32 @@ struct InterposerCounters: Sendable {
   /// The counts between the last start and stop, or `nil` where the library
   /// counts nothing on this platform.
   func counts() -> Counts? {
-    // The indices are the library's `benchmark_interposer_counter` values.
-    let heapAllocations = count(0)
+    let heapAllocations = value(.heapAllocations)
     guard heapAllocations != .max else {
       return nil
     }
-    let swiftAllocations = count(3)
+    let swiftAllocations = value(.swiftAllocations)
     let runtime =
       swiftAllocations == .max
       ? nil
       : RuntimeCounters.Counts(
         allocations: Int(swiftAllocations),
-        allocatedBytes: Int(count(4)),
-        retains: Int(count(5)),
-        releases: Int(count(6))
+        allocatedBytes: Int(value(.swiftAllocatedBytes)),
+        retains: Int(value(.swiftRetains)),
+        releases: Int(value(.swiftReleases))
       )
     return Counts(
       heapAllocations: heapAllocations,
-      heapAllocatedBytes: count(1),
-      heapFrees: count(2),
+      heapAllocatedBytes: value(.heapAllocatedBytes),
+      heapFrees: value(.heapFrees),
       runtime: runtime
     )
+  }
+
+  /// The library's value of `counter`, or `UInt64.max` where it does not
+  /// count it.
+  private func value(_ counter: Counter) -> UInt64 {
+    count(counter.rawValue)
   }
 
   /// The stacks recorded between the last start and stop, or none when that

@@ -37,7 +37,8 @@ typedef enum {
 /// counting. `options` combines `benchmark_interposer_option` values.
 void benchmark_interposer_start(uint32_t options);
 
-/// Stops counting. The counts keep their values until the next start.
+/// Stops counting and waits for threads still recording a site. The counts
+/// and sites keep their values until the next start.
 void benchmark_interposer_stop(void);
 
 /// The value of `counter` since the last start, or `UINT64_MAX` where this

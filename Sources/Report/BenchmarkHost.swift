@@ -183,14 +183,14 @@ public enum BenchmarkHost {
       if options.isolated, plan.steps.count != 1 {
         throw BenchmarkHostError.isolatedSelection(plan.steps.map(\.id))
       }
-      if options.timesOnly, options.countsOnly {
+      if options.timingOnly, options.countingOnly {
         throw BenchmarkHostError.conflictingOptions("--timing-only", "--counting-only")
       }
       var runner = BenchmarkRunner(
-        countsAllocations: !options.timesOnly,
-        recordsPeakMemory: options.isolated && !options.countsOnly
+        countsAllocations: !options.timingOnly,
+        recordsPeakMemory: options.isolated && !options.countingOnly
       )
-      runner.countsOnly = options.countsOnly
+      runner.countsOnly = options.countingOnly
       runner.recordsAllocationSites = options.recordsAllocationSites
       let measurement = try await measure(
         plan,
@@ -314,12 +314,12 @@ private struct BenchmarkHostOptions {
   }
 
   /// Whether this process times the steps without counting allocations.
-  var timesOnly: Bool {
+  var timingOnly: Bool {
     flags.contains("--timing-only")
   }
 
   /// Whether this process only counts the steps' allocations.
-  var countsOnly: Bool {
+  var countingOnly: Bool {
     flags.contains("--counting-only")
   }
 

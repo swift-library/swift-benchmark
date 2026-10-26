@@ -20,7 +20,10 @@ let package = Package(
       dependencies: [
         .product(name: "Benchmark", package: "swift-benchmark"),
         .product(name: "Report", package: "swift-benchmark"),
-      ]
+      ],
+      // Allocation sites name a Linux host's functions through its dynamic
+      // symbol table.
+      linkerSettings: [.unsafeFlags(["-Xlinker", "--export-dynamic"], .when(platforms: [.linux]))]
     ),
     .target(
       name: "FixtureBenchmarkLibrary",

@@ -24,7 +24,8 @@ public struct BenchmarkSuiteMacro: MemberMacro, ExtensionMacro, PeerMacro {
   ) throws -> [DeclSyntax] {
     let suiteName = suiteNameExpression(from: node, declaration: declaration)
     let suiteTraits = traitArrayExpression(from: node)
-    let benchmarkExpressions = declaration.memberBlock.members.compactMap { member -> String? in
+    let benchmarkExpressions = try declaration.memberBlock.members.compactMap {
+      member -> String? in
       guard let function = member.decl.as(FunctionDeclSyntax.self),
         hasBenchmarkAttribute(function)
       else {
@@ -35,6 +36,17 @@ public struct BenchmarkSuiteMacro: MemberMacro, ExtensionMacro, PeerMacro {
       let caseTraits = benchmarkAttribute.map(traitArrayExpression(from:)) ?? "[]"
       let target = isStatic(function) ? "Self." : "Self()."
       let parameters = Array(function.signature.parameterClause.parameters)
+      if let benchmarkAttribute, let setup = parsedMacroArguments(from: benchmarkAttribute).setup {
+        return try preparedBenchmarkExpression(
+          caseName: caseName,
+          caseTraits: caseTraits,
+          attribute: benchmarkAttribute,
+          setup: setup.trimmedDescription,
+          target: target,
+          function: function,
+          parameters: parameters
+        )
+      }
       if let benchmarkAttribute,
         let arguments = argumentExpressions(from: benchmarkAttribute),
         !arguments.isEmpty
@@ -43,17 +55,6 @@ public struct BenchmarkSuiteMacro: MemberMacro, ExtensionMacro, PeerMacro {
           caseName: caseName,
           caseTraits: caseTraits,
           arguments: arguments,
-          target: target,
-          function: function,
-          parameters: parameters
-        )
-      }
-      if let benchmarkAttribute, let setup = parsedMacroArguments(from: benchmarkAttribute).setup {
-        return preparedBenchmarkExpression(
-          caseName: caseName,
-          caseTraits: caseTraits,
-          dimension: dimensionExpression(from: benchmarkAttribute),
-          setup: setup.trimmedDescription,
           target: target,
           function: function,
           parameters: parameters
@@ -225,21 +226,27 @@ private func parameterizedBenchmarkExpression(
 }
 
 /// A benchmark whose method takes its per-call input as one `inout`
-/// parameter, which `setup` makes.
+/// parameter, which `setup` makes. Any other shape is a compile error rather
+/// than a benchmark left out.
 private func preparedBenchmarkExpression(
   caseName: String,
   caseTraits: String,
-  dimension: String?,
+  attribute: AttributeSyntax,
   setup: String,
   target: String,
   function: FunctionDeclSyntax,
   parameters: [FunctionParameterSyntax]
-) -> String? {
-  guard parameters.count == 1,
-    parameters[0].type.trimmedDescription.hasPrefix("inout ")
-  else {
-    return nil
+) throws -> String {
+  if parsedMacroArguments(from: attribute).arguments != nil {
+    throw MacroExpansionErrorMessage(
+      "@Benchmark '\(function.name.text)' cannot combine setup: with arguments:.")
   }
+  guard parameters.count == 1, isInout(parameters[0]) else {
+    throw MacroExpansionErrorMessage(
+      "@Benchmark '\(function.name.text)' with setup: must take its input as one inout parameter."
+    )
+  }
+  let dimension = dimensionExpression(from: attribute)
   let parameter = parameters[0]
   let valueName = localParameterName(parameter)
   let invocation =
@@ -250,6 +257,15 @@ private func preparedBenchmarkExpression(
           \(invocation)
         }
     """
+}
+
+private func isInout(_ parameter: FunctionParameterSyntax) -> Bool {
+  parameter.type.as(AttributedTypeSyntax.self)?.specifiers.contains { specifier in
+    guard case .simpleTypeSpecifier(let simple) = specifier else {
+      return false
+    }
+    return simple.specifier.tokenKind == .keyword(.inout)
+  } == true
 }
 
 private func argumentExpressions(from attribute: AttributeSyntax) -> [String]? {

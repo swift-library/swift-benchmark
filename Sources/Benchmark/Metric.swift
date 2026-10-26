@@ -9,7 +9,8 @@ extension Benchmark {
   /// ``peakMemory`` is the exception and is recorded once per step.
   ///
   /// A metric's identity is its ``name``: two metrics with the same name are
-  /// equal whatever their unit and direction, and reports key values by name.
+  /// equal whatever their unit, direction and ``isComparedByDefault``, and
+  /// reports key values by name.
   /// The names of ``builtIn`` metrics are reserved for the runner.
   public struct Metric: Sendable, Hashable, Codable, CustomStringConvertible {
     /// The unit a metric's values are expressed in.

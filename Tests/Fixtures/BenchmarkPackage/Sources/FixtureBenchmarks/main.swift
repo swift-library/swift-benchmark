@@ -38,6 +38,18 @@ struct FixtureBenchmarks {
     AllocationProbe()
   }
 
+  /// Four blocks from the Darwin zone's batch allocator; nothing elsewhere.
+  @Benchmark("BatchMalloc")
+  func batchMalloc() {
+    #if canImport(Darwin)
+      withUnsafeTemporaryAllocation(of: UnsafeMutableRawPointer?.self, capacity: 4) { blocks in
+        let zone = malloc_default_zone()
+        let allocated = malloc_zone_batch_malloc(zone, 16, blocks.baseAddress, 4)
+        malloc_zone_batch_free(zone, blocks.baseAddress, allocated)
+      }
+    #endif
+  }
+
   @Benchmark("RunTrue")
   func runTrue() throws {
     let process = Process()

@@ -66,8 +66,8 @@ enum BenchmarkWorkload: Sendable {
         }
       }
     case .prepared(let prepare):
-      let batch = try await prepare(count)
-      defer { batch.discard() }
+      let batch = try await Self.prepareBatch(count, prepare)
+      defer { Self.discard(batch) }
       switch batch.calls {
       case .synchronous(let calls):
         return try timer.timeSynchronously(calls)
@@ -102,14 +102,31 @@ enum BenchmarkWorkload: Sendable {
         }
       }
     case .prepared(let prepare):
-      let batch = try await prepare(count)
-      defer { batch.discard() }
+      let batch = try await Self.prepareBatch(count, prepare)
+      defer { Self.discard(batch) }
       switch batch.calls {
       case .synchronous(let calls):
         try await measure { try calls() }
       case .asynchronous(let calls):
         try await measure { try await calls() }
       }
+    }
+  }
+
+  /// Makes a batch's inputs with no sample recording custom metrics, so what
+  /// setup records is not the workload's.
+  private static func prepareBatch(
+    _ count: Int, _ prepare: @Sendable (Int) async throws -> PreparedBatch
+  ) async throws -> PreparedBatch {
+    try await CustomMetricRecorder.$current.withValue(nil) {
+      try await prepare(count)
+    }
+  }
+
+  /// Releases a batch's inputs with no sample recording custom metrics.
+  private static func discard(_ batch: PreparedBatch) {
+    CustomMetricRecorder.$current.withValue(nil) {
+      batch.discard()
     }
   }
 
@@ -124,7 +141,12 @@ enum BenchmarkWorkload: Sendable {
         countsProcessEvents ? ProcessCounterWindow(batchRunsOnCallingThread: true) : nil
       let cpuStart = cpuClock?.now()
       let start = clock.now()
-      try calls()
+      do {
+        try calls()
+      } catch {
+        _ = counters?.close()
+        throw error
+      }
       let end = clock.now()
       let cpuEnd = cpuClock?.now()
       return Interval(
@@ -137,7 +159,12 @@ enum BenchmarkWorkload: Sendable {
         countsProcessEvents ? ProcessCounterWindow(batchRunsOnCallingThread: false) : nil
       let cpuStart = cpuClock?.now()
       let start = clock.now()
-      try await calls()
+      do {
+        try await calls()
+      } catch {
+        _ = counters?.close()
+        throw error
+      }
       let end = clock.now()
       let cpuEnd = cpuClock?.now()
       return Interval(

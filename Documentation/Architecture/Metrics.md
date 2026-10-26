@@ -10,9 +10,10 @@ and presents them without measuring anything itself.
 ## Model
 
 `Benchmark.Metric` describes a metric by name, unit (`nanoseconds`, `bytes` or
-`count`) and direction (`lowerIsBetter` or `higherIsBetter`). Its identity is
-its name: reports key values by name, two descriptors with the same name are
-equal, and the names of the built-in metrics are reserved.
+`count`), direction (`lowerIsBetter` or `higherIsBetter`) and whether baseline
+comparisons judge it without a threshold of its own (`isComparedByDefault`).
+Its identity is its name: reports key values by name, two descriptors with the
+same name are equal, and the names of the built-in metrics are reserved.
 
 `Sample` records an iteration, the batch size it measured, and each metric's
 value per call. A sample measured over a batch reports the batch's total
@@ -42,24 +43,33 @@ Built-in metrics:
 A step measures one argument row or Dimension size of a case:
 
 ```text
-setup -> footprint reading
-      -> warmup calls
-      -> batch calibration (automatic batching)
-      -> timed samples: wall clock and CPU time per batch, custom metric values
-      -> counting pass: one batch with the runtime hooks installed
-      -> footprint reading -> peak memory sample
+row input -> footprint reading
+          -> warmup calls
+          -> batch calibration (automatic batching)
+          -> timed samples: wall clock, CPU time, process counters and custom
+             metric values per batch
+          -> counting pass: one batch with the runtime hooks installed, and
+             the interposer counting when it is loaded
+          -> footprint reading -> peak memory sample
 ```
 
+A workload with per-call setup makes each batch's inputs before the batch and
+frees them after its clocks and counters are read, with no sample recording
+custom metrics, so neither is measured.
+
 Timing and counting are separate so that hooks cannot slow the timed samples.
-Given the interposer library, the package workflow goes further and measures
-each step in two host processes: a timing process that runs no counting pass,
-and a counting process that loads the interposer, runs the warmup, then the
-counting pass twice in batches of the timing process's batch size, and records
-the second. The CLI adds the counting sample to the timed row. The runner holds a process-wide measurement gate for the whole step, from setup
-through the counting pass, so steps of concurrent runners never overlap: the
-counting hooks are process-wide and parallel steps would disturb each other's
-times.
-A workload must not run a benchmark runner itself.
+Given the interposer library, the package workflow measures each step in two
+host processes: a timing process that runs no counting pass, and a counting
+process that loads the interposer, runs the warmup, then the counting pass
+twice in batches of the timing process's batch size, and records the second.
+The CLI adds the counting sample to the timed row, and fails the run when the
+counting process counted no heap allocations, which means the library it
+loaded is not a working interposer.
+
+The runner holds a process-wide measurement gate for the whole step, from making
+the row's input through the counting pass, so steps of concurrent runners never
+overlap: the counting hooks are process-wide and parallel steps would disturb
+each other's times. A workload must not run a benchmark runner itself.
 
 ## Allocation And Reference Counting
 
@@ -70,15 +80,16 @@ implementations, and sets
 `_swift_enableSwizzlingOfAllocationAndRefCountingFunctions_forInstrumentsOnly`
 so the runtime routes releases through the slots. The slots, the original
 implementations and the flag's original value are resolved once, before the
-first installation, and never change; the counting functions read only
-trivial values, so counting cannot re-enter itself. The runtime also sets the
-flag itself when an allocation finds a replaced slot, so a thread allocating
-as a counting pass ends can leave it set. Uninstalling restores the slots and
-then the flag, and the runner restores the flag again before each step, so
-no step is timed on the hook path. The hooks count every thread of the process, which makes the
-counts exact only in a process that measures nothing else. C and Objective-C
-`malloc` allocations are not counted. A runtime without the hook symbols leaves
-the counting metrics out.
+first installation, and never change; the counting functions read only trivial
+values, so counting cannot re-enter itself. The runtime also sets the flag
+itself when an allocation finds a replaced slot, so a thread allocating as a
+counting pass ends can leave it set. Uninstalling restores the slots and then
+the flag, and the runner restores the flag again before each step, so no step is
+timed on the hook path. The hooks count every thread of the process, which makes
+the counts exact only in a process that measures nothing else. The hooks see
+only the Swift runtime's own allocations; every system allocator call, from C,
+C++ and Objective-C too, is counted through the interposer (see below). A
+runtime without the hook symbols leaves the Swift counting metrics out.
 
 Linux does not use the hook slots: CI showed that routing reference counting
 through them, which the runtime does whenever the switch is on, crashed in
@@ -89,6 +100,12 @@ interposer, which replaces `swift_allocObject`, `swift_retain`,
 runtime. It counts the calls compiled code makes into the runtime; calls the
 runtime makes to itself bypass the replacements, so Linux can count fewer
 retains and releases than Apple platforms for the same code.
+
+The runner's own batch loops count down in `while` loops: a range loop
+allocates in unoptimized builds, and the counting pass would charge those
+allocations to the workload. Allocations of the workload itself are counted as
+the build produces them, so an unoptimized build can count more than an
+optimized one.
 
 ## Heap Allocations And The Interposer
 
@@ -132,12 +149,6 @@ as `Benchmark.AllocationSites` on the row: the batch's call count and each
 stack's allocations and requested bytes. Symbols come from the host's symbol
 tables, so a stripped host shows image offsets.
 
-The runner's own batch loops count down in `while` loops: a range loop
-allocates in unoptimized builds, and the counting pass would charge those
-allocations to the workload. Allocations of the workload itself are counted as
-the build produces them, so an unoptimized build can count more than an
-optimized one.
-
 ## Peak Memory
 
 Platforms report only the highest footprint over the process lifetime: on
@@ -153,8 +164,9 @@ process of its own and enables it there.
 
 A workload records values with `Benchmark.record(_:for:)`. Each timed sample
 sums the values recorded during its batch and divides by the batch size. The
-first descriptor recorded for a name decides its unit and direction, and values
-recorded under a built-in metric's name are ignored. Custom metrics flow into
+first descriptor recorded for a name decides its unit, direction and
+`isComparedByDefault`, and values recorded under a built-in metric's name are
+ignored. Custom metrics flow into
 statistics, baselines, thresholds and budgets like built-in ones; command-line
 amounts for them are plain numbers.
 

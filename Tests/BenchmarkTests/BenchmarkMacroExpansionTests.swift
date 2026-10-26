@@ -64,7 +64,8 @@ struct BenchmarkMacroExpansionTests {
       @BenchmarkSuite("Sorting")
       struct SortingBenchmarks {
         @Benchmark("Sort", setup: Self.shuffled)
-        func sort(_ values: inout [Int]) {
+        func sort(_ values: inout
+          [Int]) {
           values.sort()
         }
 
@@ -77,7 +78,8 @@ struct BenchmarkMacroExpansionTests {
       expandedSource: """
 
         struct SortingBenchmarks {
-          func sort(_ values: inout [Int]) {
+          func sort(_ values: inout
+            [Int]) {
             values.sort()
           }
           static func sortSized(values: inout [Int]) throws {
@@ -107,6 +109,73 @@ struct BenchmarkMacroExpansionTests {
         extension SortingBenchmarks: _BenchmarkDiscovery {
         }
         """,
+      macros: macros
+    )
+  }
+
+  @Test
+  func setupWithoutOneInoutParameterIsAnError() {
+    assertMacroExpansion(
+      """
+      @BenchmarkSuite("Sorting")
+      struct SortingBenchmarks {
+        @Benchmark("Sort", setup: Self.shuffled)
+        func sort(_ values: [Int]) {}
+      }
+      """,
+      expandedSource: """
+
+        struct SortingBenchmarks {
+          func sort(_ values: [Int]) {}
+        }
+
+        public enum __BenchmarkDiscovery_SortingBenchmarks: _BenchmarkDiscovery {
+          public static var __benchmarkSuites: [BenchmarkSuite] {
+            SortingBenchmarks.__benchmarkSuites
+          }
+        }
+
+        extension SortingBenchmarks: _BenchmarkDiscovery {
+        }
+        """,
+      diagnostics: [
+        MacroDiagnostic(
+          message: "@Benchmark 'sort' with setup: must take its input as one inout parameter.",
+          line: 1, column: 1)
+      ],
+      macros: macros
+    )
+  }
+
+  @Test
+  func setupCannotCombineWithArguments() {
+    assertMacroExpansion(
+      """
+      @BenchmarkSuite("Sorting")
+      struct SortingBenchmarks {
+        @Benchmark("Sort", setup: Self.shuffled, arguments: [1, 2])
+        func sort(_ values: inout [Int]) {}
+      }
+      """,
+      expandedSource: """
+
+        struct SortingBenchmarks {
+          func sort(_ values: inout [Int]) {}
+        }
+
+        public enum __BenchmarkDiscovery_SortingBenchmarks: _BenchmarkDiscovery {
+          public static var __benchmarkSuites: [BenchmarkSuite] {
+            SortingBenchmarks.__benchmarkSuites
+          }
+        }
+
+        extension SortingBenchmarks: _BenchmarkDiscovery {
+        }
+        """,
+      diagnostics: [
+        MacroDiagnostic(
+          message: "@Benchmark 'sort' cannot combine setup: with arguments:.", line: 1, column: 1)
+      ],
       macros: macros
     )
   }

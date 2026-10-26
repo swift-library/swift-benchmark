@@ -335,13 +335,15 @@ func writeFakeXcrun(to path: String) throws {
 }
 
 /// A shell script that answers the host protocol with a plan and a
-/// measurement recorded in this process, and logs its arguments.
+/// measurement recorded in this process, and logs its arguments. Counting
+/// requests get that measurement's samples as heap counts, unless the script
+/// stands for a host whose interposer counted nothing.
 struct FakeHost {
   let directory: URL
   let host: URL
   private let launchesURL: URL
 
-  init(buildConfiguration: String) async throws {
+  init(buildConfiguration: String, countsHeap: Bool = true) async throws {
     directory = FileManager.default.temporaryDirectory
       .appendingPathComponent("swift-benchmark-fake-host-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -349,14 +351,25 @@ struct FakeHost {
     launchesURL = directory.appendingPathComponent("launches")
     let planURL = directory.appendingPathComponent("plan.json")
     let measurementURL = directory.appendingPathComponent("measurement.json")
+    let countingURL = directory.appendingPathComponent("counting.json")
     var metadata = RunMetadata.local(id: "run:fake-host")
     metadata.buildConfiguration = buildConfiguration
     try await BenchmarkHost.output(
       discoveries: [FakeHostDiscovery.self], arguments: ["list"], metadata: metadata
     ).write(to: planURL)
-    try await BenchmarkHost.output(
-      discoveries: [FakeHostDiscovery.self], arguments: ["measure"], metadata: metadata
-    ).write(to: measurementURL)
+    let measurement = try await BenchmarkHost.output(
+      discoveries: [FakeHostDiscovery.self], arguments: ["measure"], metadata: metadata)
+    try measurement.write(to: measurementURL)
+    var counting = try JSONDecoder().decode(HostMeasurement.self, from: measurement)
+    counting.records = counting.records.map { record in
+      var record = record
+      if record.kind == .sampleRecorded, countsHeap {
+        record.context.values = [Benchmark.Metric.heapAllocations.name: 1]
+        record.context.metrics = [.heapAllocations]
+      }
+      return record
+    }
+    try JSONEncoder().encode(counting).write(to: countingURL)
     // The script runs system tools, which cannot load an injected library
     // built for this test's architecture.
     try """
@@ -364,12 +377,16 @@ struct FakeHost {
     unset DYLD_INSERT_LIBRARIES LD_PRELOAD
     echo "$*" >> '\(launchesURL.path)'
     command="$1"
+    counting=no
     while [ "$#" -gt 0 ]; do
       if [ "$1" = "--output" ]; then output="$2"; fi
+      if [ "$1" = "--counting-only" ]; then counting=yes; fi
       shift
     done
     if [ "$command" = list ]; then
       cp '\(planURL.path)' "$output"
+    elif [ "$counting" = yes ]; then
+      cp '\(countingURL.path)' "$output"
     else
       cp '\(measurementURL.path)' "$output"
     fi

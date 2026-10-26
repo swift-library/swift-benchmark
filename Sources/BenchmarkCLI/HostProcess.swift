@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
 // Copyright (c) 2020-present Xudong Xu
 
+import Benchmark
 import Foundation
 import Report
 
@@ -43,6 +44,16 @@ struct HostProcess {
         + ["--counting-only", "--batch-size", String(batchSize)],
       injecting: interposerPath
     )
+    // A library that loads without the interposer's functions counts
+    // nothing, which would leave heap budgets and comparisons unjudged.
+    guard
+      counting.records.contains(where: {
+        $0.kind == .sampleRecorded
+          && $0.context.values[Benchmark.Metric.heapAllocations.name] != nil
+      })
+    else {
+      throw CLIError.interposerCountedNothing(path: interposerPath)
+    }
     timing.insertCountingSamples(ofStep: stepID, from: counting)
     return timing
   }

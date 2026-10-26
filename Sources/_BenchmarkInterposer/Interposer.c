@@ -60,6 +60,9 @@ typedef struct {
 
 static site *sites;
 static _Atomic bool recording_sites;
+/// Threads inside `record_site`. Stopping waits until none is, so the table
+/// holds still from the moment `benchmark_interposer_stop` returns.
+static _Atomic uint32_t site_writers;
 /// Whether the last start recorded sites, which the table then holds.
 static bool sites_recorded;
 static atomic_flag sites_lock = ATOMIC_FLAG_INIT;
@@ -116,13 +119,19 @@ static inline void record_allocation(const void *result, size_t size) {
     add(benchmark_interposer_heap_allocations, 1);
     add(benchmark_interposer_heap_allocated_bytes, size);
     if (atomic_load_explicit(&recording_sites, memory_order_relaxed)) {
+      // Registering before checking again pairs with stopping, which clears
+      // the flag before waiting for writers: one of the two sees the other.
+      atomic_fetch_add(&site_writers, 1);
+      if (atomic_load(&recording_sites)) {
 #if defined(__linux__)
-      recording_this_thread = true;
-      record_site(size);
-      recording_this_thread = false;
+        recording_this_thread = true;
+        record_site(size);
+        recording_this_thread = false;
 #else
-      record_site(size);
+        record_site(size);
 #endif
+      }
+      atomic_fetch_sub(&site_writers, 1);
     }
   }
 }
@@ -232,6 +241,8 @@ uint32_t benchmark_interposer_site(
 void benchmark_interposer_stop(void) {
   atomic_store(&counting, false);
   atomic_store(&recording_sites, false);
+  while (atomic_load(&site_writers) != 0) {
+  }
 }
 
 uint64_t benchmark_interposer_count(benchmark_interposer_counter counter) {
@@ -387,8 +398,9 @@ static unsigned counting_zone_batch_malloc(
   bool entered = enter();
   unsigned allocated = malloc_zone_batch_malloc(zone, size, results, requested);
   if (entered) {
-    add(benchmark_interposer_heap_allocations, allocated);
-    add(benchmark_interposer_heap_allocated_bytes, (uint64_t)allocated * size);
+    for (unsigned index = 0; index < allocated; index++) {
+      record_allocation(results[index], size);
+    }
   }
   leave(entered);
   return allocated;

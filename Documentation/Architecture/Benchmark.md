@@ -149,8 +149,9 @@ and the event records Report builds from.
 Synchronous, throwing, async and async throwing authoring overloads wrap the
 declared function; synchronous workloads are timed in a loop without suspension
 points. Non-`Void` workload overloads route returned values through
-`blackHole`. Argument and Dimension setup runs when a row's workload is made,
-before warmup, and is not measured.
+`blackHole`. A row's input, its argument values or the Dimension `input:`
+for its size, is made once when the row's workload is made, before warmup, and
+is not measured.
 
 A workload with per-call setup, declared with `setup:` on `@Benchmark` or the
 `Benchmark` initializers, takes a fresh input on every call. Before each
@@ -167,14 +168,17 @@ A declaration API alone is not Benchmark. The runner executes workloads
 repeatedly and produces structured results:
 
 ```swift
-BenchmarkRunner(clock:cpuClock:countsAllocations:recordsPeakMemory:)
+BenchmarkRunner(clock:cpuClock:countsProcessEvents:countsAllocations:recordsPeakMemory:)
   .run(_ plan: BenchmarkRunner.Plan, observers:eventRecorders:) async throws -> [BenchmarkResult]
 ```
 
 For each measuring step the runner validates the configuration, makes the
 workload, runs warmup calls, calibrates the batch size, records one timed
 sample per measured iteration, then a counting sample and, when enabled, a peak
-memory sample (see `Metrics.md`). Steps run serially, and a process-wide
+memory sample (see `Metrics.md`). A host process the CLI starts for timing
+skips the counting sample; one it starts for counting records only the
+counting sample, after a first counting pass that warms what counting
+allocates once. Steps run serially, and a process-wide
 measurement gate keeps steps of concurrent runners from overlapping. Thrown
 errors are preserved with suite, case and phase context and never become
 samples. Skips and planning failures are explicit plan actions.
@@ -391,8 +395,9 @@ to phases such as `Tokenize` or `ParseAST`. `SignpostRecorder` and
 
 ## Risks / Ongoing Extension Points
 
-- Counting metrics depend on the Swift runtime's instrumentation hooks and are
-  recorded on Apple platforms only.
+- Swift counting metrics depend on the Swift runtime's instrumentation hooks
+  on Apple platforms and on the interposer library in a counting process on
+  Linux; heap metrics need the interposer on both (see `Metrics.md`).
 - Presentation templates may grow, but they remain Report or tool artifacts
   over the structured report model.
 
