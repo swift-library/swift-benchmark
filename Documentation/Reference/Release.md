@@ -33,7 +33,7 @@ measure are absent from samples rather than zero.
 | Releases | Swift | Platforms |
 | --- | --- | --- |
 | 0.1.x | Swift tools 6.0 or later | iOS 18, macOS 15 or later |
-| Unreleased | Swift 6.3 or later | iOS 18, macOS 15 or later |
+| 0.2.x | Swift 6.3 or later | iOS 18, macOS 15 or later |
 
 Toolchains older than a release's minimum use the newest release that supports
 them.

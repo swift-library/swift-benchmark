@@ -112,7 +112,7 @@ Rejected:
 
 Current acceptance is proven by:
 
-- full `swift test` passing with 162 tests in 29 suites on 2026-10-26, on
+- full `swift test` passing with 164 tests in 29 suites on 2026-10-26, on
   macOS with Xcode 27.0, plus generic iOS builds of the library schemes;
 - macro expansion tests for benchmark declarations, traits, source locations,
   and Dimension lowering;

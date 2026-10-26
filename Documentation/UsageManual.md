@@ -16,7 +16,7 @@ metrics, reports, baselines, and CI exit codes.
 .dependencies: [
   .package(
     url: "https://github.com/swift-library/swift-benchmark.git",
-    .upToNextMinor(from: "0.1.2")
+    .upToNextMinor(from: "0.2.0")
   ),
 ],
 .targets: [
@@ -58,7 +58,7 @@ code that only needs the runtime API can drop the trait:
 ```swift
 .package(
   url: "https://github.com/swift-library/swift-benchmark.git",
-  .upToNextMinor(from: "0.1.2"),
+  .upToNextMinor(from: "0.2.0"),
   traits: []
 ),
 ```
