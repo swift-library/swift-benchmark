@@ -37,13 +37,23 @@ extension Benchmark {
     /// Whether a lower or a higher value is an improvement; decides which
     /// change a baseline comparison or budget treats as a regression.
     public var direction: Direction
+    /// Whether baseline comparisons judge the metric without a threshold
+    /// given for it. Metrics the environment moves more than the code, such as
+    /// context switches, are reported but judged only on request.
+    public var isComparedByDefault: Bool
 
     /// Creates a metric. Custom metrics need a name that no ``builtIn``
     /// metric uses.
-    public init(name: String, unit: Unit, direction: Direction = .lowerIsBetter) {
+    public init(
+      name: String,
+      unit: Unit,
+      direction: Direction = .lowerIsBetter,
+      isComparedByDefault: Bool = true
+    ) {
       self.name = name
       self.unit = unit
       self.direction = direction
+      self.isComparedByDefault = isComparedByDefault
     }
 
     /// The metric's name.
@@ -66,6 +76,44 @@ extension Benchmark {
 
     /// User plus system CPU time of the whole process per call.
     public static let cpuTime = Metric(name: "cpuTime", unit: .nanoseconds)
+
+    /// Instructions retired per call.
+    ///
+    /// Varies far less with machine load than time does. Apple platforms count
+    /// the whole process. Linux counts user-mode instructions of the thread
+    /// that runs the batch and the threads it creates, so it records the
+    /// metric only for synchronous workloads, and only where the kernel lets
+    /// the process open hardware counters.
+    public static let instructions = Metric(name: "instructions", unit: .count)
+
+    /// Processor cycles per call, counted like ``instructions``.
+    public static let cycles = Metric(name: "cycles", unit: .count)
+
+    /// Context switches of the process per call. Reported, but judged only
+    /// when a threshold or budget names it.
+    public static let contextSwitches = Metric(
+      name: "contextSwitches", unit: .count, isComparedByDefault: false)
+
+    /// Page faults of the process per call, minor and major. Reported, but
+    /// judged only when a threshold or budget names it.
+    public static let pageFaults = Metric(
+      name: "pageFaults", unit: .count, isComparedByDefault: false)
+
+    /// System calls of the process per call, on Apple platforms. Reported, but
+    /// judged only when a threshold or budget names it.
+    public static let systemCalls = Metric(
+      name: "systemCalls", unit: .count, isComparedByDefault: false)
+
+    /// Bytes the process read from storage per call, on macOS and Linux. Reads
+    /// served from the page cache do not count. Reported, but judged only when
+    /// a threshold or budget names it.
+    public static let diskReadBytes = Metric(
+      name: "diskReadBytes", unit: .bytes, isComparedByDefault: false)
+
+    /// Bytes the process wrote to storage per call, on macOS and Linux.
+    /// Reported, but judged only when a threshold or budget names it.
+    public static let diskWriteBytes = Metric(
+      name: "diskWriteBytes", unit: .bytes, isComparedByDefault: false)
 
     /// Swift heap objects the Swift runtime allocated per call, by any thread of
     /// the process.
@@ -96,8 +144,9 @@ extension Benchmark {
 
     /// The metrics the runner measures without user code.
     public static let builtIn: [Metric] = [
-      .wallClock, .cpuTime, .swiftAllocations, .swiftAllocatedBytes, .swiftRetains,
-      .swiftReleases, .peakMemory,
+      .wallClock, .cpuTime, .instructions, .cycles, .contextSwitches, .pageFaults,
+      .systemCalls, .diskReadBytes, .diskWriteBytes, .swiftAllocations, .swiftAllocatedBytes,
+      .swiftRetains, .swiftReleases, .peakMemory,
     ]
   }
 }

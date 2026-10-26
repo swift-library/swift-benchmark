@@ -25,6 +25,9 @@ Built-in metrics:
 | --- | --- | --- |
 | `wallClock` | nanoseconds | The runner's clock around each timed batch |
 | `cpuTime` | nanoseconds | Process user plus system CPU time, `getrusage(RUSAGE_SELF)`, read outside the wall clock around the same batch |
+| `instructions`, `cycles` | count | Apple: `task_inspect(TASK_INSPECT_BASIC_COUNTS)` for the whole process. Linux: `perf_event_open` user-mode hardware counters of the batch's thread and the threads it creates, synchronous workloads only. Read outside the CPU clock around the same batch |
+| `contextSwitches`, `pageFaults`, `systemCalls` | count | Apple: `task_events_info`. Linux: `getrusage` context switches and page faults; no system call count |
+| `diskReadBytes`, `diskWriteBytes` | bytes | macOS: `proc_pid_rusage` storage bytes. Linux: `/proc/self/io` `read_bytes` and `write_bytes` |
 | `swiftAllocations` | count | Swift runtime heap allocations in the counting pass |
 | `swiftAllocatedBytes` | bytes | Sizes those allocations requested |
 | `swiftRetains` | count | Swift strong retains, including `retain_n` counts, in the counting pass |
@@ -109,11 +112,22 @@ per sample. Adaptive iteration limits count each batch's whole duration.
 | Metric | Darwin | Linux |
 | --- | --- | --- |
 | `wallClock`, `cpuTime` | Yes | Yes |
+| `instructions`, `cycles` | Where the hardware counters work | Synchronous workloads, where the kernel allows hardware counters |
+| `contextSwitches`, `pageFaults` | Yes | Yes |
+| `systemCalls` | Yes | No |
+| `diskReadBytes`, `diskWriteBytes` | macOS | Yes |
 | Counting metrics | Yes | No |
 | `peakMemory` | Yes, in an isolated step | Yes, in an isolated step |
 
 A metric a platform cannot measure is absent from the samples, never reported
 as zero; comparisons skip metrics either side lacks.
+
+`Benchmark.Metric.isComparedByDefault` marks the metrics a baseline comparison
+judges without a threshold of its own. Context switches, page faults, system
+calls and disk bytes move with the rest of the machine as much as with the
+code, so they are reported but judged only when a threshold or budget names
+them; every other built-in metric and every custom metric unless declared
+otherwise is judged by default.
 
 ## Acceptance
 

@@ -176,7 +176,8 @@ extension BenchmarkRunner {
   }
 
   /// Measures one timed sample of `batchSize` calls: wall-clock time, CPU
-  /// time and any values the workload records, each divided by the batch size.
+  /// time, process counters and any values the workload records, each divided
+  /// by the batch size.
   private func measureSample(
     _ workload: BenchmarkWorkload,
     iteration: Int,
@@ -184,10 +185,14 @@ extension BenchmarkRunner {
   ) async throws -> Sample {
     let recorder = CustomMetricRecorder()
     let interval = try await CustomMetricRecorder.$current.withValue(recorder) {
-      try await workload.callTimed(batchSize, clock: clock, cpuClock: cpuClock)
+      try await workload.callTimed(
+        batchSize, clock: clock, cpuClock: cpuClock, countsProcessEvents: countsProcessEvents)
     }
     let calls = Double(batchSize)
     var values: [Benchmark.Metric: Double] = recorder.values().mapValues { $0 / calls }
+    for (metric, total) in interval.counters {
+      values[metric] = total / calls
+    }
     values[.wallClock] = Double(interval.nanoseconds) / calls
     if let cpuNanoseconds = interval.cpuNanoseconds {
       values[.cpuTime] = Double(cpuNanoseconds) / calls

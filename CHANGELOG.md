@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Timed samples count instructions and cycles, which vary far less with
+  machine load than time, and context switches, page faults, system calls and
+  disk bytes, each where the platform provides them.
+  `BenchmarkRunner(countsProcessEvents:)` turns the counting off.
+- **Breaking**: `Benchmark.Metric` carries `isComparedByDefault`. Context
+  switches, page faults, system calls and disk bytes are reported but judged
+  only when a threshold or budget names them. Report JSON records the property
+  for every metric.
+
 ## 0.2.0
 
 - **Breaking**: Requires Swift 6.3 or later. Deployment minimums are iOS 18

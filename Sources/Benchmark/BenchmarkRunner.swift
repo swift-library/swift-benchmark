@@ -5,6 +5,9 @@ public struct BenchmarkRunner: Sendable {
   public let clock: any BenchmarkClock
   /// Reads CPU time for ``Benchmark/Metric/cpuTime``; `nil` leaves the metric out.
   public let cpuClock: (any BenchmarkClock)?
+  /// Whether timed samples count instructions, cycles and operating system
+  /// events: context switches, page faults, system calls and disk bytes.
+  public let countsProcessEvents: Bool
   /// Whether each step ends with a pass that counts Swift heap allocations and
   /// reference-counting operations.
   public let countsAllocations: Bool
@@ -13,16 +16,18 @@ public struct BenchmarkRunner: Sendable {
   /// covers the whole process lifetime.
   public let recordsPeakMemory: Bool
 
-  /// Creates a runner. The defaults measure wall-clock time, CPU time and
-  /// allocation counts, and leave out peak memory.
+  /// Creates a runner. The defaults measure wall-clock time, CPU time,
+  /// process events and allocation counts, and leave out peak memory.
   public init(
     clock: any BenchmarkClock = ContinuousBenchmarkClock(),
     cpuClock: (any BenchmarkClock)? = ProcessCPUClock(),
+    countsProcessEvents: Bool = true,
     countsAllocations: Bool = true,
     recordsPeakMemory: Bool = false
   ) {
     self.clock = clock
     self.cpuClock = cpuClock
+    self.countsProcessEvents = countsProcessEvents
     self.countsAllocations = countsAllocations
     self.recordsPeakMemory = recordsPeakMemory
   }

@@ -77,7 +77,8 @@ public struct ComparisonPolicy: Sendable, Equatable {
   }
 
   /// Compares each row with the same row of the baseline on every metric both
-  /// measured, evaluates the budgets that apply to the case on each row, and
+  /// measured that is compared by default or has its own threshold,
+  /// evaluates the budgets that apply to the case on each row, and
   /// warns about rows whose comparisons noise or too few samples make
   /// unreliable.
   func compare(
@@ -98,7 +99,8 @@ public struct ComparisonPolicy: Sendable, Equatable {
       let baselineRow = baselineCase?.measurement.rows.first { $0.matches(row) }
       var rowComparisons: [BaselineComparison] = []
       if let baselineRow {
-        for metric in row.metrics {
+        for metric in row.metrics
+        where metric.isComparedByDefault || metricThresholds[metric] != nil {
           guard let current = row.statistics(for: metric),
             let previous = baselineRow.statistics(for: metric)
           else {

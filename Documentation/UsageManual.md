@@ -269,11 +269,33 @@ the platform and runtime provide them; the notes after the table say when:
 | --- | --- | --- |
 | `wallClock` | nanoseconds | Elapsed time of each timed sample |
 | `cpuTime` | nanoseconds | User plus system CPU time of the process during each timed sample |
+| `instructions` | count | Instructions retired during each timed sample |
+| `cycles` | count | Processor cycles during each timed sample |
+| `contextSwitches` | count | Context switches of the process; reported, judged only on request |
+| `pageFaults` | count | Minor and major page faults of the process; reported, judged only on request |
+| `systemCalls` | count | System calls of the process, on Apple platforms; reported, judged only on request |
+| `diskReadBytes` | bytes | Bytes read from storage, on macOS and Linux; reported, judged only on request |
+| `diskWriteBytes` | bytes | Bytes written to storage, on macOS and Linux; reported, judged only on request |
 | `swiftAllocations` | count | Swift runtime heap allocations, in a counting pass after the timed samples |
 | `swiftAllocatedBytes` | bytes | Bytes those allocations requested |
 | `swiftRetains` | count | Swift strong retains in the counting pass |
 | `swiftReleases` | count | Swift strong releases in the counting pass |
 | `peakMemory` | bytes | How far the process's memory footprint rose above its level at the start of the step; one value per step |
+
+`instructions` and `cycles` vary far less with machine load than time does,
+which makes them a steady regression gate on shared CI machines. Apple
+platforms count the whole process; where the hardware counters are unavailable,
+as in some virtual machines, the metrics are left out. Linux counts user-mode
+instructions of the thread that runs the batch and the threads it creates, so
+it records them only for synchronous workloads and only where the kernel allows
+the process to open hardware counters.
+
+Context switches, page faults, system calls and disk bytes depend on the rest
+of the machine as much as on the code, so comparisons report them without
+judging them. Give one a threshold or a budget to judge it, for example
+`--threshold contextSwitches=0`. Runners created in your own code count these
+events and the hardware counters unless created with
+`countsProcessEvents: false`.
 
 Timing and counting are separate: the timed samples run without the counting
 hooks, so hooks cannot slow the times, and a counting pass then runs one more

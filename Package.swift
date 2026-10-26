@@ -47,8 +47,12 @@ let package = Package(
     ),
     .target(
       name: "Benchmark",
-      dependencies: ["BenchmarkMacro"],
+      dependencies: ["BenchmarkMacro", "_BenchmarkCounters"],
       path: "Sources/Benchmark"
+    ),
+    .target(
+      name: "_BenchmarkCounters",
+      path: "Sources/_BenchmarkCounters"
     ),
     .macro(
       name: "BenchmarkMacro",
