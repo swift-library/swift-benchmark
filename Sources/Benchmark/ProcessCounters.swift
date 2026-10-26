@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
 // Copyright (c) 2020-present Xudong Xu
 
-internal import _BenchmarkCounters
+internal import _BenchmarkPlatform
 
 #if canImport(Darwin)
   import Darwin

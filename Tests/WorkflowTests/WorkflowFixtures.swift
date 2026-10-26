@@ -73,11 +73,29 @@ func writeCModuleDependencyPackage(at package: URL, explicitModuleMap: Bool) thr
   )
 }
 
-/// A package whose benchmarks call C, Objective-C and C++ targets, a static
-/// XCFramework and a resource bundle, plus a test-target benchmark whose
-/// `@Test` attribute shares the function's line, and a test target without
-/// benchmarks that does not compile, which the plugin must not build.
+/// A package whose benchmarks call C and C++ targets and a resource bundle, on
+/// Apple platforms also an Objective-C target and a static XCFramework, plus a
+/// test-target benchmark whose `@Test` attribute shares the function's line,
+/// and a test target without benchmarks that does not compile, which the
+/// plugin must not build.
 func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) async throws {
+  #if os(macOS)
+    let appleTargets = """
+          .target(name: "ObjCCounter"),
+          .binaryTarget(name: "BinaryCounter", path: "BinaryCounter.xcframework"),
+
+      """
+    let appleDependencies = "\"ObjCCounter\", \"BinaryCounter\", "
+    let appleImports = "import BinaryCounter\nimport ObjCCounter\n"
+    let appleValues = "ObjCCounter.value() + Int(binary_counter_value()) + "
+    let total = 15
+  #else
+    let appleTargets = ""
+    let appleDependencies = ""
+    let appleImports = ""
+    let appleValues = ""
+    let total = 8
+  #endif
   try writeFile(
     """
     // swift-tools-version: 6.3
@@ -91,13 +109,11 @@ func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) async thr
       ],
       targets: [
         .target(name: "CCounter"),
-        .target(name: "ObjCCounter"),
         .target(name: "CxxCounter"),
-        .binaryTarget(name: "BinaryCounter", path: "BinaryCounter.xcframework"),
-        .target(
+    \(appleTargets)    .target(
           name: "MixedLibrary",
           dependencies: [
-            "CCounter", "ObjCCounter", "CxxCounter", "BinaryCounter",
+            "CCounter", "CxxCounter", \(appleDependencies)
             .product(name: "Benchmark", package: "swift-benchmark"),
           ],
           resources: [.process("Resources")]
@@ -119,30 +135,23 @@ func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) async thr
     "Sources/CCounter/include/CCounter.h": "int c_counter_value(void);\n",
     "Sources/CCounter/CCounter.c":
       "#include \"CCounter.h\"\nint c_counter_value(void) { return 1; }\n",
-    "Sources/ObjCCounter/include/ObjCCounter.h":
-      "#import <Foundation/Foundation.h>\n@interface ObjCCounter : NSObject\n+ (NSInteger)value;\n@end\n",
-    "Sources/ObjCCounter/ObjCCounter.m":
-      "#import \"ObjCCounter.h\"\n@implementation ObjCCounter\n+ (NSInteger)value { return 2; }\n@end\n",
     "Sources/CxxCounter/include/CxxCounter.h":
       "#ifdef __cplusplus\nextern \"C\" {\n#endif\nint cxx_counter_value(void);\n#ifdef __cplusplus\n}\n#endif\n",
     "Sources/CxxCounter/CxxCounter.cpp":
       "#include \"CxxCounter.h\"\n#include <vector>\nint cxx_counter_value(void) { std::vector<int> v{1, 2}; return static_cast<int>(v.size()) + 1; }\n",
     "Sources/MixedLibrary/Resources/value.txt": "4\n",
     "Sources/MixedLibrary/Counters.swift": """
-    import BinaryCounter
-    import Benchmark
+    \(appleImports)import Benchmark
     import CCounter
     import CxxCounter
     import Foundation
-    import ObjCCounter
 
     public enum Counters {
       public static func total() -> Int {
         let url = Bundle.module.url(forResource: "value", withExtension: "txt")!
         let text = try! String(contentsOf: url, encoding: .utf8)
         let resource = Int(text.trimmingCharacters(in: .whitespacesAndNewlines))!
-        return Int(c_counter_value()) + ObjCCounter.value() + Int(cxx_counter_value())
-          + Int(binary_counter_value()) + resource
+        return Int(c_counter_value()) + \(appleValues)Int(cxx_counter_value()) + resource
       }
     }
 
@@ -150,7 +159,7 @@ func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) async thr
     struct MixedBenchmarks {
       @Benchmark("Total")
       func total() {
-        precondition(Counters.total() == 15)
+        precondition(Counters.total() == \(total))
       }
     }
     """,
@@ -160,42 +169,60 @@ func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) async thr
     import Testing
 
     struct SameLineBenchmarks {
-      @Test(.benchmark()) func sameLine() { precondition(Counters.total() == 15) }
+      @Test(.benchmark()) func sameLine() { precondition(Counters.total() == \(total)) }
     }
     """,
     "Tests/UnrelatedTests/Unrelated.swift": "let unbuilt: Int = \"not an Int\"\n",
-    "binary/include/BinaryCounter.h": "int binary_counter_value(void);\n",
-    "binary/include/module.modulemap":
-      "module BinaryCounter {\n  header \"BinaryCounter.h\"\n  export *\n}\n",
-    "binary/BinaryCounter.c":
-      "#include \"BinaryCounter.h\"\nint binary_counter_value(void) { return 5; }\n",
   ]
   for (path, contents) in files {
     try writeFile(contents, to: package.appendingPathComponent(path))
   }
-
-  let binary = package.appendingPathComponent("binary")
-  let object = binary.appendingPathComponent("BinaryCounter.o").path
-  let library = binary.appendingPathComponent("libBinaryCounter.a").path
-  _ = try await runProcess(
-    executable: "/usr/bin/xcrun",
-    arguments: [
-      "clang", "-c", binary.appendingPathComponent("BinaryCounter.c").path, "-o", object,
-      "-I", binary.appendingPathComponent("include").path,
-      "-arch", "arm64", "-arch", "x86_64", "-mmacosx-version-min=15.0",
-    ]
-  )
-  _ = try await runProcess(
-    executable: "/usr/bin/xcrun", arguments: ["libtool", "-static", "-o", library, object])
-  _ = try await runProcess(
-    executable: "/usr/bin/xcrun",
-    arguments: [
-      "xcodebuild", "-create-xcframework", "-library", library,
-      "-headers", binary.appendingPathComponent("include").path,
-      "-output", package.appendingPathComponent("BinaryCounter.xcframework").path,
-    ]
-  )
+  #if os(macOS)
+    try await writeAppleMixedTargets(at: package)
+  #endif
 }
+
+#if os(macOS)
+  /// The Objective-C target and the static XCFramework of the mixed package.
+  private func writeAppleMixedTargets(at package: URL) async throws {
+    let files = [
+      "Sources/ObjCCounter/include/ObjCCounter.h":
+        "#import <Foundation/Foundation.h>\n@interface ObjCCounter : NSObject\n+ (NSInteger)value;\n@end\n",
+      "Sources/ObjCCounter/ObjCCounter.m":
+        "#import \"ObjCCounter.h\"\n@implementation ObjCCounter\n+ (NSInteger)value { return 2; }\n@end\n",
+      "binary/include/BinaryCounter.h": "int binary_counter_value(void);\n",
+      "binary/include/module.modulemap":
+        "module BinaryCounter {\n  header \"BinaryCounter.h\"\n  export *\n}\n",
+      "binary/BinaryCounter.c":
+        "#include \"BinaryCounter.h\"\nint binary_counter_value(void) { return 5; }\n",
+    ]
+    for (path, contents) in files {
+      try writeFile(contents, to: package.appendingPathComponent(path))
+    }
+
+    let binary = package.appendingPathComponent("binary")
+    let object = binary.appendingPathComponent("BinaryCounter.o").path
+    let library = binary.appendingPathComponent("libBinaryCounter.a").path
+    _ = try await runProcess(
+      executable: "/usr/bin/xcrun",
+      arguments: [
+        "clang", "-c", binary.appendingPathComponent("BinaryCounter.c").path, "-o", object,
+        "-I", binary.appendingPathComponent("include").path,
+        "-arch", "arm64", "-arch", "x86_64", "-mmacosx-version-min=15.0",
+      ]
+    )
+    _ = try await runProcess(
+      executable: "/usr/bin/xcrun", arguments: ["libtool", "-static", "-o", library, object])
+    _ = try await runProcess(
+      executable: "/usr/bin/xcrun",
+      arguments: [
+        "xcodebuild", "-create-xcframework", "-library", library,
+        "-headers", binary.appendingPathComponent("include").path,
+        "-output", package.appendingPathComponent("BinaryCounter.xcframework").path,
+      ]
+    )
+  }
+#endif
 
 func initializeGitRepository(at directory: URL) async throws {
   _ = try await runProcess(

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
 // Copyright (c) 2020-present Xudong Xu
 
+internal import _BenchmarkPlatform
+
 #if canImport(Darwin)
   import Darwin
 #elseif canImport(Glibc)
@@ -99,16 +101,21 @@ extension Benchmark.AllocationSites {
   /// without a symbol. Return addresses point after the call, so the address
   /// looked up is one byte earlier.
   private static func symbolicate(_ address: UInt) -> String {
-    var info = Dl_info()
-    guard address > 0, dladdr(UnsafeRawPointer(bitPattern: address - 1), &info) != 0 else {
+    var symbol: UnsafePointer<CChar>?
+    var image: UnsafePointer<CChar>?
+    var imageBase: UInt = 0
+    guard address > 0,
+      benchmark_symbol_at(
+        UnsafeRawPointer(bitPattern: address - 1), &symbol, &image, &imageBase) != 0
+    else {
       return "0x\(String(address, radix: 16))"
     }
-    if let name = info.dli_sname {
-      return demangle(String(cString: name))
+    if let symbol {
+      return demangle(String(cString: symbol))
     }
-    let image = info.dli_fname.map { String(cString: $0) }?.split(separator: "/").last
-    let offset = address - UInt(bitPattern: info.dli_fbase)
-    return "\(image.map(String.init) ?? "?")+0x\(String(offset, radix: 16))"
+    let imageName = image.map { String(cString: $0) }?.split(separator: "/").last
+    let offset = address - imageBase
+    return "\(imageName.map(String.init) ?? "?")+0x\(String(offset, radix: 16))"
   }
 
   /// `name` demangled as a Swift or C++ symbol, or unchanged.

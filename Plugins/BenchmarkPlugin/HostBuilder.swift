@@ -71,10 +71,17 @@ struct HostBuilder {
     // Bridge closures run inside every measured batch, so they are optimized
     // like the package they call.
     let optimization = configuration == .release ? ["-O"] : []
+    #if os(Linux)
+      // Allocation sites name functions through the dynamic symbol table,
+      // which holds an executable's own functions only when exported.
+      let symbolArguments = ["-Xlinker", "--export-dynamic"]
+    #else
+      let symbolArguments: [String] = []
+    #endif
 
     try runProcess(
       executable: swiftc,
-      arguments: optimization + [
+      arguments: optimization + symbolArguments + [
         "-parse-as-library",
         "-enable-testing",
         "-module-cache-path",

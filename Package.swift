@@ -49,12 +49,12 @@ let package = Package(
     ),
     .target(
       name: "Benchmark",
-      dependencies: ["BenchmarkMacro", "_BenchmarkCounters"],
+      dependencies: ["BenchmarkMacro", "_BenchmarkPlatform"],
       path: "Sources/Benchmark"
     ),
     .target(
-      name: "_BenchmarkCounters",
-      path: "Sources/_BenchmarkCounters"
+      name: "_BenchmarkPlatform",
+      path: "Sources/_BenchmarkPlatform"
     ),
     .target(
       name: "_BenchmarkInterposer",

@@ -6,17 +6,8 @@ import Foundation
 import Report
 import Testing
 
-#if os(macOS)
-  private let pluginWorkflowIsSupported = true
-#else
-  private let pluginWorkflowIsSupported = false
-#endif
-
 // Fixture deadlines include cold dependency builds on hosted runners.
-@Suite(
-  "Plugin Workflow",
-  .enabled(if: pluginWorkflowIsSupported, "The command plugin supports Apple platforms only.")
-)
+@Suite("Plugin Workflow")
 struct PluginWorkflowTests {
   @Test(.timeLimit(.minutes(45)))
   func fixturePackageCommandGeneratesHostWithoutUserBoilerplate() async throws {

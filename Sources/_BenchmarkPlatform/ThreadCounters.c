@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
 // Copyright (c) 2020-present Xudong Xu
 
-#include "_BenchmarkCounters.h"
+#include "_BenchmarkPlatform.h"
 
 #if defined(__linux__)
 

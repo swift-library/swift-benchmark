@@ -26,7 +26,12 @@ extension HostBuilder {
         cxxExtensions.contains($0.url.pathExtension.lowercased())
       } == true
     }
-    return arguments + (usesCxx ? ["-lc++"] : [])
+    #if os(Linux)
+      let cxxLibrary = "-lstdc++"
+    #else
+      let cxxLibrary = "-lc++"
+    #endif
+    return arguments + (usesCxx ? [cxxLibrary] : [])
   }
 }
 

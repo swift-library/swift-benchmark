@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
 // Copyright (c) 2020-present Xudong Xu
 
-#ifndef BENCHMARK_COUNTERS_H
-#define BENCHMARK_COUNTERS_H
+// What the Benchmark runner reads from the platform through C: hardware
+// counters, and the symbols of return addresses.
+
+#ifndef BENCHMARK_PLATFORM_H
+#define BENCHMARK_PLATFORM_H
 
 #include <stdint.h>
 
@@ -24,5 +27,11 @@ int benchmark_thread_counter_read(int counter, uint64_t *value);
 
 /// Stops the counter and releases its handle.
 void benchmark_thread_counter_close(int counter);
+
+/// Looks up the loaded image and the nearest symbol containing `address`, as
+/// `dladdr` does. Returns 0 when no loaded image contains it; `symbol` is
+/// `NULL` when the image has no symbol for it.
+int benchmark_symbol_at(
+  const void *address, const char **symbol, const char **image, uintptr_t *image_base);
 
 #endif
