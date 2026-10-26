@@ -21,7 +21,7 @@ struct AdapterTests {
       }
     }
     let adapter = BenchmarkTestingAdapter(
-      command: BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 10))))
+      runner: BenchmarkRunner(clock: StepClock(step: 10), cpuClock: nil, countsAllocations: false))
 
     let document = try await adapter.report(
       suites: [suite], metadata: .local(id: "run:adapter", packageIdentity: "swift-benchmark"))
@@ -50,25 +50,39 @@ struct AdapterTests {
     )
     let suite = BenchmarkSuite(
       "Adapters",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("Parse") {
         blackHole(1)
       }
     }
     let baseline = BaselineDocument(cases: [
-      BaselineCase(suiteName: "Adapters", caseName: "Parse", meanNanoseconds: 1)
+      BaselineCase(
+        suiteName: "Adapters",
+        caseName: "Parse",
+        measurement: Report.Measurement(
+          samples: [
+            SampleReport(
+              id: "sample:adapters.parse.0", iterationID: "iteration:adapters.parse.0",
+              iteration: 0, values: ["wallClock": 1])
+          ],
+          metrics: [.wallClock]
+        )
+      )
     ])
-    let command = BenchmarkCommand(runner: BenchmarkRunner(clock: StepClock(step: 10)))
-    let testingAdapter = BenchmarkTestingAdapter(command: command)
-    let xctestAdapter = BenchmarkXCTestAdapter(command: command)
+    let runner = BenchmarkRunner(
+      clock: StepClock(step: 10), cpuClock: nil, countsAllocations: false)
+    let testingAdapter = BenchmarkTestingAdapter(runner: runner)
+    let xctestAdapter = BenchmarkXCTestAdapter(runner: runner)
 
     let document = try await testingAdapter.report(
       suites: [suite],
       metadata: metadata,
       baseline: baseline,
-      threshold: .relativePercentage(10),
-      budgets: [BudgetPolicy(metric: .mean, limitNanoseconds: 1)]
+      comparison: ComparisonPolicy(budgets: [
+        BudgetPolicy(metric: .wallClock, statistic: .mean, limit: 1)
+      ])
     )
     let testingContexts = testingAdapter.failureContexts(for: document)
     let xctestContexts = xctestAdapter.failureContexts(for: document)
@@ -88,20 +102,13 @@ struct AdapterTests {
   }
 
   @Test
-  func swiftTestingBenchmarkTraitCarriesReportPolicy() {
-    let testTrait: any TestTrait = .benchmark(
-      baselineMetric: .p95,
-      budgets: [BudgetPolicy(metric: .p95, limitNanoseconds: 100)]
-    )
-    let suiteTrait: any SuiteTrait = .benchmark(
-      threshold: .absoluteNanoseconds(50),
-      budgets: [BudgetPolicy(metric: .mean, limitNanoseconds: 200)]
-    )
+  func swiftTestingBenchmarkTraitCarriesItsConfiguration() {
+    let configuration = BenchmarkConfiguration(warmup: .none, iterations: .iterations(3))
+    let testTrait: any TestTrait = .benchmark(configuration: configuration)
+    let suiteTrait: any SuiteTrait = .benchmark()
 
-    #expect((testTrait as? BenchmarkTestingTrait)?.baselineMetric == .p95)
-    #expect((testTrait as? BenchmarkTestingTrait)?.budgets.first?.metric == .p95)
-    #expect((suiteTrait as? BenchmarkTestingTrait)?.threshold == .absoluteNanoseconds(50))
-    #expect((suiteTrait as? BenchmarkTestingTrait)?.budgets.first?.metric == .mean)
+    #expect((testTrait as? BenchmarkTestingTrait)?.configuration == configuration)
+    #expect((suiteTrait as? BenchmarkTestingTrait)?.configuration == nil)
   }
 }
 

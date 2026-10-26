@@ -35,17 +35,14 @@ public final class BenchmarkTimelineObserver: BenchmarkExecutionObserver, @unche
     }
   }
 
-  public func benchmarkDidRun(
-    context: BenchmarkExecutionContext,
-    durationNanoseconds: UInt64?
-  ) async {
+  public func benchmarkDidRun(context: BenchmarkExecutionContext, sample: Sample?) async {
     guard case .measurement(let iteration) = context.phase else {
       return
     }
     var attributes = correlationAttributes(context: context, iteration: iteration)
-    if let durationNanoseconds {
+    if let sample, let wallClock = sample.value(for: .wallClock) {
       attributes.values[TimelineCorrelationKeys.durationNanoseconds] = .int(
-        Int(durationNanoseconds))
+        Int(wallClock * Double(sample.batchSize)))
     }
     endSpan(for: context, eventName: "BenchmarkIterationMeasured", eventAttributes: attributes)
   }
@@ -72,20 +69,24 @@ public final class BenchmarkTimelineObserver: BenchmarkExecutionObserver, @unche
   }
 
   private func key(_ context: BenchmarkExecutionContext) -> String {
-    "\(context.suiteName)\u{0}\(context.caseName)\u{0}\(context.phase)"
+    "\(context.suiteName)\u{0}\(context.caseName)\u{0}\(context.rowID ?? "")\u{0}\(context.phase)"
   }
 
   private func correlationAttributes(
     context: BenchmarkExecutionContext,
     iteration: Int
   ) -> SpanAttributes {
-    [
+    var attributes: SpanAttributes = [
       TimelineCorrelationKeys.suite: .string(context.suiteName),
       TimelineCorrelationKeys.case: .string(context.caseName),
       TimelineCorrelationKeys.iteration: .int(iteration),
       TimelineCorrelationKeys.dimensionSize: context.size.map { .int($0.rawValue) }
         ?? .string("none"),
     ]
+    if let rowID = context.rowID {
+      attributes.values[TimelineCorrelationKeys.row] = .string(rowID)
+    }
+    return attributes
   }
 }
 

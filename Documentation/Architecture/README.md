@@ -3,7 +3,7 @@
 Current architecture descriptions for `swift-benchmark` live here.
 
 - `ProductDomains.md`: product-domain map for Benchmark, Instruments,
-  InstrumentsMacros, Report, diagnostics adapters, and adapter domains.
+  InstrumentsMacros, Report, and adapter domains.
 - `CapabilityMap.md`: capability-track map that groups user/tool workflows
   across product domains and points to the relevant truth documents.
 - `SwiftTestingAlignment.md`: Swift Testing alignment strategy, naming/type
@@ -16,9 +16,9 @@ Current architecture descriptions for `swift-benchmark` live here.
   contracts.
 - `Dimension.md`: Dimension-first measurement and Apple-aligned input-size
   semantics.
-- `Memory.md`: resident memory, allocation providers, and resource regression.
-- `AppleDiagnostics.md`: current xctrace diagnostics and future MetricKit
-  payloads as Report-facing Apple diagnostics.
+- `Metrics.md`: built-in and custom metrics, timing and counting, peak memory,
+  batching, and platform availability.
+- `AppleDiagnostics.md`: xctrace recording and trace attachments.
 - `WorkflowAdapters.md`: package command, CLI/plugin, Swift Testing, and
   XCTest adapters.
 - `ImplementationScope.md`: current implementation snapshot, Apple/Swift
@@ -29,7 +29,7 @@ Current architecture descriptions for `swift-benchmark` live here.
 - `Instruments.md`: Instruments layer, Instruments macros, recorder model, and
   Apple Signpost backend boundary.
 - `Report.md`: structured performance reports, baseline/regression,
-  attribution, diagnostics, fallback, and renderer boundaries.
+  warnings, attribution, trace attachments, fallback, and renderer boundaries.
 
 Supporting proposals, decisions, migrations, archives, and reference notes live
 in separate `Documentation/` subtrees. They should not replace the current

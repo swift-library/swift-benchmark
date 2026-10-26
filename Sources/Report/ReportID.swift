@@ -86,7 +86,7 @@ enum ReportIDFactory {
         rawValue: "row:\(stable(suiteName)).\(stable(caseName)).size-\(size.rawValue)")
     }
     if let rowID, !rowID.isEmpty {
-      return ReportID(rawValue: "row:\(stable(suiteName)).\(stable(caseName)).\(stable(rowID))")
+      return ReportID(rawValue: "row:\(stable(suiteName)).\(stable(caseName)).\(rowID)")
     }
     return ReportID(rawValue: "row:\(stable(suiteName)).\(stable(caseName))")
   }
@@ -120,24 +120,18 @@ enum ReportIDFactory {
   static func dimensionCurve(
     suiteName: String,
     caseName: String,
-    metric: Report.Measurement.Metric
+    metric: Benchmark.Metric,
+    statistic: Report.Statistic
   ) -> ReportID {
-    ReportID(rawValue: "curve:\(stable(suiteName)).\(stable(caseName)).\(metric.rawValue)")
+    ReportID(
+      rawValue:
+        "curve:\(stable(suiteName)).\(stable(caseName)).\(stable(metric.name)).\(statistic.rawValue)"
+    )
   }
 
-  static func stable(_ value: String) -> String {
-    value
-      .lowercased()
-      .map { character in
-        character.isLetter || character.isNumber ? character : "-"
-      }
-      .reduce(into: "") { partial, character in
-        if character == "-", partial.last == "-" {
-          return
-        }
-        partial.append(character)
-      }
-      .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+  /// `name` as an identifier component, which keeps distinct names distinct.
+  private static func stable(_ name: String) -> String {
+    BenchmarkIdentifier.component(name)
   }
 
   private static func rowSuffix(size: Benchmark.Scale?, rowID: String?) -> String {
@@ -147,6 +141,6 @@ enum ReportIDFactory {
     guard let rowID, !rowID.isEmpty else {
       return ""
     }
-    return ".\(stable(rowID))"
+    return ".\(rowID)"
   }
 }

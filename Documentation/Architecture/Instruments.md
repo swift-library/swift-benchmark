@@ -23,14 +23,14 @@ Instruments layer and keeps the Instruments boundary visible.
 At the repository level, Instruments alignment is completed foundation.
 Benchmark and Report now consume Instruments data through the implemented
 Benchmark/Report scope: Report timeline attribution,
-CLI/plugin workflows, adapters, Dimension, Memory/allocation, platform
-diagnostics, and Benchmark/Instruments correlation. Those layers may consume
+CLI/plugin workflows, adapters, Dimension, metrics, trace attachments, and
+Benchmark/Instruments correlation. Those layers may consume
 Instruments data, but Benchmark runner behavior and Report policy remain
 outside this Instruments layer.
 
 Do not introduce the Benchmark runner, policy objects, report metrics,
-baselines, regression gates, Report rendering, XCTest adapters, future
-MetricKit adapters, memory benchmarks, Dimension benchmarks, custom Instruments
+baselines, regression gates, Report rendering, XCTest adapters, metric
+collection, Dimension benchmarks, custom Instruments
 packages, full OpenTelemetry context propagation, or a full privacy system in
 the Instruments alignment layer.
 
@@ -118,8 +118,13 @@ Current package facts:
 
 - Swift tools version: `6.3`.
 - SwiftSyntax dependency: `602.0.0`.
-- Public products include `Instruments`, `Benchmark`, `Report`, `Memory`,
+- Public products include `Instruments`, `Benchmark`, `Report`,
   `BenchmarkTesting`, and `BenchmarkXCTest`.
+- The `Macros` package trait, enabled by default, declares the macros and
+  makes `Instruments` depend on `InstrumentsMacro`. Without it, `Instruments`
+  offers the runtime API alone and, with SwiftPM 6.4 or later, builds without
+  swift-syntax; SwiftPM 6.3 builds the macro target even when the trait is
+  off. The macro declarations are compiled only under `#if Macros`.
 - Runtime/API target: `Sources/Instruments`.
 - Macro implementation target: `Sources/InstrumentsMacro`.
 - Tests: `Tests/InstrumentsTests`.
@@ -451,6 +456,10 @@ Macro priority:
 - error paths through `defer`-based cleanup,
 - cancellation paths where `defer` runs.
 
+The expansion first lowers nested `#span` and `#event` calls inside the body,
+so nested macros expand to runtime calls instead of re-entering the outer
+expansion.
+
 Conceptual expansion:
 
 ```swift
@@ -708,7 +717,7 @@ or Report policy into Instruments.
 - `CompositeRecorder` remains an extension point and is not part of the current
   implementation.
 - Report, baseline/regression, CLI/plugin, Testing/XCTest adapters, Dimension,
-  Memory, future MetricKit, and custom Instruments integration are separate
+  metrics, trace attachments, and custom Instruments integration are separate
   product layers over Benchmark/Report. They may consume Instruments data, but
   they do not belong in the Instruments runtime layer.
 
@@ -733,7 +742,8 @@ Implementation status for the unified implementation pass:
 7. `Timeline` and `InMemoryRecorder` are implemented.
 8. Tests are Instruments-first.
 9. Benchmark core and the first Report product layer are implemented as
-   separate layers. Deep Report diagnostics remain outside Instruments runtime.
+   separate layers. Report attribution and trace attachments remain outside
+   the Instruments runtime.
 
 ## Architecture Documentation Guidance
 
@@ -741,7 +751,7 @@ Update architecture docs in the same pass as code changes:
 
 1. Keep this file as the current Instruments architecture truth.
 2. Update `ProductDomains.md` if public products, transitional modules, or
-   adapter/diagnostics boundaries change.
+   adapter boundaries change.
 3. Update `../Migrations/SignpostToInstruments.md` with the actual migration
    outcome and removed Signpost surface.
 4. Keep `../Reference/InstrumentsAlignmentChecklist.md` as implementation

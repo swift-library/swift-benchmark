@@ -2,65 +2,48 @@
 
 ## Scope / Purpose
 
-This document owns Apple-only diagnostics that enrich Report data. Current
-implemented scope is `xcrun xctrace` artifact orchestration, trace attachment
-provenance, and Signpost/trace correlation through public Report and
-Instruments seams. MetricKit is future optional production diagnostics.
+This document owns the Apple-only diagnostics that enrich Report data:
+`xcrun xctrace` recording and Instruments trace attachments. They are optional
+Report data; they do not enter Benchmark core and do not redefine the
+Instruments runtime.
 
-These diagnostics are optional Report data. They do not enter Benchmark
-core and do not redefine Instruments runtime.
+## xctrace Recording
 
-## Current Implementation Status
+`run`, `check` and `trace` with `--xctrace-output <path>` launch the benchmark
+host once under `xcrun xctrace record`, with `--xctrace-template` choosing the
+template (`Time Profiler` by default) and `--xcrun` the `xcrun` executable.
+One traced process measures every selected step so that the recording is a
+single trace; `trace` also captures the timeline. The host writes its
+measurement to a file the CLI names, independent of what xctrace does with the
+host's standard output.
 
-Current source has Report-side diagnostic attachment export, trace artifact
-attachment/provenance seams, and `xcrun xctrace record` orchestration through
-`XctraceRecorder`. CLI/plugin trace workflows can record a host execution,
-attach the resulting `.trace`, and preserve command/template provenance in
-`ReportDocument`. Public `xctrace export` XML/TOC attachments are modeled as
-optional trace artifact metadata. Trace orchestration remains optional Report
-diagnostics.
+A recording that fails exits with status 30. A successful one becomes a trace
+attachment on every case, with the trace path, the recording command, the tool
+and the template as provenance.
 
-Current source also has MetricKit-style snapshot seams. Real MetricKit delivery
-through `MXMetricManagerSubscriber` and production payload lifecycle handling are
-future work, not current Benchmark closure acceptance.
+## Trace Attachments
 
-## MetricKit Future Boundary
+`--trace <path>` attaches an existing trace to every case, and
+`--required-trace <path>` does so and fails with status 30 when the trace does
+not exist. `--trace-tool`, `--trace-template` and `--trace-command` record how
+the trace was produced. Attachments are `DiagnosticAttachment` values of kind
+`trace` in each case report.
 
-MetricKit is Apple-only and primarily online app/session scoped. It is not a
-current Benchmark closure requirement and should not block portable acceptance.
-
-Future MetricKit diagnostics should include:
-
-- payload window,
-- payload version,
-- source/provenance metadata,
-- metric names and values where available,
-- unavailable/notConfigured/failed states.
-
-Do not promise deterministic per-iteration MetricKit data.
-
-## xctrace
-
-`xcrun xctrace record` support is public-tool orchestration:
-
-- run command,
-- record command metadata,
-- attach `.trace`,
-- optionally attach public `xctrace export` XML/TOC metadata,
-- preserve provenance in `ReportDocument`.
-
-Do not parse private `.trace` internals as a stable API.
+Report records where a trace is and how it was made; it does not parse `.trace`
+internals.
 
 ## Relationship To Instruments
 
-Instruments runtime owns spans, events, recorders, timeline, and Signpost
-backend behavior. Apple Diagnostics can attach trace artifacts to reports, and
-future production diagnostics can attach MetricKit payloads, but neither path
-may leak Signpost, xctrace, or MetricKit concepts into Benchmark core.
+Instruments owns spans, events, recorders, timelines and the Signpost backend.
+Spans recorded through Signpost appear in an xctrace recording; timeline
+attribution in the report comes from the in-process timeline, not from the
+trace. Neither path leaks Signpost or xctrace concepts into Benchmark core.
 
-## Acceptance Checks
+## Acceptance
 
-- Unavailable/notConfigured/failed tests.
-- xctrace unavailable/available path tests.
-- Trace attachment provenance tests.
-- CLI/plugin required-diagnostic exit-code tests.
+- xctrace record commands and their provenance, standard output routing and
+  failure reporting (`AppleDiagnosticsTests`).
+- Trace attachments on every case, and failure for a missing required trace
+  (`BenchmarkHostTests`, `BenchmarkCommandTests`).
+- Traced commands launching one measuring host process (package workflow
+  tests).

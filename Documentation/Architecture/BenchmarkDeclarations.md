@@ -63,10 +63,10 @@ Benchmark traits mirror Swift Testing's trait split:
 
 - `BenchmarkTrait`: shared trait vocabulary where a trait can apply at more
   than one declaration level.
-- `BenchmarkSuiteTrait`: suite-level defaults, budgets, baselines, diagnostics,
-  scoping, and configuration.
-- `BenchmarkCaseTrait`: case-level measurement, budgets, Dimension metadata,
-  diagnostics, and overrides.
+- `BenchmarkSuiteTrait`: suite-level configuration, tags and skips, with
+  scoping into child cases.
+- `BenchmarkCaseTrait`: case-level configuration, tags, skips and Dimension
+  metadata.
 - `BenchmarkScoping`: suite/case scoping hooks when a trait needs setup or
   teardown behavior.
 
@@ -84,10 +84,11 @@ topology. It is a Benchmark core measurement concept.
 It describes:
 
 - one Apple-aligned input-size Dimension,
-- `Benchmark.Scale` values,
-- a generator that creates the input for each size,
-- setup semantics that keep generation outside measured iterations,
-- amortized metric semantics.
+- `Benchmark.Scale` values, passed to the declared method,
+- amortized semantics for curves.
+
+The programmatic `Benchmark(_:dimension:input:_:)` initializer adds an input
+closure that runs once per size, outside measured iterations.
 
 Discovery preserves `Benchmark.Dimension` metadata. `BenchmarkRunner.Plan`
 expands each `Benchmark.Scale` into executable steps.
@@ -95,8 +96,8 @@ expands each `Benchmark.Scale` into executable steps.
 stores one row per size, and ordinary benchmarks use one row with
 `size == nil`.
 
-Report projects those rows into `Report.Measurement.Row.metrics` and
-`Report.DimensionCurve`. Multi-Dimension and coordinate generators are future
+Report projects those rows into per-metric statistics on
+`Report.Measurement.Row` and `Report.DimensionCurve`. Multi-Dimension and coordinate generators are future
 proposal scope, not current declaration architecture.
 
 The lower-level Dimension architecture is covered in `Dimension.md`.

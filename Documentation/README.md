@@ -18,7 +18,7 @@ quick-start and best-practice entrypoint, while `Documentation/UsageManual.md` i
 complete manual. Target-level API documentation should live with the SwiftPM
 target it documents when DocC catalogs are added.
 
-The six public library targets have DocC catalogs at
+The five public library targets have DocC catalogs at
 `Sources/<Target>/<Target>.docc/`. These own module introductions and API
 reference; complete usage examples remain in the README and usage manual.
 
@@ -36,7 +36,7 @@ Documentation roles:
   `Documentation/Architecture/BenchmarkExecution.md`,
   `Documentation/Architecture/ReportDocument.md`,
   `Documentation/Architecture/Dimension.md`,
-  `Documentation/Architecture/Memory.md`,
+  `Documentation/Architecture/Metrics.md`,
   `Documentation/Architecture/AppleDiagnostics.md`, and
   `Documentation/Architecture/WorkflowAdapters.md`: major capability architecture
   documents.

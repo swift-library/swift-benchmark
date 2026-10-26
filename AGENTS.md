@@ -27,7 +27,7 @@ User-facing usage docs are split by depth:
 
 - `README.md` is the quick-start and best-practice entrypoint.
 - `Documentation/UsageManual.md` is the complete user manual for API, CLI, CI,
-  diagnostics, adapters, and advanced workflows.
+  metrics, adapters, and advanced workflows.
 
 Do not duplicate user-facing API examples outside those two files unless a
 specialized architecture or decision document needs a narrowly scoped example.
@@ -41,7 +41,9 @@ specialized architecture or decision document needs a narrowly scoped example.
 - `Documentation/Architecture/Benchmark.md` is the source of truth for the
   Benchmark layer and defines the Benchmark runner scope.
 - `Documentation/Architecture/Report.md` is the source of truth for Report,
-  baseline, attribution, diagnostics adapter, and renderer boundaries.
+  baseline, warning, attribution, trace attachment, and renderer boundaries.
+- `Documentation/Architecture/Metrics.md` is the source of truth for what a
+  benchmark sample measures and how.
 - `Documentation/Migrations/SignpostToInstruments.md` records the accepted
   semantic shift from Signpost-first to Instruments-first.
 - `Documentation/Reference/InstrumentsAlignmentChecklist.md` is the implementation
@@ -117,20 +119,25 @@ Benchmark/Report implementation foundation:
    warmup, fixed iterations, samples, Dimension rows, structured results,
    tests, and docs.
 3. First-pass Report, baseline/regression, host-backed CLI/plugin workflow,
-   Testing/XCTest adapter helpers, Memory/allocation seams, diagnostics
-   adapters, and Benchmark/Instruments timeline aggregation.
+   Testing/XCTest adapter helpers, and Benchmark/Instruments timeline
+   aggregation.
+4. Credible measurement: built-in and custom metrics, automatic batching,
+   per-step host processes, per-row and per-metric comparisons with warnings,
+   SwiftSyntax-only discovery, and the `Macros` trait.
 
 The implemented Benchmark/Report scope is defined by the architecture
 documents. Current capabilities include Swift-Testing-shaped traits/discovery/plan,
-`Benchmark.Event.Stream`, no-`--host` package workflow for library
-declarations, BenchmarkTesting bridge support for supported test-target
-`@Suite(.benchmark...)` / `@Test(.benchmark...)` declarations, adaptive and
-duration policies, CLI/plugin flag wiring, Memory/allocation seams, and
-`xctrace` orchestration. Known boundaries remain: executable-only declarations
-use the advanced `--host` override, the BenchmarkTesting bridge diagnoses
-`private`/`fileprivate` tests; argument rows are supported. Testing/XCTest adapter
-depth stays behind available APIs, platform memory/allocation hooks vary, and
-MetricKit is future optional production diagnostics.
+`Benchmark.Event.Stream`, no-`--host` package workflow for library and test
+declarations with one host process per step, BenchmarkTesting bridge support for
+supported test-target `@Suite(.benchmark...)` / `@Test(.benchmark...)`
+declarations, wall-clock, CPU, allocation, reference-counting, peak-memory and
+custom metrics, batching, adaptive and duration policies, and `xctrace`
+recording. Known boundaries remain: executable-only declarations use the
+advanced `--host` override; the BenchmarkTesting bridge diagnoses
+`private`/`fileprivate` tests and extensions of types from other targets;
+argument rows are supported. Testing/XCTest adapter depth stays behind available
+APIs, counting metrics are recorded on Apple platforms only, and the package
+workflow supports Apple platforms.
 
 When implementation completes, absorb durable facts into
 `Documentation/Architecture/`, focused `Documentation/Reference/` checklists
@@ -187,8 +194,8 @@ Before code changes for the Benchmark target, explicitly decide:
 - Instruments is for runtime-safe instrumentation in production and test code.
 - Signpost is not a product domain.
 - Signpost is the Apple backend inside Instruments.
-- Report is comparison, attribution, diagnostics, rendering, and export, not
-  runtime recording.
+- Report is comparison, warnings, attribution, trace attachments, rendering,
+  and export, not runtime recording.
 
 ## Instruments Runtime Contract
 
@@ -265,8 +272,11 @@ Keep validation tied to the changed behavior and owning layer.
 ## Validation
 
 The package requires Swift 6.3 and deployment minimums of iOS 18 and macOS 15
-for all products. Shared CI uses only Xcode 26.6 on macOS 26 with bundled Swift
-6.3; the latest SDK checks availability against the deployment floors.
+for all products. Shared CI tests with Xcode 26.6 on macOS 26 (bundled Swift
+6.3, the minimum) and with Xcode 27.1 (the latest release), tests on a Swift
+6.3 Linux image, and builds the libraries for iOS; the latest SDKs check
+availability against the deployment floors.
+`Documentation/Reference/Release.md` records the matrix.
 
 Shared CI reads `.github/swift-package.json` for compiler, formatting, DocC and
 repository-command validation. Required checks are `policy / policy` and

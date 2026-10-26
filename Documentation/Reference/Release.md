@@ -22,19 +22,32 @@ restate those rules.
 Compatibility includes public Swift APIs and macros, discovery and plugin
 behavior, CLI options and exit codes, Report JSON, and compiler/platform requirements.
 
-Core APIs compile for the declared Apple platforms. Xctrace orchestration uses
-a desktop host; other platforms receive a command-unavailable result from the
-default process runner. Portable recording and diagnostic fallbacks retain
-their documented behavior.
+Core APIs compile for the declared Apple platforms and on Linux. Xctrace
+orchestration uses a desktop host; other platforms receive a
+command-unavailable result from the default process runner. Portable recording
+fallbacks retain their documented behavior, and metrics a platform cannot
+measure are absent from samples rather than zero.
 
 ## Dependencies and Verified Combinations
 
+| Releases | Swift | Platforms |
+| --- | --- | --- |
+| 0.1.x | Swift tools 6.0 or later | iOS 18, macOS 15 or later |
+| 0.2.x | Swift 6.3 or later | iOS 18, macOS 15 or later |
+
+Toolchains older than a release's minimum use the newest release that supports
+them.
+
 The package requires Swift 6.3, iOS 18 or macOS 15, including its command-line
 products. The maintained system window covers iOS 18/26/27 and macOS 15/26/27.
-Shared CI uses one compiler entry: Xcode 26.6 on macOS 26, with bundled Swift
-6.3, for tests, release builds, strict formatting, DocC validation and the
-CLI/plugin version command. The latest SDK checks API availability against the
-deployment floors at compile time; CI does not run on older systems.
+Shared CI tests and builds release with two compilers: the minimum, Xcode
+26.6 on macOS 26 with bundled Swift 6.3, and the latest release, Xcode 27.1 on
+the `xcode-27` runner. Xcode 27.1, the last entry, also builds the
+documentation, builds Report, BenchmarkTesting and BenchmarkXCTest for generic
+iOS, and runs the CLI/plugin version command. A Swift 6.3 Linux image tests the
+package; the command plugin workflow is Apple-only, so its tests are skipped
+there. The latest SDKs check API availability against the deployment floors at
+compile time; CI does not run on older systems.
 
 ## Validation
 
@@ -43,7 +56,8 @@ The required checks are `policy / policy` and `validate / result`.
 signatures, Conventional Commit messages and PR titles, added-line rules, the
 version declaration, changelog and Swift minimum.
 [CI](../../.github/workflows/ci.yml) aggregates formatting, tests, release
-builds, the six declared DocC targets and the CLI/plugin version command.
+builds, the Linux tests, the iOS builds, the five declared DocC targets and the
+CLI/plugin version command.
 
 The version command reads the version source and pattern from
 `.github/release.json` and compares both CLI products' and the command plugin's

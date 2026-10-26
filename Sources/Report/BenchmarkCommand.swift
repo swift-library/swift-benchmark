@@ -3,131 +3,49 @@
 
 import Benchmark
 
-public enum ReportFormat: String, Sendable, Codable, CaseIterable {
+/// The forms a report can be written in.
+package enum ReportFormat: String, Sendable, Codable, CaseIterable {
   case console
   case json
-  case markdown
   case speedscope
 
-  public func render(_ document: ReportDocument) throws -> String {
+  package func render(_ document: ReportDocument) throws -> String {
     switch self {
     case .console:
       return ConsoleReportRenderer.render(document)
     case .json:
       return try JSONReportRenderer.render(document)
-    case .markdown:
-      return MarkdownReportRenderer.render(document)
     case .speedscope:
       return try SpeedscopeReportRenderer.render(document)
     }
   }
 }
 
-public enum TimelineCapturePolicy: String, Sendable, Codable, CaseIterable {
+/// Whether a run records the Instruments timeline of each measured call.
+package enum TimelineCapturePolicy: String, Sendable, Codable, CaseIterable {
   case disabled
   case benchmarkIterations
 }
 
-public struct BenchmarkCommand: Sendable {
-  public var runner: BenchmarkRunner
+/// Measures benchmarks and builds their report: in this process for the
+/// testing adapters, or from the measurements host processes recorded for
+/// the CLI.
+package struct BenchmarkCommand: Sendable {
+  package var runner: BenchmarkRunner
 
-  public init(runner: BenchmarkRunner = BenchmarkRunner()) {
+  package init(runner: BenchmarkRunner = BenchmarkRunner()) {
     self.runner = runner
   }
 
-  public func run(
-    suites: [BenchmarkSuite],
-    metadata: RunMetadata,
-    baseline: BaselineDocument? = nil,
-    baselineMetric: Report.Measurement.Metric = .mean,
-    threshold: ThresholdPolicy = .relativePercentage(10),
-    budgets: [BudgetPolicy] = [],
-    attributions: [TimelineAttribution] = [],
-    diagnostics: [DiagnosticMetric] = [],
-    attachments: [DiagnosticAttachment] = [],
-    timelineCapture: TimelineCapturePolicy = .disabled,
-    executionObservers: [any BenchmarkExecutionObserver] = [],
-    observers: [any BenchmarkObserver] = [],
-    metricProviders: [any MetricProvider] = [],
-    traceExporters: [any TraceExporter] = [],
-    format: ReportFormat = .console
-  ) async throws -> String {
-    try await run(
-      plan: BenchmarkRunner.Plan(suites: suites),
-      metadata: metadata,
-      baseline: baseline,
-      baselineMetric: baselineMetric,
-      threshold: threshold,
-      budgets: budgets,
-      attributions: attributions,
-      diagnostics: diagnostics,
-      attachments: attachments,
-      timelineCapture: timelineCapture,
-      executionObservers: executionObservers,
-      observers: observers,
-      metricProviders: metricProviders,
-      traceExporters: traceExporters,
-      format: format
-    )
-  }
-
-  public func run(
+  /// Measures `plan` in this process and reports it.
+  package func report(
     plan: BenchmarkRunner.Plan,
     metadata: RunMetadata,
     baseline: BaselineDocument? = nil,
-    baselineMetric: Report.Measurement.Metric = .mean,
-    threshold: ThresholdPolicy = .relativePercentage(10),
-    budgets: [BudgetPolicy] = [],
-    attributions: [TimelineAttribution] = [],
-    diagnostics: [DiagnosticMetric] = [],
-    attachments: [DiagnosticAttachment] = [],
+    comparison: ComparisonPolicy = .default,
     timelineCapture: TimelineCapturePolicy = .disabled,
-    executionObservers: [any BenchmarkExecutionObserver] = [],
-    observers: [any BenchmarkObserver] = [],
-    metricProviders: [any MetricProvider] = [],
-    traceExporters: [any TraceExporter] = [],
-    format: ReportFormat = .console
-  ) async throws -> String {
-    try format.render(
-      await report(
-        plan: plan,
-        metadata: metadata,
-        baseline: baseline,
-        baselineMetric: baselineMetric,
-        threshold: threshold,
-        budgets: budgets,
-        attributions: attributions,
-        diagnostics: diagnostics,
-        attachments: attachments,
-        timelineCapture: timelineCapture,
-        executionObservers: executionObservers,
-        observers: observers,
-        metricProviders: metricProviders,
-        traceExporters: traceExporters
-      )
-    )
-  }
-
-  func report(
-    plan: BenchmarkRunner.Plan,
-    metadata: RunMetadata,
-    baseline: BaselineDocument? = nil,
-    baselineMetric: Report.Measurement.Metric = .mean,
-    threshold: ThresholdPolicy = .relativePercentage(10),
-    budgets: [BudgetPolicy] = [],
-    attributions: [TimelineAttribution] = [],
-    diagnostics: [DiagnosticMetric] = [],
-    attachments: [DiagnosticAttachment] = [],
-    timelineCapture: TimelineCapturePolicy = .disabled,
-    executionObservers: [any BenchmarkExecutionObserver] = [],
-    observers: [any BenchmarkObserver] = [],
-    metricProviders: [any MetricProvider] = [],
     traceExporters: [any TraceExporter] = []
   ) async throws -> ReportDocument {
-    let runScope = ReportScope(runID: metadata.id)
-    for observer in observers {
-      await observer.runDidStart(scope: runScope)
-    }
     let timelineObserver: BenchmarkTimelineObserver?
     switch timelineCapture {
     case .disabled:
@@ -135,91 +53,104 @@ public struct BenchmarkCommand: Sendable {
     case .benchmarkIterations:
       timelineObserver = BenchmarkTimelineObserver()
     }
-    var benchmarkObservers = executionObservers
-    if let timelineObserver {
-      benchmarkObservers.append(timelineObserver)
-    }
-    let reportRecorder = ReportRecorder()
+    let recorder = ReportRecorder()
     let results = try await runner.run(
       plan,
-      observers: benchmarkObservers,
-      eventRecorders: [reportRecorder]
+      observers: timelineObserver.map { [$0] } ?? [],
+      eventRecorders: [recorder]
     )
-    var collectedDiagnostics = diagnostics
-    var collectedAttachments = attachments
-    var collectedAttributions = attributions
-    if let timelineObserver {
-      collectedAttributions.append(
-        contentsOf: TimelineCorrelator.attributions(
-          from: timelineObserver.recorder.snapshot(),
-          runID: metadata.id,
-          results: results
-        )
-      )
-    }
+    let attributions =
+      timelineObserver.map {
+        TimelineCorrelator.attributions(
+          from: $0.recorder.snapshot(), runID: metadata.id, results: results)
+      } ?? []
+    let attachments = try await Self.attachments(
+      scopes: results.map { caseScope(runID: metadata.id, $0.suiteName, $0.caseName) },
+      exporters: traceExporters
+    )
+    return await recorder.document(
+      metadata: metadata,
+      baseline: baseline,
+      comparison: comparison,
+      attributions: attributions,
+      attachments: attachments
+    )
+  }
 
-    for result in results {
-      let scope = ReportScope(
-        runID: metadata.id,
-        suiteID: ReportIDFactory.suite(result.suiteName),
-        caseID: ReportIDFactory.benchmarkCase(
-          suiteName: result.suiteName,
-          caseName: result.caseName
-        )
-      )
-      for provider in metricProviders {
-        let metrics = await provider.metrics(for: scope)
-        try BenchmarkCommand.validate(metrics: metrics, requirement: provider.requirement)
-        collectedDiagnostics.append(contentsOf: metrics)
+  /// Builds the report for measurements recorded by separate host processes,
+  /// in the order they ran. Run metadata comes from the first, and every
+  /// attribution is scoped to that run.
+  package static func document(
+    measurements: [HostMeasurement],
+    baseline: BaselineDocument? = nil,
+    comparison: ComparisonPolicy = .default,
+    traceExporters: [any TraceExporter] = []
+  ) async throws -> ReportDocument? {
+    guard let metadata = measurements.first?.metadata else {
+      return nil
+    }
+    let records = measurements.flatMap(\.records).enumerated().map { index, record in
+      Benchmark.Event.Stream.Record(sequence: index, kind: record.kind, context: record.context)
+    }
+    var scopes: [ReportScope] = []
+    for record in records {
+      guard let suiteName = record.context.suiteName, let caseName = record.context.caseName
+      else {
+        continue
       }
-      for exporter in traceExporters {
+      let scope = caseScope(runID: metadata.id, suiteName, caseName)
+      if !scopes.contains(scope) {
+        scopes.append(scope)
+      }
+    }
+    return ReportBuilder(records: records).document(
+      metadata: metadata,
+      baseline: baseline,
+      comparison: comparison,
+      attributions: measurements.flatMap(\.attributions).map { attribution in
+        var attribution = attribution
+        attribution.scope.runID = metadata.id
+        return attribution
+      },
+      attachments: try await attachments(scopes: scopes, exporters: traceExporters)
+    )
+  }
+
+  /// Asks every exporter for each case's attachments, failing when a
+  /// required exporter has none.
+  private static func attachments(
+    scopes: [ReportScope],
+    exporters: [any TraceExporter]
+  ) async throws -> [DiagnosticAttachment] {
+    var attachments: [DiagnosticAttachment] = []
+    for scope in scopes {
+      for exporter in exporters {
         let exported = await exporter.attachments(for: scope)
         if exporter.requirement == .required, exported.isEmpty {
           throw BenchmarkCommandError.requiredAttachmentUnavailable(scope: scope)
         }
-        collectedAttachments.append(contentsOf: exported)
+        attachments.append(contentsOf: exported)
       }
     }
-
-    let document = await reportRecorder.document(
-      metadata: metadata,
-      baseline: baseline,
-      baselineMetric: baselineMetric,
-      threshold: threshold,
-      budgets: budgets,
-      attributions: collectedAttributions,
-      diagnostics: collectedDiagnostics,
-      attachments: collectedAttachments
-    )
-    for observer in observers {
-      await observer.runDidFinish(scope: runScope)
-    }
-    return document
-  }
-
-  private static func validate(
-    metrics: [DiagnosticMetric],
-    requirement: DiagnosticRequirement
-  ) throws {
-    guard requirement == .required else {
-      return
-    }
-    for metric in metrics where metric.state.kind != .measured {
-      throw BenchmarkCommandError.requiredDiagnosticUnavailable(metric: metric)
-    }
+    return attachments
   }
 }
 
-public enum BenchmarkCommandError: Error, CustomStringConvertible {
-  case requiredDiagnosticUnavailable(metric: DiagnosticMetric)
+package enum BenchmarkCommandError: Error, CustomStringConvertible {
   case requiredAttachmentUnavailable(scope: ReportScope)
 
-  public var description: String {
+  package var description: String {
     switch self {
-    case .requiredDiagnosticUnavailable(let metric):
-      return "Required diagnostic '\(metric.name)' is \(metric.state.kind.rawValue)."
     case .requiredAttachmentUnavailable(let scope):
       return "Required diagnostic attachment is unavailable for scope \(scope)."
     }
   }
+}
+
+private func caseScope(runID: ReportID, _ suiteName: String, _ caseName: String) -> ReportScope {
+  ReportScope(
+    runID: runID,
+    suiteID: ReportIDFactory.suite(suiteName),
+    caseID: ReportIDFactory.benchmarkCase(suiteName: suiteName, caseName: caseName)
+  )
 }

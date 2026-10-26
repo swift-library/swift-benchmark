@@ -12,12 +12,19 @@ let package = Package(
     .library(name: "Instruments", targets: ["Instruments"]),
     .library(name: "Benchmark", targets: ["Benchmark"]),
     .library(name: "Report", targets: ["Report"]),
-    .library(name: "Memory", targets: ["Memory"]),
     .library(name: "BenchmarkTesting", targets: ["BenchmarkTesting"]),
     .library(name: "BenchmarkXCTest", targets: ["BenchmarkXCTest"]),
     .executable(name: "swift-benchmark-cli", targets: ["BenchmarkCLI"]),
     .executable(name: "BenchmarkCLI", targets: ["BenchmarkCLI"]),
     .plugin(name: "BenchmarkPlugin", targets: ["BenchmarkPlugin"]),
+  ],
+  traits: [
+    .trait(
+      name: "Macros",
+      description:
+        "Declares the Instruments macros, which build swift-syntax. Without it, Instruments offers only its runtime API."
+    ),
+    .default(enabledTraits: ["Macros"]),
   ],
   dependencies: [
     .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0")
@@ -25,7 +32,7 @@ let package = Package(
   targets: [
     .target(
       name: "Instruments",
-      dependencies: ["InstrumentsMacro"],
+      dependencies: [.target(name: "InstrumentsMacro", condition: .when(traits: ["Macros"]))],
       path: "Sources/Instruments"
     ),
     .macro(
@@ -59,11 +66,6 @@ let package = Package(
       path: "Sources/Report"
     ),
     .target(
-      name: "Memory",
-      dependencies: ["Report"],
-      path: "Sources/Memory"
-    ),
-    .target(
       name: "BenchmarkTesting",
       dependencies: ["Benchmark", "Report"],
       path: "Sources/BenchmarkTesting"
@@ -83,26 +85,16 @@ let package = Package(
     ),
     .target(
       name: "_BenchmarkDiscoveryCore",
-      path: "Sources/_BenchmarkDiscoveryCore"
-    ),
-    .target(
-      name: "_BenchmarkSyntaxDiscoveryCore",
       dependencies: [
-        "_BenchmarkDiscoveryCore",
         .product(name: "SwiftParser", package: "swift-syntax"),
         .product(name: "SwiftSyntax", package: "swift-syntax"),
       ],
-      path: "Sources/_BenchmarkSyntaxDiscoveryCore"
+      path: "Sources/_BenchmarkDiscoveryCore"
     ),
     .executableTarget(
       name: "BenchmarkDiscoveryTool",
       dependencies: ["_BenchmarkDiscoveryCore"],
       path: "Sources/BenchmarkDiscoveryTool"
-    ),
-    .executableTarget(
-      name: "BenchmarkSyntaxDiscoveryTool",
-      dependencies: ["_BenchmarkSyntaxDiscoveryCore"],
-      path: "Sources/BenchmarkSyntaxDiscoveryTool"
     ),
     .plugin(
       name: "BenchmarkPlugin",
@@ -155,29 +147,19 @@ let package = Package(
       resources: [.process("Fixtures")]
     ),
     .testTarget(
-      name: "MemoryTests",
-      dependencies: ["Memory", "Report"],
-      path: "Tests/MemoryTests"
-    ),
-    .testTarget(
       name: "AdapterTests",
       dependencies: ["Benchmark", "BenchmarkTesting", "BenchmarkXCTest", "Report"],
       path: "Tests/AdapterTests"
     ),
     .testTarget(
       name: "WorkflowTests",
-      dependencies: ["Report"],
+      dependencies: ["Benchmark", "Report"],
       path: "Tests/WorkflowTests"
     ),
     .testTarget(
       name: "BenchmarkDiscoveryCoreTests",
       dependencies: ["_BenchmarkDiscoveryCore"],
       path: "Tests/BenchmarkDiscoveryCoreTests"
-    ),
-    .testTarget(
-      name: "BenchmarkSyntaxDiscoveryCoreTests",
-      dependencies: ["_BenchmarkDiscoveryCore", "_BenchmarkSyntaxDiscoveryCore"],
-      path: "Tests/BenchmarkSyntaxDiscoveryCoreTests"
     ),
   ]
 )

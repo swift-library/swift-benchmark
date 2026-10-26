@@ -16,17 +16,16 @@ without redefining the full map.
 - `InstrumentsMacros`
 - `Benchmark`
 - `Report`
-- `Memory`
 - `BenchmarkTesting`
 - `BenchmarkXCTest`
 - CLI / SwiftPM plugin
-- platform diagnostics adapters
+- Apple diagnostics
 
-The completed foundation delivered Instruments-first runtime/macro alignment
-and Benchmark core measurement. The Benchmark pass has now
-extended the same boundaries with package workflow, declaration macros, runner
-plans, event streams, baseline/regression, Testing/XCTest adapters, Dimension,
-Memory/allocation, and diagnostics adapters.
+These boundaries hold Instruments-first runtime and macro alignment, Benchmark
+measurement with built-in and custom metrics, the package workflow with
+declaration macros, runner plans, event streams and per-step host processes,
+Report comparisons with warnings, Testing/XCTest adapters, Dimension, and
+xctrace trace attachments.
 
 Further work should evolve these product boundaries rather than creating new
 top-level domains for unrelated implementation topology.
@@ -38,7 +37,7 @@ Completed foundation:
 1. Instruments-first runtime and macro alignment.
 2. Benchmark runner and structured result model.
 3. First-pass Report, CLI/plugin, adapter, Dimension/input-size analysis,
-   Memory, diagnostics, and implementation planning.
+   and implementation planning.
 
 Implemented scope:
 
@@ -49,8 +48,11 @@ Implemented scope:
 3. Swift Testing and XCTest native adapter UX over Benchmark/Report.
 4. Apple-aligned Dimension workflow and Report-backed curve/comparison model.
 5. Report-owned baseline, budget, diff, check, and stable JSON reports.
-6. Memory/allocation provider depth and resource-regression discipline.
-7. Optional Apple diagnostics as Report data and trace artifacts.
+6. Credible measurement: wall-clock and CPU time, Swift allocation and
+   reference counting, peak memory and custom metrics; automatic batching;
+   per-step host processes; per-row, per-metric comparisons; and warnings for
+   unreliable comparisons.
+7. xctrace recording and trace attachments as Report data.
 
 The implemented scope is complete within the accepted boundaries. It
 does not copy unrelated package structure, result formats, or private platform
@@ -61,8 +63,10 @@ hooks.
 Current package facts:
 
 - Package name: `swift-benchmark`.
-- Public products today: `Instruments`, `Benchmark`, `Report`, `Memory`,
+- Public products today: `Instruments`, `Benchmark`, `Report`,
   `BenchmarkTesting`, and `BenchmarkXCTest`.
+- Package traits today: `Macros`, enabled by default, declares the Instruments
+  macros; without it Instruments builds without swift-syntax.
 - Executable/plugin products today: `swift-benchmark-cli`,
   `BenchmarkCLI`, and `BenchmarkPlugin`.
 - Package workflow implementation tools today: `BenchmarkDiscoveryTool` and
@@ -70,13 +74,13 @@ Current package facts:
 - Runtime/API target today: `Sources/Instruments`.
 - Macro implementation target today: `Sources/InstrumentsMacro`.
 - Benchmark target today: `Sources/Benchmark`.
-- Report and adapter targets today: `Sources/Report`, `Sources/Memory`,
+- Report and adapter targets today: `Sources/Report`,
   `Sources/BenchmarkTesting`, `Sources/BenchmarkXCTest`,
   `Sources/BenchmarkCLI`, `Sources/BenchmarkDiscoveryTool`,
   `Sources/_BenchmarkDiscoveryCore`, and `Plugins/BenchmarkPlugin`.
 - Tests today: `Tests/InstrumentsTests`, `Tests/BenchmarkTests`,
-  `Tests/ReportTests`, `Tests/MemoryTests`, `Tests/AdapterTests`, and
-  `Tests/WorkflowTests`.
+  `Tests/ReportTests`, `Tests/AdapterTests`, `Tests/BenchmarkDiscoveryCoreTests`,
+  and `Tests/WorkflowTests`.
 
 The current source code is Instruments-first. Signpost is an Apple backend
 inside Instruments rather than a product domain.
@@ -102,8 +106,11 @@ It owns:
 - declaration metadata needed for discovery and planning,
 - runner policies,
 - warmup,
+- batching,
 - measured iterations,
 - samples,
+- built-in metrics (wall-clock and CPU time, Swift allocation and reference
+  counting, peak memory) and custom metrics recorded by workloads,
 - `Benchmark.Measurement` rows and samples,
 - `Benchmark.Dimension` single input-size metadata,
 - structured results,
@@ -150,7 +157,9 @@ It owns:
 - `@Span`.
 
 Macros should emit Instruments semantics. They should not emit Signpost
-semantics directly.
+semantics directly. The package's `Macros` trait declares them; the runtime
+API they expand to works without them, so production code can depend on
+Instruments without building swift-syntax.
 
 `@Span` is the function/initializer-level body macro. Function/initializer-level
 `@Instrumented` is ergonomic syntax over the same span semantics with a default
@@ -199,8 +208,8 @@ They must not:
 
 ### Report
 
-Report provides structured report data, comparison, attribution, diagnostics,
-and export. It owns the report graph that explains regressions and feeds
+Report provides structured report data, comparison, attribution, trace
+attachments, and export. It owns the report graph that explains regressions and feeds
 agent/tool/UI/profiler-compatible outputs.
 
 It owns:
@@ -208,15 +217,16 @@ It owns:
 - typed report documents,
 - stable JSON schema,
 - Swift-Testing-style event collection consumers over `Benchmark.Event`, such
-  as `ReportRecorder`, `ReportBuilder`, and `ReportDocumentEncoder`,
+  as `ReportRecorder` and `ReportBuilder`,
 - run/environment metadata,
 - raw result projection,
 - timeline aggregation,
-- baseline diffs,
+- per-row, per-metric baseline comparisons,
 - single-run budget verdicts,
 - regression verdicts,
+- warnings about unreliable comparisons,
 - CI verdict data,
-- diagnostics metrics and attachments,
+- trace attachments,
 - structured outputs and exporter-compatible records.
 
 Swift code should not treat hardcoded HTML/Markdown presentation as the core
@@ -224,9 +234,9 @@ value. HTML or Markdown can be optional template or agent-driven artifacts over
 the structured report model. The public Swift contract is the data shape and
 export contract, not presentation authoring.
 
-Report consumes data produced by Benchmark, Instruments, and optional
-diagnostics adapters. It does not own the runtime recording model and does not
-replace the Benchmark runner.
+Report consumes data produced by Benchmark and Instruments, and trace
+artifacts. It does not own the runtime recording model and does not replace the
+Benchmark runner.
 
 Report naming should follow Swift Testing's event/recorder style when concepts
 match, but should not nest just for aesthetics. `Benchmark.Event`,
@@ -238,19 +248,20 @@ recorders are human output; stable machine truth remains `ReportDocument` JSON.
 Report data should be correlated by stable scopes:
 
 ```text
-Run -> Suite -> Case -> Iteration/Sample -> Span/Event -> Metric/Attachment
+Run -> Suite -> Case -> Row -> Sample -> Span/Event
+                     -> Attachment
 ```
 
-This lets users drill from a regression summary to the sample, internal phase,
-metric, and diagnostic artifact that explain the result.
+This lets users drill from a regression summary to the row, sample, metric,
+internal phase, and trace that explain the result.
 
 ### Benchmark Dimension
 
 Dimension is Benchmark's first-class input-size measurement model.
 
 The user-facing Dimension model is trait-driven parameterization over
-Benchmark declarations. Users write `.dimension(sizes: [10, 100]) { size in
-makeInput(size) }` on `@Benchmark`; discovery preserves
+Benchmark declarations. Users write `.dimension(sizes: [10, 100])` on a
+`@Benchmark` method that takes a `Benchmark.Scale`; discovery preserves
 `Benchmark.Dimension` metadata; `BenchmarkRunner.Plan` expands each
 `Benchmark.Scale` into executable steps; `Benchmark.Event.Context`
 carries Dimension context; and `Benchmark.Measurement` stores rows and samples.
@@ -267,10 +278,10 @@ It owns:
 - `Benchmark.Dimension.amortized(...)` semantics.
 
 Report owns the derived projection: `Report.Measurement`,
-`Report.Measurement.Row.metrics`, `Report.Measurement.Metric`, and
-`Report.DimensionCurve`. A Dimension curve is a structured record over
-measurement rows and a selected metric; it is not a Swift-owned presentation
-renderer.
+`Report.Measurement.Row` statistics, `Report.Statistic`, and
+`Report.DimensionCurve`. A Dimension curve is a structured record of one
+statistic of one metric over measurement rows; it is not a Swift-owned
+presentation renderer.
 
 Input-size curve behavior is implemented through Benchmark Dimension and
 Report DimensionCurve. There is no separate input-size product domain or
@@ -279,21 +290,6 @@ compatibility shim.
 Lower-level input-size and amortized semantics follow Apple
 `swift-collections-benchmark`. The declaration, trait, and plan experience
 follows Swift Testing.
-
-### Memory
-
-Memory owns memory and allocation providers over Benchmark/Report.
-
-It owns:
-
-- resident memory metrics such as RSS/physical memory,
-- allocator metrics such as allocated bytes, deallocation counts, net
-  allocations, peak allocated bytes, and leak/tolerance data,
-- provider unavailable/notConfigured/failed/measured states,
-- resource-regression discipline suitable for Testing/XCTest and CLI verdicts.
-
-Resident memory and allocator metrics are separate dimensions. Unsupported data
-must not be reported as zero.
 
 ### Testing And XCTest
 
@@ -306,6 +302,7 @@ They own:
 - Swift Testing `@Test(.benchmark...)` case-level traits where supported,
 - inheritance and merge behavior from suite-level benchmark traits into
   contained Testing tests,
+- in-process measurement that reports through the same `ReportDocument`,
 - XCTest issue/failure/attachment integration,
 - source-location-aware failures,
 - budget/baseline/allocation verdict presentation,
@@ -331,8 +328,10 @@ They own:
 - `diff`,
 - `trace`,
 - filters and execution overrides,
+- one host process per measured step, and one traced process for xctrace,
+- comparison, budgets, the debug-build gate and rendering,
 - output paths,
-- diagnostics flags,
+- trace flags,
 - quiet/progress separation,
 - documented exit codes.
 
@@ -355,31 +354,14 @@ declaration -> discovery -> runner plan -> runner -> report
 terminology is used, it belongs to diagnostics collection, not benchmark
 discovery.
 
-### Platform Diagnostics Adapters
+### Apple Diagnostics
 
-Diagnostics adapters enrich Report and remain optional.
+Apple diagnostics enrich Report and remain optional. They own `xcrun xctrace
+record` orchestration and Instruments trace attachments; Report owns the
+Benchmark/Instruments timeline correlation they sit beside. The `.trace`
+package is an attachment with provenance, not a data model to parse.
 
-They may own:
-
-- Benchmark lifecycle observation,
-- Benchmark/Instruments timeline correlation,
-- future MetricKit collection where available,
-- memory/allocation metric collection,
-- Instruments trace artifact orchestration,
-- future platform metric providers.
-
-Diagnostics adapters do not belong in Benchmark core or Instruments runtime.
-Unsupported optional diagnostics should produce structured unavailable states,
-not fake zero values. Unsupported required diagnostics should fail
-configuration explicitly.
-
-MetricKit is future Apple-only optional Report diagnostics. It is
-run/app-session scoped, must not be promised as deterministic per-iteration
-benchmark data, and is not current Benchmark closure acceptance.
-
-`xcrun xctrace record` orchestration is an optional diagnostics workflow. The
-`.trace` package and exported public metadata are attachments/provenance, not a
-stable private data model to parse.
+Apple diagnostics do not belong in Benchmark core or Instruments runtime.
 
 ## Key Principles
 
@@ -394,12 +376,12 @@ stable private data model to parse.
 - Keep Benchmark as its own layer, not as Instruments runtime behavior.
 - Treat Benchmark as a Swift-Testing-style performance specialization: Swift
   Testing provides the primary declaration/discovery/plan/runner architecture,
-  and benchmark-specific measurement, Dimension, report, memory, and diagnostics
+  and benchmark-specific measurement, metric, Dimension, and report
   capabilities extend that skeleton.
 - Keep Benchmark discovery/plan/runner aligned with Swift Testing naming and
   architecture while preserving benchmark-specific execution semantics.
-- Keep diagnostics adapters Report-facing; they explain benchmark results but
-  do not define Benchmark core.
+- Keep Apple diagnostics Report-facing; they explain benchmark results but do
+  not define Benchmark core.
 - Keep `ReportDocument` JSON as the stable exchange contract.
 - Keep architecture alignment references limited to Apple/Swift official
   sources.
@@ -417,9 +399,11 @@ stable private data model to parse.
   target.
 - Testing/XCTest adapter depth depends on public Testing/XCTest surfaces and
   must stay behind compile/availability gates.
-- Memory/allocation provider behavior varies by platform and toolchain.
+- Counting metrics depend on the Swift runtime's instrumentation hooks and are
+  recorded on Apple platforms only; peak memory is attributable to a step only
+  in a process that measures nothing else.
 - `xctrace` behavior is Apple-tooling-dependent and must remain optional Report
-  diagnostics. MetricKit remains future optional production diagnostics.
+  diagnostics.
 - Future presentation templates may grow, but they should remain artifacts over
   the structured report model rather than new product semantics.
 

@@ -1,211 +1,105 @@
 // SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
 // Copyright (c) 2020-present Xudong Xu
 
+import Benchmark
+import Foundation
+
 public enum ReportVerdict: String, Sendable, Codable {
   case passed
   case failed
   case notCompared
 }
 
-public struct ThresholdPolicy: Sendable, Equatable, Codable {
-  public enum Kind: String, Sendable, Codable {
-    case relativePercentage
-    case absoluteNanoseconds
-  }
-
-  public var kind: Kind
-  public var value: Double
-
-  public init(kind: Kind, value: Double) {
-    self.kind = kind
-    self.value = value
-  }
-
-  public static func relativePercentage(_ percentage: Double) -> ThresholdPolicy {
-    ThresholdPolicy(kind: .relativePercentage, value: percentage)
-  }
-
-  public static func absoluteNanoseconds(_ nanoseconds: Double) -> ThresholdPolicy {
-    ThresholdPolicy(kind: .absoluteNanoseconds, value: nanoseconds)
-  }
-}
-
-public struct BaselineCase: Sendable, Equatable, Codable {
-  public var suiteName: String
-  public var caseName: String
-  public var meanNanoseconds: Double
-  public var metrics: Report.Measurement.Metrics?
-  public var measurement: Report.Measurement?
-
-  public init(
-    suiteName: String,
-    caseName: String,
-    meanNanoseconds: Double,
-    metrics: Report.Measurement.Metrics? = nil,
-    measurement: Report.Measurement? = nil
-  ) {
-    self.suiteName = suiteName
-    self.caseName = caseName
-    self.meanNanoseconds = meanNanoseconds
-    self.metrics = metrics ?? measurement?.metrics
-    self.measurement = measurement
-  }
-
-  public func value(for metric: Report.Measurement.Metric) -> Double {
-    guard let metrics else {
-      return meanNanoseconds
-    }
-    return metric.value(from: metrics)
-  }
-}
-
-public struct BaselineDocument: Sendable, Equatable, Codable {
-  public static let currentSchemaVersion = 2
-
-  public var schemaVersion: Int
-  public var metadata: RunMetadata?
-  public var cases: [BaselineCase]
-
-  public init(
-    schemaVersion: Int = BaselineDocument.currentSchemaVersion,
-    metadata: RunMetadata? = nil,
-    cases: [BaselineCase]
-  ) {
-    self.schemaVersion = schemaVersion
-    self.metadata = metadata
-    self.cases = cases
-  }
-
-  public init(document: ReportDocument) {
-    self.init(
-      metadata: document.metadata,
-      cases: document.suites.flatMap { suite in
-        suite.cases.map { report in
-          BaselineCase(
-            suiteName: suite.name,
-            caseName: report.name,
-            meanNanoseconds: report.measurement.metrics.mean,
-            metrics: report.measurement.metrics,
-            measurement: report.measurement
-          )
-        }
-      }
-    )
-  }
-
-  public func baselineCase(suiteName: String, caseName: String) -> BaselineCase? {
-    cases.first { baseline in
-      baseline.suiteName == suiteName && baseline.caseName == caseName
-    }
-  }
-}
-
+/// The comparison of one metric of one row between a run and its baseline.
 public struct BaselineComparison: Sendable, Equatable, Codable {
-  public var metric: Report.Measurement.Metric
-  public var currentValueNanoseconds: Double
-  public var baselineValueNanoseconds: Double
-  public var currentMeanNanoseconds: Double
-  public var baselineMeanNanoseconds: Double
-  public var absoluteDeltaNanoseconds: Double
+  /// The metric this applies to.
+  public var metric: Benchmark.Metric
+  /// The statistic of the metric this applies to.
+  public var statistic: Report.Statistic
+  /// The row's Dimension size, if it has one.
+  public var size: Benchmark.Scale?
+  /// The row's argument row identifier, if it has one.
+  public var rowID: String?
+  /// The statistic's value in this run, in the metric's unit.
+  public var current: Double
+  /// The statistic's value in the baseline, in the metric's unit.
+  public var baseline: Double
+  /// `current - baseline`, in the metric's unit.
+  public var delta: Double
+  /// `delta` as a percentage of `baseline`; infinite when the baseline is zero.
   public var percentageDelta: Double
+  /// The threshold the comparison applied.
   public var threshold: ThresholdPolicy
+  /// `failed` when the metric worsened past ``threshold``, and `passed`
+  /// otherwise.
   public var verdict: ReportVerdict
 
+  /// Compares `current` with `baseline`. A change in the metric's better
+  /// direction always passes; a change in its worse direction passes while it
+  /// stays within `threshold`.
   public init(
-    currentMeanNanoseconds: Double,
-    baselineMeanNanoseconds: Double,
-    threshold: ThresholdPolicy
+    metric: Benchmark.Metric,
+    statistic: Report.Statistic,
+    current: Double,
+    baseline: Double,
+    threshold: ThresholdPolicy,
+    size: Benchmark.Scale? = nil,
+    rowID: String? = nil
   ) {
-    self.metric = .mean
-    self.currentValueNanoseconds = currentMeanNanoseconds
-    self.baselineValueNanoseconds = baselineMeanNanoseconds
-    self.currentMeanNanoseconds = currentMeanNanoseconds
-    self.baselineMeanNanoseconds = baselineMeanNanoseconds
-    self.absoluteDeltaNanoseconds = currentMeanNanoseconds - baselineMeanNanoseconds
-    if baselineMeanNanoseconds == 0 {
-      self.percentageDelta = currentMeanNanoseconds == 0 ? 0 : Double.infinity
-    } else {
-      self.percentageDelta = (absoluteDeltaNanoseconds / baselineMeanNanoseconds) * 100
-    }
-    self.threshold = threshold
-    self.verdict = BaselineComparison.evaluate(
-      absoluteDeltaNanoseconds: absoluteDeltaNanoseconds,
-      percentageDelta: percentageDelta,
-      threshold: threshold
-    )
-  }
-
-  public init(
-    currentMetrics: Report.Measurement.Metrics,
-    baselineCase: BaselineCase,
-    metric: Report.Measurement.Metric = .mean,
-    threshold: ThresholdPolicy
-  ) {
-    let currentValue = metric.value(from: currentMetrics)
-    let baselineValue = baselineCase.value(for: metric)
     self.metric = metric
-    self.currentValueNanoseconds = currentValue
-    self.baselineValueNanoseconds = baselineValue
-    self.currentMeanNanoseconds = currentMetrics.mean
-    self.baselineMeanNanoseconds = baselineCase.meanNanoseconds
-    self.absoluteDeltaNanoseconds = currentValue - baselineValue
-    if baselineValue == 0 {
-      self.percentageDelta = currentValue == 0 ? 0 : Double.infinity
+    self.statistic = statistic
+    self.size = size
+    self.rowID = rowID
+    self.current = current
+    self.baseline = baseline
+    self.delta = current - baseline
+    if baseline == 0 {
+      self.percentageDelta = delta == 0 ? 0 : (delta < 0 ? -.infinity : .infinity)
     } else {
-      self.percentageDelta = (absoluteDeltaNanoseconds / baselineValue) * 100
+      self.percentageDelta = delta / abs(baseline) * 100
     }
     self.threshold = threshold
-    self.verdict = BaselineComparison.evaluate(
-      absoluteDeltaNanoseconds: absoluteDeltaNanoseconds,
-      percentageDelta: percentageDelta,
-      threshold: threshold
-    )
-  }
-
-  private static func evaluate(
-    absoluteDeltaNanoseconds: Double,
-    percentageDelta: Double,
-    threshold: ThresholdPolicy
-  ) -> ReportVerdict {
-    guard absoluteDeltaNanoseconds > 0 else {
-      return .passed
-    }
-
-    switch threshold.kind {
-    case .relativePercentage:
-      return percentageDelta <= threshold.value ? .passed : .failed
-    case .absoluteNanoseconds:
-      return absoluteDeltaNanoseconds <= threshold.value ? .passed : .failed
+    let worsening = metric.direction == .lowerIsBetter ? delta : -delta
+    if worsening <= 0 {
+      self.verdict = .passed
+    } else {
+      switch threshold.kind {
+      case .relativePercentage:
+        let worseningPercentage = baseline == 0 ? Double.infinity : worsening / abs(baseline) * 100
+        self.verdict = worseningPercentage <= threshold.value ? .passed : .failed
+      case .absolute:
+        self.verdict = worsening <= threshold.value ? .passed : .failed
+      }
     }
   }
-}
 
-extension BaselineComparison {
   private enum CodingKeys: String, CodingKey {
     case metric
-    case currentValueNanoseconds
-    case baselineValueNanoseconds
-    case currentMeanNanoseconds
-    case baselineMeanNanoseconds
-    case absoluteDeltaNanoseconds
+    case statistic
+    case size
+    case rowID
+    case current
+    case baseline
+    case delta
     case percentageDelta
     case threshold
     case verdict
   }
 
   /// Decodes a comparison. A `null` percentage delta comes from a zero baseline
-  /// and decodes as an infinite delta with the sign of the absolute delta.
+  /// and decodes as an infinite delta with the sign of `delta`.
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    metric = try container.decode(Report.Measurement.Metric.self, forKey: .metric)
-    currentValueNanoseconds = try container.decode(Double.self, forKey: .currentValueNanoseconds)
-    baselineValueNanoseconds = try container.decode(Double.self, forKey: .baselineValueNanoseconds)
-    currentMeanNanoseconds = try container.decode(Double.self, forKey: .currentMeanNanoseconds)
-    baselineMeanNanoseconds = try container.decode(Double.self, forKey: .baselineMeanNanoseconds)
-    absoluteDeltaNanoseconds = try container.decode(Double.self, forKey: .absoluteDeltaNanoseconds)
+    metric = try container.decode(Benchmark.Metric.self, forKey: .metric)
+    statistic = try container.decode(Report.Statistic.self, forKey: .statistic)
+    size = try container.decodeIfPresent(Benchmark.Scale.self, forKey: .size)
+    rowID = try container.decodeIfPresent(String.self, forKey: .rowID)
+    current = try container.decode(Double.self, forKey: .current)
+    baseline = try container.decode(Double.self, forKey: .baseline)
+    delta = try container.decode(Double.self, forKey: .delta)
     percentageDelta =
       try container.decodeIfPresent(Double.self, forKey: .percentageDelta)
-      ?? (absoluteDeltaNanoseconds < 0 ? -.infinity : .infinity)
+      ?? (delta < 0 ? -.infinity : .infinity)
     threshold = try container.decode(ThresholdPolicy.self, forKey: .threshold)
     verdict = try container.decode(ReportVerdict.self, forKey: .verdict)
   }
@@ -215,11 +109,12 @@ extension BaselineComparison {
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(metric, forKey: .metric)
-    try container.encode(currentValueNanoseconds, forKey: .currentValueNanoseconds)
-    try container.encode(baselineValueNanoseconds, forKey: .baselineValueNanoseconds)
-    try container.encode(currentMeanNanoseconds, forKey: .currentMeanNanoseconds)
-    try container.encode(baselineMeanNanoseconds, forKey: .baselineMeanNanoseconds)
-    try container.encode(absoluteDeltaNanoseconds, forKey: .absoluteDeltaNanoseconds)
+    try container.encode(statistic, forKey: .statistic)
+    try container.encodeIfPresent(size, forKey: .size)
+    try container.encodeIfPresent(rowID, forKey: .rowID)
+    try container.encode(current, forKey: .current)
+    try container.encode(baseline, forKey: .baseline)
+    try container.encode(delta, forKey: .delta)
     if percentageDelta.isFinite {
       try container.encode(percentageDelta, forKey: .percentageDelta)
     } else {
@@ -230,45 +125,39 @@ extension BaselineComparison {
   }
 }
 
-public struct BudgetPolicy: Sendable, Equatable, Codable {
-  public var suiteName: String?
-  public var caseName: String?
-  public var metric: Report.Measurement.Metric
-  public var limitNanoseconds: Double
-
-  public init(
-    suiteName: String? = nil,
-    caseName: String? = nil,
-    metric: Report.Measurement.Metric = .mean,
-    limitNanoseconds: Double
-  ) {
-    self.suiteName = suiteName
-    self.caseName = caseName
-    self.metric = metric
-    self.limitNanoseconds = limitNanoseconds
-  }
-
-  public func applies(suiteName: String, caseName: String) -> Bool {
-    if let suiteNameFilter = self.suiteName, suiteNameFilter != suiteName {
-      return false
-    }
-    if let caseNameFilter = self.caseName, caseNameFilter != caseName {
-      return false
-    }
-    return true
-  }
-}
-
+/// The evaluation of one budget on one measurement row.
 public struct BudgetComparison: Sendable, Equatable, Codable {
+  /// The budget evaluated.
   public var policy: BudgetPolicy
-  public var actualNanoseconds: Double
-  public var absoluteDeltaNanoseconds: Double
+  /// The row's Dimension size, if it has one.
+  public var size: Benchmark.Scale?
+  /// The row's argument row identifier, if it has one.
+  public var rowID: String?
+  /// The measured statistic, or `nil` when the row has no values for the metric.
+  public var actual: Double?
+  /// `actual - limit`, in the metric's unit.
+  public var delta: Double?
+  /// `notCompared` when the row has no values for the budget's metric.
   public var verdict: ReportVerdict
 
-  public init(policy: BudgetPolicy, metrics: Report.Measurement.Metrics) {
+  /// Evaluates `policy` on `row`, using the row's own description of the metric.
+  public init(policy: BudgetPolicy, row: Report.Measurement.Row) {
     self.policy = policy
-    self.actualNanoseconds = policy.metric.value(from: metrics)
-    self.absoluteDeltaNanoseconds = actualNanoseconds - policy.limitNanoseconds
-    self.verdict = actualNanoseconds <= policy.limitNanoseconds ? .passed : .failed
+    self.size = row.size
+    self.rowID = row.id
+    guard let measured = row.metrics.first(where: { $0 == policy.metric }),
+      let statistics = row.statistics(for: measured)
+    else {
+      self.actual = nil
+      self.delta = nil
+      self.verdict = .notCompared
+      return
+    }
+    let actual = policy.statistic.value(from: statistics)
+    self.actual = actual
+    self.delta = actual - policy.limit
+    let withinLimit =
+      measured.direction == .lowerIsBetter ? actual <= policy.limit : actual >= policy.limit
+    self.verdict = withinLimit ? .passed : .failed
   }
 }
