@@ -553,7 +553,9 @@ import Instruments
 
 The resulting `ReportDocument` contains the measured sample, the
 `BenchmarkIteration` root span, child business spans/events, and span timing
-summaries. This does not read OSLog or Console output. Report JSON is the
+summaries. Each attribution's scope names its sample, so the spans of one
+argument row or Dimension size stay with that row's samples. This does not
+read OSLog or Console output. Report JSON is the
 structured drill-down truth; Signpost/xctrace remains the Apple platform asset
 for deeper Instruments analysis. `trace` captures the timeline without
 `--timeline`.

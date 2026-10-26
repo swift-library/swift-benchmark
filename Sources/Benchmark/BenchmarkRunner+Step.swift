@@ -240,6 +240,7 @@ extension BenchmarkRunner {
       caseName: step.benchmarkCase.name,
       size: step.size,
       arguments: step.arguments,
+      rowID: step.argumentRow?.id,
       phase: phase
     )
   }

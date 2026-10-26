@@ -69,20 +69,24 @@ public final class BenchmarkTimelineObserver: BenchmarkExecutionObserver, @unche
   }
 
   private func key(_ context: BenchmarkExecutionContext) -> String {
-    "\(context.suiteName)\u{0}\(context.caseName)\u{0}\(context.phase)"
+    "\(context.suiteName)\u{0}\(context.caseName)\u{0}\(context.rowID ?? "")\u{0}\(context.phase)"
   }
 
   private func correlationAttributes(
     context: BenchmarkExecutionContext,
     iteration: Int
   ) -> SpanAttributes {
-    [
+    var attributes: SpanAttributes = [
       TimelineCorrelationKeys.suite: .string(context.suiteName),
       TimelineCorrelationKeys.case: .string(context.caseName),
       TimelineCorrelationKeys.iteration: .int(iteration),
       TimelineCorrelationKeys.dimensionSize: context.size.map { .int($0.rawValue) }
         ?? .string("none"),
     ]
+    if let rowID = context.rowID {
+      attributes.values[TimelineCorrelationKeys.row] = .string(rowID)
+    }
+    return attributes
   }
 }
 

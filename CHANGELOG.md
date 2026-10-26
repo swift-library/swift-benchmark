@@ -73,6 +73,10 @@
   maps from inside XCFrameworks.
 - Traced commands no longer hang when xctrace or the benchmarks print more
   than a pipe holds.
+- Timeline attributions of argument rows belong to their own row's samples.
+  The iteration span records the row in `TimelineCorrelationKeys.row`, and
+  `BenchmarkExecutionContext.rowID` names it for observers; previously every
+  row's iteration matched every other row's samples.
 - A configuration the host rejects, and a baseline or report file that cannot
   be read, exit with the configuration status 2 instead of 3.
 - BenchmarkXCTest builds with swift-corelibs-xctest; `attachments(for:)`

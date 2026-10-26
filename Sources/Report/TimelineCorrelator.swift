@@ -9,6 +9,8 @@ public enum TimelineCorrelationKeys {
   public static let `case` = "benchmark.case"
   public static let iteration = "benchmark.iteration"
   public static let dimensionSize = "benchmark.dimension.size"
+  /// The step's argument row or Dimension size identifier, when it has one.
+  public static let row = "benchmark.row"
   public static let durationNanoseconds = "benchmark.duration.nanoseconds"
 }
 
@@ -19,6 +21,7 @@ public enum TimelineCorrelator {
     suiteName: String,
     caseName: String,
     size: Benchmark.Scale? = nil,
+    rowID: String? = nil,
     iteration: Int
   ) -> TimelineAttribution {
     let suiteID = ReportIDFactory.suite(suiteName)
@@ -27,12 +30,14 @@ public enum TimelineCorrelator {
       suiteName: suiteName,
       caseName: caseName,
       size: size,
+      rowID: rowID,
       iteration: iteration
     )
     let sampleID = ReportIDFactory.sample(
       suiteName: suiteName,
       caseName: caseName,
       size: size,
+      rowID: rowID,
       iteration: iteration
     )
 
@@ -43,6 +48,7 @@ public enum TimelineCorrelator {
           suiteName: suiteName,
           caseName: caseName,
           size: size,
+          rowID: rowID,
           iteration: iteration
         )
       }.map(\.id)
@@ -61,7 +67,7 @@ public enum TimelineCorrelator {
     let events = timeline.events.filter { record in
       matches(
         record.attributes, suiteName: suiteName, caseName: caseName, size: size,
-        iteration: iteration)
+        rowID: rowID, iteration: iteration)
         || record.parentSpanID.map { includedSpanIDs.contains($0) } == true
     }.map(EventAttribution.init)
 
@@ -92,6 +98,7 @@ public enum TimelineCorrelator {
             suiteName: result.suiteName,
             caseName: result.caseName,
             size: row.size,
+            rowID: row.id,
             iteration: sample.iteration
           )
         }
@@ -104,11 +111,13 @@ public enum TimelineCorrelator {
     suiteName: String,
     caseName: String,
     size: Benchmark.Scale?,
+    rowID: String?,
     iteration: Int
   ) -> Bool {
     attributes.values[TimelineCorrelationKeys.suite] == .string(suiteName)
       && attributes.values[TimelineCorrelationKeys.case] == .string(caseName)
       && attributes.values[TimelineCorrelationKeys.iteration] == .int(iteration)
+      && attributes.values[TimelineCorrelationKeys.row] == rowID.map { .string($0) }
       && matchesDimension(attributes, size: size)
   }
 

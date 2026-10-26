@@ -6,6 +6,9 @@ public struct BenchmarkExecutionContext: Sendable, Equatable {
   public var caseName: String
   public var size: Benchmark.Scale?
   public var arguments: [Benchmark.ArgumentValue]
+  /// The identifier of the step's argument row or Dimension size, or `nil`
+  /// for an unparameterized case.
+  public var rowID: String?
   public var phase: BenchmarkPhase
 
   public init(
@@ -13,12 +16,14 @@ public struct BenchmarkExecutionContext: Sendable, Equatable {
     caseName: String,
     size: Benchmark.Scale? = nil,
     arguments: [Benchmark.ArgumentValue] = [],
+    rowID: String? = nil,
     phase: BenchmarkPhase
   ) {
     self.suiteName = suiteName
     self.caseName = caseName
     self.size = size
     self.arguments = arguments
+    self.rowID = rowID
     self.phase = phase
   }
 }
