@@ -40,14 +40,14 @@ them.
 
 The package requires Swift 6.3, iOS 18 or macOS 15, including its command-line
 products. The maintained system window covers iOS 18/26/27 and macOS 15/26/27.
-Shared CI tests and builds release with three compilers: the minimum, Xcode
-26.6 on macOS 26 with bundled Swift 6.3, and Xcode 27.2 and 27.1 on the
-`xcode-27` runner. Xcode 27.1, the last entry, also builds the documentation,
-builds Report, BenchmarkTesting and BenchmarkXCTest for generic iOS, and runs
-the CLI/plugin version command. A Swift 6.3 Linux image tests the package; the
-command plugin workflow is Apple-only, so its tests are skipped there. The
-latest SDKs check API availability against the deployment floors at compile
-time; CI does not run on older systems.
+Shared CI tests and builds release with two compilers: the minimum, Xcode
+26.6 on macOS 26 with bundled Swift 6.3, and the latest release, Xcode 27.1 on
+the `xcode-27` runner. Xcode 27.1, the last entry, also builds the
+documentation, builds Report, BenchmarkTesting and BenchmarkXCTest for generic
+iOS, and runs the CLI/plugin version command. A Swift 6.3 Linux image tests the
+package; the command plugin workflow is Apple-only, so its tests are skipped
+there. The latest SDKs check API availability against the deployment floors at
+compile time; CI does not run on older systems.
 
 ## Validation
 

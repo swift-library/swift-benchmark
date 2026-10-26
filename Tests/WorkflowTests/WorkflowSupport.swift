@@ -5,13 +5,28 @@ import Foundation
 
 /// The arguments of `swift package benchmark <arguments>` for the package at
 /// `package`, building in `scratch`, which the plugin may also write to.
+/// Options every `swift package` command that runs the benchmark plugin
+/// needs with this toolchain.
+///
+/// SwiftPM 6.3 cannot build the plugin's SwiftSyntax tool beside macros built
+/// from SwiftSyntax prebuilts, so the tests turn the prebuilts off there, as
+/// users of that toolchain do.
+let pluginPackageOptions: [String] = {
+  #if compiler(>=6.4)
+    []
+  #else
+    ["--disable-experimental-prebuilts"]
+  #endif
+}()
+
 func swiftPackageBenchmark(
   _ arguments: [String],
   package: String,
   scratch: String,
   configuration: String? = nil
 ) -> [String] {
-  ["swift", "package", "-q", "--package-path", package, "--scratch-path", scratch]
+  ["swift", "package"] + pluginPackageOptions
+    + ["-q", "--package-path", package, "--scratch-path", scratch]
     + (configuration.map { ["--configuration", $0] } ?? [])
     + ["--allow-writing-to-directory", scratch, "benchmark"] + arguments
 }

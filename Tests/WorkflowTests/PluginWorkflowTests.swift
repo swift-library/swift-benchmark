@@ -18,7 +18,7 @@ import Testing
   .enabled(if: pluginWorkflowIsSupported, "The command plugin supports Apple platforms only.")
 )
 struct PluginWorkflowTests {
-  @Test(.timeLimit(.minutes(10)))
+  @Test(.timeLimit(.minutes(45)))
   func fixturePackageCommandGeneratesHostWithoutUserBoilerplate() throws {
     let fixturePath = fixturePackagePath()
     let scratchPath = scratchPath("fixture-benchmark-package-plugin")
@@ -243,9 +243,8 @@ struct PluginWorkflowTests {
     #expect(FileManager.default.fileExists(atPath: testingTracePath))
     let pluginVersion = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift", "package", "--package-path", fixturePath, "--scratch-path", scratchPath,
-        "benchmark", "--version",
+      arguments: ["swift", "package"] + pluginPackageOptions + [
+        "--package-path", fixturePath, "--scratch-path", scratchPath, "benchmark", "--version",
       ]
     ).trimmingCharacters(in: .whitespacesAndNewlines)
     let cliVersion = try runProcess(executable: cliPath(), arguments: ["--version"])
@@ -254,8 +253,9 @@ struct PluginWorkflowTests {
 
   }
 
-  // A cold Release fixture also compiles SwiftSyntax on hosted runners.
-  @Test(.timeLimit(.minutes(15)))
+  // A cold Release fixture also compiles SwiftSyntax, from source where the
+  // toolchain has no SwiftSyntax prebuilts for it.
+  @Test(.timeLimit(.minutes(60)))
   func fixturePackageCommandGeneratesReleaseHostWithoutPrebuild() throws {
     let fixturePath = fixturePackagePath()
     let scratchPath = scratchPath("fixture-benchmark-package-plugin-release")
@@ -293,7 +293,7 @@ struct PluginWorkflowTests {
     #expect(run.contains("\"buildConfiguration\" : \"release\""))
   }
 
-  @Test(.timeLimit(.minutes(10)), .serialized, arguments: [true, false])
+  @Test(.timeLimit(.minutes(45)), .serialized, arguments: [true, false])
   func fixturePackageCommandFindsCModuleMapsInExternalScratchPath(explicitModuleMap: Bool) throws {
     let layout = explicitModuleMap ? "explicit" : "generated"
     let sourceRoot = URL(fileURLWithPath: scratchPath("fixture-c-module-package-source-\(layout)"))
@@ -332,7 +332,7 @@ struct PluginWorkflowTests {
     #expect(list.contains("\"caseName\" : \"CModuleNoop\""))
   }
 
-  @Test(.timeLimit(.minutes(15)))
+  @Test(.timeLimit(.minutes(45)))
   func fixturePackageCommandLinksMixedLanguageResourceAndBinaryTargets() throws {
     let package = URL(fileURLWithPath: scratchPath("fixture-mixed-targets-package"))
     let scratch = URL(fileURLWithPath: scratchPath("fixture-mixed-targets-scratch"))
@@ -344,8 +344,8 @@ struct PluginWorkflowTests {
     // host must build where the sandbox lets the plugin write.
     let run = try runProcess(
       executable: "/usr/bin/env",
-      arguments: [
-        "swift", "package", "-q", "--package-path", package.path, "--scratch-path", scratch.path,
+      arguments: ["swift", "package"] + pluginPackageOptions + [
+        "-q", "--package-path", package.path, "--scratch-path", scratch.path,
         "benchmark", "run", "--warmup", "0", "--iterations", "2", "--format", "json",
       ]
     )
@@ -355,7 +355,7 @@ struct PluginWorkflowTests {
     #expect(run.contains("\"name\" : \"peakMemory\""))
   }
 
-  @Test(.timeLimit(.minutes(10)))
+  @Test(.timeLimit(.minutes(45)))
   func fixturePackageCommandReportsTestingBridgeDiagnostics() throws {
     let privatePackage = fixturePath("BenchmarkTestingPrivatePackage")
     let privateScratch = scratchPath("fixture-benchmark-testing-private")

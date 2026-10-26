@@ -6,11 +6,6 @@
       "xcode": "26.6"
     },
     {
-      "name": "macos-27-xcode-27.2",
-      "runner": "xcode-27",
-      "xcode": "27.2"
-    },
-    {
       "name": "macos-27-xcode-27.1",
       "runner": "xcode-27",
       "xcode": "27.1"
@@ -58,5 +53,6 @@
       "name": "cli-plugin-version",
       "run": "version=$(python3 -c 'import json, pathlib, re; config = json.loads(pathlib.Path(\".github/release.json\").read_text()); print(re.search(config[\"version_pattern\"], pathlib.Path(config[\"version_file\"]).read_text())[1])')\nswift build -c release\nbin=$(swift build -c release --show-bin-path)\ntest \"$(\"$bin/swift-benchmark-cli\" --version)\" = \"swift-benchmark-cli $version\"\ntest \"$(\"$bin/BenchmarkCLI\" --version)\" = \"swift-benchmark-cli $version\"\ntest \"$(swift package --configuration release benchmark --version)\" = \"swift-benchmark-cli $version\""
     }
-  ]
+  ],
+  "timeout_minutes": 90
 }
