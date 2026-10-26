@@ -228,7 +228,8 @@ struct CLIWorkflowTests {
     ).suites.first?.cases.first?.measurement
 
     #if canImport(Darwin) || os(Linux)
-      #expect((touched?.statistics(for: .peakMemory)?.median ?? 0) >= Double(64 << 20))
+      // Pages the allocator already held count toward the starting footprint.
+      #expect((touched?.statistics(for: .peakMemory)?.median ?? 0) >= Double(48 << 20))
     #endif
     #if canImport(Darwin)
       #expect(allocations?.statistics(for: .allocations)?.median == 1_000)
