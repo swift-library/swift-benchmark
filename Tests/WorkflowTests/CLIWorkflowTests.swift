@@ -10,13 +10,13 @@ import Testing
 @Suite("CLI Workflow")
 struct CLIWorkflowTests {
   @Test(.timeLimit(.minutes(1)))
-  func subprocessCaptureHandlesLargeOutputAndFailures() throws {
+  func subprocessCaptureHandlesLargeOutputAndFailures() async throws {
     let script =
       "BEGIN { for (i = 0; i < 131072; i++) { printf \"o\"; printf \"e\" > \"/dev/stderr\" } }"
-    let output = try runProcess(executable: "/usr/bin/awk", arguments: [script])
+    let output = try await runProcess(executable: "/usr/bin/awk", arguments: [script])
     #expect(output == String(repeating: "o", count: 131072))
 
-    let failure = try runProcessFailure(
+    let failure = try await runProcessFailure(
       executable: "/usr/bin/awk", arguments: [script + " END { exit 7 }"])
     #expect(
       failure == String(repeating: "o", count: 131072) + "\n"
@@ -24,10 +24,10 @@ struct CLIWorkflowTests {
   }
 
   @Test(.timeLimit(.minutes(3)))
-  func cliProductsReportTheSameVersion() throws {
-    let version = try runProcess(executable: cliPath(), arguments: ["--version"])
+  func cliProductsReportTheSameVersion() async throws {
+    let version = try await runProcess(executable: cliPath(), arguments: ["--version"])
       .trimmingCharacters(in: .whitespacesAndNewlines)
-    let aliasVersion = try runProcess(
+    let aliasVersion = try await runProcess(
       executable: URL(fileURLWithPath: try cliPath()).deletingLastPathComponent()
         .appendingPathComponent("BenchmarkCLI").path,
       arguments: ["--version"]
@@ -37,11 +37,11 @@ struct CLIWorkflowTests {
   }
 
   @Test(.timeLimit(.minutes(3)))
-  func cliReportsHelpAndInvalidCommands() throws {
-    let help = try runProcess(executable: cliPath(), arguments: ["--help"])
-    let invalidCommand = try processResult(
+  func cliReportsHelpAndInvalidCommands() async throws {
+    let help = try await runProcess(executable: cliPath(), arguments: ["--help"])
+    let invalidCommand = try await processResult(
       executable: cliPath(), arguments: ["invalid-command"])
-    let missingInput = try processResult(
+    let missingInput = try await processResult(
       executable: cliPath(), arguments: ["render", "--input", "/nonexistent/report.json"])
 
     #expect(help.contains("Commands:"))
@@ -54,7 +54,7 @@ struct CLIWorkflowTests {
     let fake = try await FakeHost(buildConfiguration: "release")
     defer { fake.remove() }
 
-    let run = try runProcess(
+    let run = try await runProcess(
       executable: try cliPath(),
       arguments: ["run", "--host", fake.host.path, "--iterations", "3", "--format", "json"]
     )
@@ -73,7 +73,7 @@ struct CLIWorkflowTests {
     let xcrunPath = fake.directory.appendingPathComponent("xcrun").path
     try writeFakeXcrun(to: xcrunPath)
 
-    let trace = try runProcess(
+    let trace = try await runProcess(
       executable: try cliPath(),
       arguments: [
         "trace", "--host", fake.host.path, "--format", "json",
@@ -81,7 +81,7 @@ struct CLIWorkflowTests {
         "--xcrun", xcrunPath,
       ]
     )
-    let check = try processResult(
+    let check = try await processResult(
       executable: try cliPath(),
       arguments: [
         "check", "--allow-debug", "--host", fake.host.path, "--format", "json",
@@ -107,7 +107,7 @@ struct CLIWorkflowTests {
     let fake = try await FakeHost(buildConfiguration: "debug")
     defer { fake.remove() }
 
-    let check = try processResult(
+    let check = try await processResult(
       executable: try cliPath(), arguments: ["check", "--host", fake.host.path])
 
     #expect(check.status == 2)
@@ -116,12 +116,12 @@ struct CLIWorkflowTests {
   }
 
   @Test(.timeLimit(.minutes(10)))
-  func fixturePackageHostWorksThroughCLI() throws {
+  func fixturePackageHostWorksThroughCLI() async throws {
     let fixturePath = fixturePackagePath()
     let scratchPath = scratchPath("fixture-benchmark-package")
     try? FileManager.default.removeItem(atPath: scratchPath)
 
-    _ = try runProcess(
+    _ = try await runProcess(
       executable: "/usr/bin/env",
       arguments: [
         "swift",
@@ -134,7 +134,7 @@ struct CLIWorkflowTests {
         "FixtureBenchmarks",
       ]
     )
-    let binPath = try runProcess(
+    let binPath = try await runProcess(
       executable: "/usr/bin/env",
       arguments: [
         "swift",
@@ -153,7 +153,7 @@ struct CLIWorkflowTests {
       .path
 
     let cli = try cliPath()
-    let list = try runProcess(
+    let list = try await runProcess(
       executable: cli,
       arguments: [
         "list",
@@ -163,7 +163,7 @@ struct CLIWorkflowTests {
         "json",
       ]
     )
-    let run = try runProcess(
+    let run = try await runProcess(
       executable: cli,
       arguments: [
         "run",
@@ -175,7 +175,7 @@ struct CLIWorkflowTests {
         "Noop",
       ]
     )
-    let failedCheck = try processResult(
+    let failedCheck = try await processResult(
       executable: cli,
       arguments: [
         "check",
@@ -190,11 +190,11 @@ struct CLIWorkflowTests {
         "json",
       ]
     )
-    let invalidConfiguration = try processResult(
+    let invalidConfiguration = try await processResult(
       executable: cli,
       arguments: ["run", "--host", hostPath, "--case", "Noop", "--iterations", "nope"]
     )
-    let missingBaseline = try processResult(
+    let missingBaseline = try await processResult(
       executable: cli,
       arguments: [
         "check", "--allow-debug", "--host", hostPath, "--case", "Noop", "--baseline",
@@ -203,7 +203,7 @@ struct CLIWorkflowTests {
     )
     // Each step runs in a host process of its own, so no other work shares
     // the counting pass and the counts are exact.
-    let allocations = try JSONDecoder().decode(
+    let allocations = try await JSONDecoder().decode(
       ReportDocument.self,
       from: Data(
         runProcess(
@@ -215,7 +215,7 @@ struct CLIWorkflowTests {
         ).utf8)
     ).suites.first?.cases.first?.measurement
 
-    let touched = try JSONDecoder().decode(
+    let touched = try await JSONDecoder().decode(
       ReportDocument.self,
       from: Data(
         runProcess(

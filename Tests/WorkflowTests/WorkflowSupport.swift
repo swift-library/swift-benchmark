@@ -3,8 +3,6 @@
 
 import Foundation
 
-/// The arguments of `swift package benchmark <arguments>` for the package at
-/// `package`, building in `scratch`, which the plugin may also write to.
 /// Options every `swift package` command that runs the benchmark plugin
 /// needs with this toolchain.
 ///
@@ -19,6 +17,8 @@ let pluginPackageOptions: [String] = {
   #endif
 }()
 
+/// The arguments of `swift package benchmark <arguments>` for the package at
+/// `package`, building in `scratch`, which the plugin may also write to.
 func swiftPackageBenchmark(
   _ arguments: [String],
   package: String,
@@ -31,8 +31,8 @@ func swiftPackageBenchmark(
     + ["--allow-writing-to-directory", scratch, "benchmark"] + arguments
 }
 
-func runProcess(executable: String, arguments: [String]) throws -> String {
-  let result = try processResult(executable: executable, arguments: arguments)
+func runProcess(executable: String, arguments: [String]) async throws -> String {
+  let result = try await processResult(executable: executable, arguments: arguments)
   guard result.status == 0 else {
     throw PackageWorkflowError(
       status: result.status,
@@ -43,8 +43,8 @@ func runProcess(executable: String, arguments: [String]) throws -> String {
   return result.output
 }
 
-func runProcessFailure(executable: String, arguments: [String]) throws -> String {
-  let result = try processResult(executable: executable, arguments: arguments)
+func runProcessFailure(executable: String, arguments: [String]) async throws -> String {
+  let result = try await processResult(executable: executable, arguments: arguments)
   guard result.status != 0 else {
     throw PackageWorkflowError(
       status: result.status,
@@ -55,7 +55,9 @@ func runProcessFailure(executable: String, arguments: [String]) throws -> String
   return "\(result.output)\n\(result.errorOutput)"
 }
 
-func processResult(executable: String, arguments: [String]) throws -> (
+/// Runs `executable` and waits for it without holding a thread, so tests
+/// that run long builds in parallel do not starve the other tests.
+func processResult(executable: String, arguments: [String]) async throws -> (
   status: Int32, output: String, errorOutput: String
 ) {
   let directory = FileManager.default.temporaryDirectory
@@ -77,8 +79,16 @@ func processResult(executable: String, arguments: [String]) throws -> (
   process.currentDirectoryURL = repositoryRoot()
   process.standardOutput = stdout
   process.standardError = stderr
-  try process.run()
-  process.waitUntilExit()
+  try await withCheckedThrowingContinuation {
+    (continuation: CheckedContinuation<Void, any Error>) in
+    process.terminationHandler = { _ in continuation.resume() }
+    do {
+      try process.run()
+    } catch {
+      process.terminationHandler = nil
+      continuation.resume(throwing: error)
+    }
+  }
   return (
     process.terminationStatus,
     String(decoding: try Data(contentsOf: outputURL), as: UTF8.self),

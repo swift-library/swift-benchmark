@@ -77,7 +77,7 @@ func writeCModuleDependencyPackage(at package: URL, explicitModuleMap: Bool) thr
 /// XCFramework and a resource bundle, plus a test-target benchmark whose
 /// `@Test` attribute shares the function's line, and a test target without
 /// benchmarks that does not compile, which the plugin must not build.
-func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) throws {
+func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) async throws {
   try writeFile(
     """
     // swift-tools-version: 6.3
@@ -177,7 +177,7 @@ func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) throws {
   let binary = package.appendingPathComponent("binary")
   let object = binary.appendingPathComponent("BinaryCounter.o").path
   let library = binary.appendingPathComponent("libBinaryCounter.a").path
-  _ = try runProcess(
+  _ = try await runProcess(
     executable: "/usr/bin/xcrun",
     arguments: [
       "clang", "-c", binary.appendingPathComponent("BinaryCounter.c").path, "-o", object,
@@ -185,9 +185,9 @@ func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) throws {
       "-arch", "arm64", "-arch", "x86_64", "-mmacosx-version-min=15.0",
     ]
   )
-  _ = try runProcess(
+  _ = try await runProcess(
     executable: "/usr/bin/xcrun", arguments: ["libtool", "-static", "-o", library, object])
-  _ = try runProcess(
+  _ = try await runProcess(
     executable: "/usr/bin/xcrun",
     arguments: [
       "xcodebuild", "-create-xcframework", "-library", library,
@@ -197,20 +197,20 @@ func writeMixedTargetPackage(at package: URL, swiftBenchmarkRoot: URL) throws {
   )
 }
 
-func initializeGitRepository(at directory: URL) throws {
-  _ = try runProcess(
+func initializeGitRepository(at directory: URL) async throws {
+  _ = try await runProcess(
     executable: "/usr/bin/env",
     arguments: ["git", "-C", directory.path, "init", "-q"]
   )
-  _ = try runProcess(
+  _ = try await runProcess(
     executable: "/usr/bin/env",
     arguments: ["git", "-C", directory.path, "checkout", "-q", "-B", "master"]
   )
-  _ = try runProcess(
+  _ = try await runProcess(
     executable: "/usr/bin/env",
     arguments: ["git", "-C", directory.path, "add", "."]
   )
-  _ = try runProcess(
+  _ = try await runProcess(
     executable: "/usr/bin/env",
     arguments: [
       "git",

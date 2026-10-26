@@ -10,7 +10,7 @@ import Testing
 @Suite("Package Traits")
 struct PackageTraitWorkflowTests {
   @Test(.timeLimit(.minutes(10)))
-  func instrumentsBuildsWithoutSwiftSyntaxWhenMacrosAreDisabled() throws {
+  func instrumentsBuildsWithoutSwiftSyntaxWhenMacrosAreDisabled() async throws {
     let package = URL(fileURLWithPath: scratchPath("fixture-instruments-runtime-package"))
     let scratch = URL(fileURLWithPath: scratchPath("fixture-instruments-runtime-scratch"))
     try? FileManager.default.removeItem(at: package)
@@ -49,12 +49,12 @@ struct PackageTraitWorkflowTests {
       "swift", "build", "--package-path", package.path, "--scratch-path", scratch.path,
     ]
 
-    _ = try runProcess(executable: "/usr/bin/env", arguments: swiftPackage)
-    let binPath = try runProcess(
+    _ = try await runProcess(executable: "/usr/bin/env", arguments: swiftPackage)
+    let binPath = try await runProcess(
       executable: "/usr/bin/env", arguments: swiftPackage + ["--show-bin-path"]
     )
     .trimmingCharacters(in: .whitespacesAndNewlines)
-    let run = try runProcess(
+    let run = try await runProcess(
       executable: URL(fileURLWithPath: binPath).appendingPathComponent("InstrumentsRuntime").path,
       arguments: [])
     let products = try FileManager.default.subpathsOfDirectory(atPath: binPath)

@@ -19,7 +19,7 @@ import Testing
 )
 struct PluginWorkflowTests {
   @Test(.timeLimit(.minutes(45)))
-  func fixturePackageCommandGeneratesHostWithoutUserBoilerplate() throws {
+  func fixturePackageCommandGeneratesHostWithoutUserBoilerplate() async throws {
     let fixturePath = fixturePackagePath()
     let scratchPath = scratchPath("fixture-benchmark-package-plugin")
     try? FileManager.default.removeItem(atPath: scratchPath)
@@ -45,14 +45,14 @@ struct PluginWorkflowTests {
     let fakeXcrunPath = URL(fileURLWithPath: scratchPath).appendingPathComponent("fake-xcrun").path
     try writeFakeXcrun(to: fakeXcrunPath)
 
-    let list = try runProcess(
+    let list = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["list", "--tag", "fast", "--format", "json"],
         package: fixturePath, scratch: scratchPath
       )
     )
-    _ = try runProcess(
+    _ = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         [
@@ -62,7 +62,7 @@ struct PluginWorkflowTests {
         package: fixturePath, scratch: scratchPath
       )
     )
-    _ = try runProcess(
+    _ = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         [
@@ -72,7 +72,7 @@ struct PluginWorkflowTests {
         package: fixturePath, scratch: scratchPath
       )
     )
-    let testingCheck = try runProcess(
+    let testingCheck = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         [
@@ -82,7 +82,7 @@ struct PluginWorkflowTests {
         package: fixturePath, scratch: scratchPath
       )
     )
-    let testingDiff = try runProcess(
+    let testingDiff = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         [
@@ -92,7 +92,7 @@ struct PluginWorkflowTests {
         package: fixturePath, scratch: scratchPath
       )
     )
-    let testingTrace = try runProcess(
+    let testingTrace = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         [
@@ -102,56 +102,56 @@ struct PluginWorkflowTests {
         package: fixturePath, scratch: scratchPath
       )
     )
-    let allList = try runProcess(
+    let allList = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["list", "--format", "json"],
         package: fixturePath, scratch: scratchPath
       )
     )
-    let testingList = try runProcess(
+    let testingList = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["list", "--tag", "testingBridge", "--format", "json"],
         package: fixturePath, scratch: scratchPath
       )
     )
-    let standaloneList = try runProcess(
+    let standaloneList = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["list", "--tag", "standalone", "--format", "json"],
         package: fixturePath, scratch: scratchPath
       )
     )
-    let run = try runProcess(
+    let run = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["run", "--tag", "library", "--format", "json"],
         package: fixturePath, scratch: scratchPath
       )
     )
-    let testingRun = try runProcess(
+    let testingRun = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["run", "--tag", "testingBridge", "--format", "json"],
         package: fixturePath, scratch: scratchPath
       )
     )
-    _ = try runProcess(
+    _ = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["run", "--tag", "library", "--format", "json", "--output", reportPath, "--quiet"],
         package: fixturePath, scratch: scratchPath
       )
     )
-    _ = try runProcess(
+    _ = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["baseline", "write", "--input", reportPath, "--output", baselinePath, "--quiet"],
         package: fixturePath, scratch: scratchPath
       )
     )
-    let check = try runProcess(
+    let check = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         [
@@ -161,14 +161,14 @@ struct PluginWorkflowTests {
         package: fixturePath, scratch: scratchPath
       )
     )
-    let diff = try runProcess(
+    let diff = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["diff", "--input", reportPath, "--baseline", baselinePath, "--format", "json"],
         package: fixturePath, scratch: scratchPath
       )
     )
-    let failedCheck = try processResult(
+    let failedCheck = try await processResult(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         [
@@ -187,7 +187,7 @@ struct PluginWorkflowTests {
     let testingReport = try JSONDecoder().decode(
       ReportDocument.self, from: Data(contentsOf: URL(fileURLWithPath: testingReportPath)))
     let testingRows = testingReport.suites.flatMap(\.cases).flatMap(\.measurement.rows)
-    let trace = try runProcess(
+    let trace = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         [
@@ -241,13 +241,13 @@ struct PluginWorkflowTests {
     #expect(testingTrace.contains("\"xctrace\""))
     #expect(FileManager.default.fileExists(atPath: tracePath))
     #expect(FileManager.default.fileExists(atPath: testingTracePath))
-    let pluginVersion = try runProcess(
+    let pluginVersion = try await runProcess(
       executable: "/usr/bin/env",
       arguments: ["swift", "package"] + pluginPackageOptions + [
         "--package-path", fixturePath, "--scratch-path", scratchPath, "benchmark", "--version",
       ]
     ).trimmingCharacters(in: .whitespacesAndNewlines)
-    let cliVersion = try runProcess(executable: cliPath(), arguments: ["--version"])
+    let cliVersion = try await runProcess(executable: cliPath(), arguments: ["--version"])
       .trimmingCharacters(in: .whitespacesAndNewlines)
     #expect(pluginVersion == cliVersion)
 
@@ -256,7 +256,7 @@ struct PluginWorkflowTests {
   // A cold Release fixture also compiles SwiftSyntax, from source where the
   // toolchain has no SwiftSyntax prebuilts for it.
   @Test(.timeLimit(.minutes(60)))
-  func fixturePackageCommandGeneratesReleaseHostWithoutPrebuild() throws {
+  func fixturePackageCommandGeneratesReleaseHostWithoutPrebuild() async throws {
     let fixturePath = fixturePackagePath()
     let scratchPath = scratchPath("fixture-benchmark-package-plugin-release")
     try? FileManager.default.removeItem(atPath: scratchPath)
@@ -265,7 +265,7 @@ struct PluginWorkflowTests {
       withIntermediateDirectories: true
     )
 
-    _ = try runProcess(
+    _ = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["list", "--tag", "fast", "--format", "json"],
@@ -273,14 +273,14 @@ struct PluginWorkflowTests {
       )
     )
 
-    let list = try runProcess(
+    let list = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["list", "--tag", "fast", "--format", "json"],
         package: fixturePath, scratch: scratchPath, configuration: "release"
       )
     )
-    let run = try runProcess(
+    let run = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["run", "--tag", "fast", "--warmup", "0", "--iterations", "1", "--format", "json"],
@@ -294,7 +294,9 @@ struct PluginWorkflowTests {
   }
 
   @Test(.timeLimit(.minutes(45)), .serialized, arguments: [true, false])
-  func fixturePackageCommandFindsCModuleMapsInExternalScratchPath(explicitModuleMap: Bool) throws {
+  func fixturePackageCommandFindsCModuleMapsInExternalScratchPath(explicitModuleMap: Bool)
+    async throws
+  {
     let layout = explicitModuleMap ? "explicit" : "generated"
     let sourceRoot = URL(fileURLWithPath: scratchPath("fixture-c-module-package-source-\(layout)"))
     let scratch = URL(
@@ -309,7 +311,7 @@ struct PluginWorkflowTests {
     let dependency = sourceRoot.appendingPathComponent("CModuleDependency")
     let package = sourceRoot.appendingPathComponent("CModuleBenchmarkPackage")
     try writeCModuleDependencyPackage(at: dependency, explicitModuleMap: explicitModuleMap)
-    try initializeGitRepository(at: dependency)
+    try await initializeGitRepository(at: dependency)
     try writeCModuleBenchmarkPackage(
       at: package,
       dependency: dependency,
@@ -320,7 +322,7 @@ struct PluginWorkflowTests {
       withIntermediateDirectories: true
     )
 
-    let list = try runProcess(
+    let list = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["list", "--tag", "cModule", "--format", "json"],
@@ -333,16 +335,16 @@ struct PluginWorkflowTests {
   }
 
   @Test(.timeLimit(.minutes(45)))
-  func fixturePackageCommandLinksMixedLanguageResourceAndBinaryTargets() throws {
+  func fixturePackageCommandLinksMixedLanguageResourceAndBinaryTargets() async throws {
     let package = URL(fileURLWithPath: scratchPath("fixture-mixed-targets-package"))
     let scratch = URL(fileURLWithPath: scratchPath("fixture-mixed-targets-scratch"))
     try? FileManager.default.removeItem(at: package)
     try? FileManager.default.removeItem(at: scratch)
-    try writeMixedTargetPackage(at: package, swiftBenchmarkRoot: repositoryRoot())
+    try await writeMixedTargetPackage(at: package, swiftBenchmarkRoot: repositoryRoot())
 
     // No write permission beyond the plugin's own work directory: the
     // host must build where the sandbox lets the plugin write.
-    let run = try runProcess(
+    let run = try await runProcess(
       executable: "/usr/bin/env",
       arguments: ["swift", "package"] + pluginPackageOptions + [
         "-q", "--package-path", package.path, "--scratch-path", scratch.path,
@@ -356,7 +358,7 @@ struct PluginWorkflowTests {
   }
 
   @Test(.timeLimit(.minutes(45)))
-  func fixturePackageCommandReportsTestingBridgeDiagnostics() throws {
+  func fixturePackageCommandReportsTestingBridgeDiagnostics() async throws {
     let privatePackage = fixturePath("BenchmarkTestingPrivatePackage")
     let privateScratch = scratchPath("fixture-benchmark-testing-private")
     try? FileManager.default.removeItem(atPath: privateScratch)
@@ -364,7 +366,7 @@ struct PluginWorkflowTests {
       atPath: privateScratch,
       withIntermediateDirectories: true
     )
-    let privateFailure = try runProcessFailure(
+    let privateFailure = try await runProcessFailure(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["list", "--format", "json"],
@@ -379,7 +381,7 @@ struct PluginWorkflowTests {
       atPath: argumentsScratch,
       withIntermediateDirectories: true
     )
-    let argumentsList = try runProcess(
+    let argumentsList = try await runProcess(
       executable: "/usr/bin/env",
       arguments: swiftPackageBenchmark(
         ["list", "--format", "json"],
