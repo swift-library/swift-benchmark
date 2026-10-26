@@ -155,21 +155,16 @@ package struct XctraceRecorder: Sendable {
       let process = Process()
       process.executableURL = URL(fileURLWithPath: xcrunPath)
       process.arguments = arguments
-      let stdout = Pipe()
-      let stderr = Pipe()
-      process.standardOutput = stdout
-      process.standardError = stderr
       do {
+        let capture = try ProcessOutputCapture()
+        process.standardOutput = capture.output
+        process.standardError = capture.error
         try process.run()
-        let output = PipeCapture()
-        let errorOutput = PipeCapture()
-        output.startReading(stdout.fileHandleForReading)
-        errorOutput.startReading(stderr.fileHandleForReading)
         process.waitUntilExit()
         return XctraceCommandResult(
           terminationStatus: process.terminationStatus,
-          standardOutput: output.string(),
-          standardError: errorOutput.string()
+          standardOutput: capture.standardOutput(),
+          standardError: capture.standardError()
         )
       } catch {
         return XctraceCommandResult(

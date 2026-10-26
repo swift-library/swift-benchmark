@@ -38,14 +38,12 @@ struct HostProcess {
     process.executableURL = URL(fileURLWithPath: path)
     process.arguments = arguments + ["--output", outputURL.path]
     process.standardOutput = FileHandle.standardError
-    let errorPipe = Pipe()
-    process.standardError = errorPipe
+    let capture = try ProcessOutputCapture()
+    process.standardError = capture.error
     try process.run()
-    let errorCapture = PipeCapture()
-    errorCapture.startReading(errorPipe.fileHandleForReading)
     process.waitUntilExit()
 
-    let errorOutput = errorCapture.string()
+    let errorOutput = capture.standardError()
     guard process.terminationReason == .exit, process.terminationStatus == 0 else {
       if process.terminationReason == .exit, process.terminationStatus == 2 {
         throw CLIError.hostRejected(stderr: errorOutput)
