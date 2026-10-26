@@ -67,22 +67,24 @@ struct BenchmarkCLI {
 
     Commands:
       list --host <path> [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json]
-      run --host <path> [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json|speedscope] [--output <path>]
+      run --host <path> [--suite <name>] [--case <name>] [--tag <tag>] [--format console|json|markdown|speedscope] [--output <path>]
       check --host <path> [--baseline <baseline.json>] [--allow-debug] [--suite <name>] [--case <name>] [--tag <tag>]
       trace --host <path> [same options as run] [--xctrace-output <path>]
-      render --input <report.json> [--format console|json|speedscope] [--output <path>]
+      render --input <report.json> [--format console|json|markdown|speedscope] [--output <path>]
       compare|diff --input <report.json> --baseline <baseline.json> [--statistic <name>] [--threshold [<metric>=]<value>] [--fail-on-regression]
       baseline write --input <report.json> --output <baseline.json>
       baseline update --input <report.json> --output <baseline.json>
       baseline check --input <report.json> --baseline <baseline.json> [--statistic <name>] [--threshold [<metric>=]<value>]
       help
 
-    Each step of run and check is measured in a process of its own; trace with
+    Each step of run and check is measured in a process of its own, and with
+    --interposer counted in a second process that loads the library; trace with
     --xctrace-output records every selected step in one process.
 
     Options:
       --version
       --host <path>
+      --interposer <path>   (the allocation-counting library; the command plugin passes it)
       --swift-version <text>   (the compiler that built the host, for run metadata)
       --statistic min|max|mean|median|standardDeviation|p90|p95|p99   (default median)
       --threshold <n>% | <metric>=<n>%|<amount>   (default 10%)

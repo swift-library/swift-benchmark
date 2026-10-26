@@ -330,8 +330,11 @@ struct FakeHost {
     try await BenchmarkHost.output(
       discoveries: [FakeHostDiscovery.self], arguments: ["measure"], metadata: metadata
     ).write(to: measurementURL)
+    // The script runs system tools, which cannot load an injected library
+    // built for this test's architecture.
     try """
     #!/bin/sh
+    unset DYLD_INSERT_LIBRARIES LD_PRELOAD
     echo "$*" >> '\(launchesURL.path)'
     command="$1"
     while [ "$#" -gt 0 ]; do

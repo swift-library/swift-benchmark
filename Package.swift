@@ -17,6 +17,8 @@ let package = Package(
     .executable(name: "swift-benchmark-cli", targets: ["BenchmarkCLI"]),
     .executable(name: "BenchmarkCLI", targets: ["BenchmarkCLI"]),
     .plugin(name: "BenchmarkPlugin", targets: ["BenchmarkPlugin"]),
+    // Injected into the host processes that count allocations; nothing links it.
+    .library(name: "_BenchmarkInterposer", type: .dynamic, targets: ["_BenchmarkInterposer"]),
   ],
   traits: [
     .trait(
@@ -53,6 +55,10 @@ let package = Package(
     .target(
       name: "_BenchmarkCounters",
       path: "Sources/_BenchmarkCounters"
+    ),
+    .target(
+      name: "_BenchmarkInterposer",
+      path: "Sources/_BenchmarkInterposer"
     ),
     .macro(
       name: "BenchmarkMacro",

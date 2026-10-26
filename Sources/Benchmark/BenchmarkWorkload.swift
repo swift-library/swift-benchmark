@@ -4,7 +4,9 @@
 /// A benchmark body ready to call.
 ///
 /// Synchronous bodies stay synchronous so the runner can call them in a batch
-/// without an `await` between calls.
+/// without an `await` between calls. Batches count their calls down in a
+/// `while` loop: a range loop allocates in unoptimized builds, and counting
+/// would charge those allocations to the workload.
 enum BenchmarkWorkload: Sendable {
   case synchronous(@Sendable () throws -> Void)
   case asynchronous(@Sendable () async throws -> Void)
@@ -51,8 +53,10 @@ enum BenchmarkWorkload: Sendable {
         countsProcessEvents ? ProcessCounterWindow(batchRunsOnCallingThread: false) : nil
       let cpuStart = cpuClock?.now()
       let start = clock.now()
-      for _ in 0..<count {
+      var remaining = count
+      while remaining > 0 {
         try await body()
+        remaining -= 1
       }
       let end = clock.now()
       let cpuEnd = cpuClock?.now()
@@ -64,14 +68,17 @@ enum BenchmarkWorkload: Sendable {
 
   /// Calls the body `count` times with no timing.
   func callRepeatedly(_ count: Int) async throws {
+    var remaining = count
     switch self {
     case .synchronous(let body):
-      for _ in 0..<count {
+      while remaining > 0 {
         try body()
+        remaining -= 1
       }
     case .asynchronous(let body):
-      for _ in 0..<count {
+      while remaining > 0 {
         try await body()
+        remaining -= 1
       }
     }
   }
@@ -87,8 +94,10 @@ enum BenchmarkWorkload: Sendable {
       countsProcessEvents ? ProcessCounterWindow(batchRunsOnCallingThread: true) : nil
     let cpuStart = cpuClock?.now()
     let start = clock.now()
-    for _ in 0..<count {
+    var remaining = count
+    while remaining > 0 {
       try body()
+      remaining -= 1
     }
     let end = clock.now()
     let cpuEnd = cpuClock?.now()

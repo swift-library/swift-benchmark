@@ -78,7 +78,19 @@ extension BenchmarkRunner {
 
     var samples: [Sample] = []
     samples.reserveCapacity(policy.iterations.maxIterations + 2)
-    while policy.iterations.shouldContinue(after: samples) {
+    if countsOnly {
+      // A first pass through the counting path warms what it allocates once,
+      // such as the task allocator's memory for its calls.
+      do {
+        _ = try await countAllocations(workload, batchSize: batchSize)
+      } catch {
+        await recordIssue(
+          error, step: step, iteration: nil, phase: .counting, eventRecorders: eventRecorders)
+        throw BenchmarkRunnerError.caseFailed(
+          suite: suite.name, case: step.benchmarkCase.name, phase: .counting, underlying: error)
+      }
+    }
+    while !countsOnly, policy.iterations.shouldContinue(after: samples) {
       let iteration = samples.count
       let phase = BenchmarkPhase.measurement(iteration: iteration)
       let context = executionContext(step: step, suite: suite, phase: phase)
@@ -117,30 +129,18 @@ extension BenchmarkRunner {
       )
     }
 
-    if countsAllocations {
-      let counts: RuntimeCounters.Counts?
+    if countsAllocations || countsOnly {
+      let values: [Benchmark.Metric: Double]
       do {
-        counts = try await RuntimeCounters.counting {
-          try await workload.callRepeatedly(batchSize)
-        }
+        values = try await countAllocations(workload, batchSize: batchSize)
       } catch {
         await recordIssue(
           error, step: step, iteration: nil, phase: .counting, eventRecorders: eventRecorders)
         throw BenchmarkRunnerError.caseFailed(
           suite: suite.name, case: step.benchmarkCase.name, phase: .counting, underlying: error)
       }
-      if let counts {
-        let calls = Double(batchSize)
-        let sample = Sample(
-          iteration: samples.count,
-          batchSize: batchSize,
-          values: [
-            .swiftAllocations: Double(counts.allocations) / calls,
-            .swiftAllocatedBytes: Double(counts.allocatedBytes) / calls,
-            .swiftRetains: Double(counts.retains) / calls,
-            .swiftReleases: Double(counts.releases) / calls,
-          ]
-        )
+      if !values.isEmpty {
+        let sample = Sample(iteration: samples.count, batchSize: batchSize, values: values)
         samples.append(sample)
         await record(
           kind: .sampleRecorded,
@@ -151,7 +151,9 @@ extension BenchmarkRunner {
       }
     }
 
-    if let start = footprintAtStart, let end = PhysicalFootprint.read(), end.peak > start.peak {
+    if !countsOnly, let start = footprintAtStart, let end = PhysicalFootprint.read(),
+      end.peak > start.peak
+    {
       let sample = Sample(
         iteration: samples.count, values: [.peakMemory: Double(end.peak - start.current)])
       samples.append(sample)
@@ -198,6 +200,44 @@ extension BenchmarkRunner {
       values[.cpuTime] = Double(cpuNanoseconds) / calls
     }
     return Sample(iteration: iteration, batchSize: batchSize, values: values)
+  }
+
+  /// Counts one batch of `batchSize` calls: Swift runtime allocations and
+  /// reference counting, and heap allocations where the interposer library is
+  /// loaded, each divided by the batch size. Empty where nothing counts.
+  private func countAllocations(
+    _ workload: BenchmarkWorkload,
+    batchSize: Int
+  ) async throws -> [Benchmark.Metric: Double] {
+    let interposer = InterposerCounters.loaded
+    interposer?.start()
+    let hooked: RuntimeCounters.Counts?
+    do {
+      hooked = try await RuntimeCounters.counting {
+        try await workload.callRepeatedly(batchSize)
+      }
+    } catch {
+      interposer?.stop()
+      throw error
+    }
+    interposer?.stop()
+    let interposed = interposer?.counts()
+
+    let calls = Double(batchSize)
+    var values: [Benchmark.Metric: Double] = [:]
+    if let runtime = hooked ?? interposed?.runtime {
+      values[.swiftAllocations] = Double(runtime.allocations) / calls
+      values[.swiftAllocatedBytes] = Double(runtime.allocatedBytes) / calls
+      values[.swiftRetains] = Double(runtime.retains) / calls
+      values[.swiftReleases] = Double(runtime.releases) / calls
+    }
+    if let interposed {
+      values[.heapAllocations] = Double(interposed.heapAllocations) / calls
+      values[.heapAllocatedBytes] = Double(interposed.heapAllocatedBytes) / calls
+      values[.heapNetAllocations] =
+        (Double(interposed.heapAllocations) - Double(interposed.heapFrees)) / calls
+    }
+    return values
   }
 
   /// Chooses how many calls each sample measures. Automatic batching grows

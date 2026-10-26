@@ -12,6 +12,18 @@ public enum ReportVerdict: String, Sendable, Codable {
 
 /// The comparison of one metric of one row between a run and its baseline.
 public struct BaselineComparison: Sendable, Equatable, Codable {
+  /// Whether noise alone is unlikely to explain a comparison's change.
+  public enum Significance: String, Sendable, Codable {
+    /// The confidence interval of the change leaves out zero.
+    case significant
+    /// The confidence interval of the change includes zero, so the change
+    /// can be noise.
+    case notSignificant
+    /// A side has fewer than two values, as a counting metric has, so only
+    /// the threshold judges the change.
+    case untested
+  }
+
   /// The metric this applies to.
   public var metric: Benchmark.Metric
   /// The statistic of the metric this applies to.
@@ -30,19 +42,26 @@ public struct BaselineComparison: Sendable, Equatable, Codable {
   public var percentageDelta: Double
   /// The threshold the comparison applied.
   public var threshold: ThresholdPolicy
-  /// `failed` when the metric worsened past ``threshold``, and `passed`
-  /// otherwise.
+  /// The interval that holds `delta` with the comparison's confidence, or
+  /// `nil` when a side has fewer than two values.
+  public var confidenceInterval: Report.ConfidenceInterval?
+  /// Whether ``confidenceInterval`` leaves out zero.
+  public var significance: Significance
+  /// `failed` when the metric worsened past ``threshold`` and the change is
+  /// not ``Significance/notSignificant``, and `passed` otherwise.
   public var verdict: ReportVerdict
 
   /// Compares `current` with `baseline`. A change in the metric's better
-  /// direction always passes; a change in its worse direction passes while it
-  /// stays within `threshold`.
+  /// direction always passes. A change in its worse direction fails when it
+  /// exceeds `threshold`, unless `confidenceInterval` includes zero, which
+  /// means noise can explain it.
   public init(
     metric: Benchmark.Metric,
     statistic: Report.Statistic,
     current: Double,
     baseline: Double,
     threshold: ThresholdPolicy,
+    confidenceInterval: Report.ConfidenceInterval? = nil,
     size: Benchmark.Scale? = nil,
     rowID: String? = nil
   ) {
@@ -59,18 +78,20 @@ public struct BaselineComparison: Sendable, Equatable, Codable {
       self.percentageDelta = delta / abs(baseline) * 100
     }
     self.threshold = threshold
+    self.confidenceInterval = confidenceInterval
+    self.significance =
+      confidenceInterval.map { $0.excludesZero ? .significant : .notSignificant } ?? .untested
     let worsening = metric.direction == .lowerIsBetter ? delta : -delta
-    if worsening <= 0 {
-      self.verdict = .passed
-    } else {
-      switch threshold.kind {
-      case .relativePercentage:
-        let worseningPercentage = baseline == 0 ? Double.infinity : worsening / abs(baseline) * 100
-        self.verdict = worseningPercentage <= threshold.value ? .passed : .failed
-      case .absolute:
-        self.verdict = worsening <= threshold.value ? .passed : .failed
-      }
+    let exceedsThreshold: Bool
+    switch threshold.kind {
+    case .relativePercentage:
+      let worseningPercentage = baseline == 0 ? Double.infinity : worsening / abs(baseline) * 100
+      exceedsThreshold = worseningPercentage > threshold.value
+    case .absolute:
+      exceedsThreshold = worsening > threshold.value
     }
+    self.verdict =
+      worsening > 0 && exceedsThreshold && significance != .notSignificant ? .failed : .passed
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -83,6 +104,8 @@ public struct BaselineComparison: Sendable, Equatable, Codable {
     case delta
     case percentageDelta
     case threshold
+    case confidenceInterval
+    case significance
     case verdict
   }
 
@@ -101,6 +124,9 @@ public struct BaselineComparison: Sendable, Equatable, Codable {
       try container.decodeIfPresent(Double.self, forKey: .percentageDelta)
       ?? (delta < 0 ? -.infinity : .infinity)
     threshold = try container.decode(ThresholdPolicy.self, forKey: .threshold)
+    confidenceInterval = try container.decodeIfPresent(
+      Report.ConfidenceInterval.self, forKey: .confidenceInterval)
+    significance = try container.decode(Significance.self, forKey: .significance)
     verdict = try container.decode(ReportVerdict.self, forKey: .verdict)
   }
 
@@ -121,6 +147,8 @@ public struct BaselineComparison: Sendable, Equatable, Codable {
       try container.encodeNil(forKey: .percentageDelta)
     }
     try container.encode(threshold, forKey: .threshold)
+    try container.encodeIfPresent(confidenceInterval, forKey: .confidenceInterval)
+    try container.encode(significance, forKey: .significance)
     try container.encode(verdict, forKey: .verdict)
   }
 }

@@ -32,6 +32,9 @@ Built-in metrics:
 | `swiftAllocatedBytes` | bytes | Sizes those allocations requested |
 | `swiftRetains` | count | Swift strong retains, including `retain_n` counts, in the counting pass |
 | `swiftReleases` | count | Swift strong releases, including `release_n` counts, in the counting pass |
+| `heapAllocations` | count | System allocator calls that returned memory, in the counting pass of a process that loaded the interposer |
+| `heapAllocatedBytes` | bytes | Sizes those calls requested; a reallocation counts its new size |
+| `heapNetAllocations` | count | Those allocations minus frees, which stays positive for a call that keeps memory |
 | `peakMemory` | bytes | Growth of the process's footprint peak above the footprint at the start of the step |
 
 ## Step Measurement
@@ -48,7 +51,11 @@ setup -> footprint reading
 ```
 
 Timing and counting are separate so that hooks cannot slow the timed samples.
-The runner holds a process-wide measurement gate for the whole step, from setup
+Given the interposer library, the package workflow goes further and measures
+each step in two host processes: a timing process that runs no counting pass,
+and a counting process that loads the interposer, runs the warmup, then the
+counting pass twice in batches of the timing process's batch size, and records
+the second. The CLI adds the counting sample to the timed row. The runner holds a process-wide measurement gate for the whole step, from setup
 through the counting pass, so steps of concurrent runners never overlap: the
 counting hooks are process-wide and parallel steps would disturb each other's
 times.
@@ -73,10 +80,42 @@ counts exact only in a process that measures nothing else. C and Objective-C
 `malloc` allocations are not counted. A runtime without the hook symbols leaves
 the counting metrics out.
 
-Only Apple platforms count. On Linux, CI showed that routing reference
-counting through the hook slots, which the runtime does whenever the switch is
-on, crashed in `swift_retain` and corrupted memory in the test process. Linux
-runs the counting pass's workload without hooks and records no counts.
+Linux does not use the hook slots: CI showed that routing reference counting
+through them, which the runtime does whenever the switch is on, crashed in
+`swift_retain` and corrupted memory in the test process. Linux counts Swift
+allocations and reference counting only in a counting process, through the
+interposer, which replaces `swift_allocObject`, `swift_retain`,
+`swift_release`, `swift_retain_n` and `swift_release_n` and forwards to the
+runtime. It counts the calls compiled code makes into the runtime; calls the
+runtime makes to itself bypass the replacements, so Linux can count fewer
+retains and releases than Apple platforms for the same code.
+
+## Heap Allocations And The Interposer
+
+The interposer is a C dynamic library, the `_BenchmarkInterposer` product,
+that the CLI injects into counting processes: with `DYLD_INSERT_LIBRARIES` on
+Apple platforms, where it replaces `malloc` and its relatives, the
+`malloc_zone_*` functions and the typed `malloc_type_*` entry points through
+dyld interposing, and with `LD_PRELOAD` on Linux, where it defines glibc's
+allocation functions and forwards to glibc's `__libc_*` implementations. Every
+allocation in the process passes through it, from C, C++, Objective-C and the
+Swift runtime. Its replacements cost time on every call even while not
+counting, which is why only the counting process loads it and timing never
+runs with it.
+
+libmalloc's entry points call one another through their exported symbols,
+which interposing replaces too, so one allocation can pass through several
+replacements; a per-thread nesting guard counts only the outermost. The runner
+finds the library's controls with `dlsym`, so a process without it, such as a
+test process, records no heap metrics. The library removes itself from the
+front of the variable that loaded it, so the processes a benchmark starts do
+not inherit it.
+
+The runner's own batch loops count down in `while` loops: a range loop
+allocates in unoptimized builds, and the counting pass would charge those
+allocations to the workload. Allocations of the workload itself are counted as
+the build produces them, so an unoptimized build can count more than an
+optimized one.
 
 ## Peak Memory
 
@@ -116,7 +155,8 @@ per sample. Adaptive iteration limits count each batch's whole duration.
 | `contextSwitches`, `pageFaults` | Yes | Yes |
 | `systemCalls` | Yes | No |
 | `diskReadBytes`, `diskWriteBytes` | macOS | Yes |
-| Counting metrics | Yes | No |
+| `swiftAllocations`, `swiftAllocatedBytes`, `swiftRetains`, `swiftReleases` | Yes | In the counting process |
+| `heapAllocations`, `heapAllocatedBytes`, `heapNetAllocations` | In the counting process | In the counting process, with glibc |
 | `peakMemory` | Yes, in an isolated step | Yes, in an isolated step |
 
 A metric a platform cannot measure is absent from the samples, never reported
@@ -137,4 +177,8 @@ otherwise is judged by default.
 - Wall-clock accuracy for a known duration and sub-microsecond workloads timed
   over the calibration target (`MeasurementPrecisionTests`).
 - Exact allocation counts and bytes for a workload with a known allocation
-  pattern, measured in an isolated host process (package workflow tests).
+  pattern, measured in an isolated host process, and with the interposer
+  exact heap counts, bytes and unfreed allocations for workloads with known
+  allocations, and a workload that starts a process (package workflow tests).
+- Timing and counting processes record only their own metrics, and the CLI
+  adds counting samples to the timed row of their step (`BenchmarkHostTests`).

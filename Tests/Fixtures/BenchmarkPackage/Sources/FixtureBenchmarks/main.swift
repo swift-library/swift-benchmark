@@ -2,6 +2,7 @@
 // Copyright (c) 2020-present Xudong Xu
 
 import Benchmark
+import Foundation
 import Report
 
 @BenchmarkSuite("Fixture")
@@ -21,6 +22,20 @@ struct FixtureBenchmarks {
     for _ in 0..<1_000 {
       blackHole(AllocationProbe())
     }
+  }
+
+  @Benchmark("Leak16Bytes")
+  func leak16Bytes() {
+    blackHole(UnsafeMutableRawPointer.allocate(byteCount: 16, alignment: 8))
+  }
+
+  @Benchmark("RunTrue")
+  func runTrue() throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+    try process.run()
+    process.waitUntilExit()
+    precondition(process.terminationStatus == 0)
   }
 
   @Benchmark("Touch64MiB")

@@ -121,7 +121,10 @@ extension Benchmark {
     /// Counted in a separate pass after the timed samples, so counting does not
     /// slow the timed calls. Only allocations through the Swift runtime count:
     /// memory a C or C++ library allocates with `malloc`, and Objective-C
-    /// objects, are not included.
+    /// objects, are in ``heapAllocations``. Apple platforms count in any
+    /// process. Linux counts only in the counting host process, and only the
+    /// calls compiled code makes into the runtime, not those the runtime makes
+    /// to itself.
     public static let swiftAllocations = Metric(name: "swiftAllocations", unit: .count)
 
     /// Bytes requested by the allocations counted in ``swiftAllocations``.
@@ -132,6 +135,24 @@ extension Benchmark {
 
     /// Swift strong releases per call, counted with ``swiftAllocations``.
     public static let swiftReleases = Metric(name: "swiftReleases", unit: .count)
+
+    /// System allocator calls per call that returned memory, by any thread of
+    /// the process: `malloc` and its relatives, through which C, C++,
+    /// Objective-C and the Swift runtime allocate.
+    ///
+    /// Counted only in the counting host process that the package workflow
+    /// starts for each step with the interposer library loaded; other
+    /// processes leave it out.
+    public static let heapAllocations = Metric(name: "heapAllocations", unit: .count)
+
+    /// Bytes requested by the allocations counted in ``heapAllocations``. A
+    /// reallocation counts its new size.
+    public static let heapAllocatedBytes = Metric(name: "heapAllocatedBytes", unit: .bytes)
+
+    /// Allocations per call left unfreed when the batch ends:
+    /// ``heapAllocations`` minus frees. A steady positive value means each call
+    /// keeps memory, as a leak or a growing cache does.
+    public static let heapNetAllocations = Metric(name: "heapNetAllocations", unit: .count)
 
     /// How far the process's physical memory footprint rose above its level at
     /// the start of the step, recorded once per step.
@@ -146,7 +167,8 @@ extension Benchmark {
     public static let builtIn: [Metric] = [
       .wallClock, .cpuTime, .instructions, .cycles, .contextSwitches, .pageFaults,
       .systemCalls, .diskReadBytes, .diskWriteBytes, .swiftAllocations, .swiftAllocatedBytes,
-      .swiftRetains, .swiftReleases, .peakMemory,
+      .swiftRetains, .swiftReleases, .heapAllocations, .heapAllocatedBytes, .heapNetAllocations,
+      .peakMemory,
     ]
   }
 }

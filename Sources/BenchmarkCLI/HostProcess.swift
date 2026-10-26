@@ -11,6 +11,8 @@ import Report
 /// through to the CLI's standard error.
 struct HostProcess {
   var path: String
+  /// The interposer library that counting processes load before any other.
+  var interposerPath: String?
 
   /// The steps the host would measure for `selection`.
   func plan(_ selection: [String]) throws -> HostPlan {
@@ -19,6 +21,27 @@ struct HostProcess {
 
   func measure(_ arguments: [String]) throws -> HostMeasurement {
     try invoke(["measure"] + arguments)
+  }
+
+  /// Measures one step: in one process, or, given the interposer, timed in
+  /// one process and counted in another that loads the interposer and calls
+  /// the step in batches of the timed size.
+  func measureStep(_ stepID: String, _ arguments: [String]) throws -> HostMeasurement {
+    let step = ["--step", stepID, "--isolated"]
+    guard let interposerPath else {
+      return try measure(step + arguments)
+    }
+    var timing = try measure(step + arguments + ["--timing-only"])
+    guard let batchSize = timing.timedBatchSize(ofStep: stepID) else {
+      return timing
+    }
+    let counting: HostMeasurement = try invoke(
+      ["measure"] + step + arguments.filter { $0 != "--timeline" }
+        + ["--counting-only", "--batch-size", String(batchSize)],
+      injecting: interposerPath
+    )
+    timing.insertCountingSamples(ofStep: stepID, from: counting)
+    return timing
   }
 
   /// A fresh path for a host to write its output to.
@@ -31,12 +54,25 @@ struct HostProcess {
     try JSONDecoder().decode(type, from: Data(contentsOf: url))
   }
 
-  private func invoke<Output: Decodable>(_ arguments: [String]) throws -> Output {
+  private func invoke<Output: Decodable>(
+    _ arguments: [String], injecting library: String? = nil
+  ) throws -> Output {
     let outputURL = Self.temporaryOutputURL()
     defer { try? FileManager.default.removeItem(at: outputURL) }
     let process = Process()
     process.executableURL = URL(fileURLWithPath: path)
     process.arguments = arguments + ["--output", outputURL.path]
+    if let library {
+      #if canImport(Darwin)
+        let variable = "DYLD_INSERT_LIBRARIES"
+      #else
+        let variable = "LD_PRELOAD"
+      #endif
+      var environment = ProcessInfo.processInfo.environment
+      environment[variable] = [library, environment[variable]].compactMap { $0 }
+        .joined(separator: ":")
+      process.environment = environment
+    }
     process.standardOutput = FileHandle.standardError
     let capture = try ProcessOutputCapture()
     process.standardError = capture.error

@@ -35,11 +35,6 @@ struct HostBuilder {
       throw PluginError.noBenchmarksDiscovered
     }
 
-    let parameters = PackageManager.BuildParameters(
-      configuration: configuration,
-      logging: .concise,
-      echoLogs: false
-    )
     // Only targets that declare benchmarks are built, with their
     // dependencies; other targets, such as UI tests, are left alone. A
     // release build compiles test targets for testing, which the bridge's
@@ -94,6 +89,23 @@ struct HostBuilder {
       captureOutputOnFailure: true
     )
     return host
+  }
+
+  /// Builds the interposer library, which the CLI loads into the processes
+  /// that count each step's allocations.
+  func buildInterposer() throws -> URL {
+    let build = try packageManager.build(
+      .product("_BenchmarkInterposer"), parameters: parameters)
+    guard build.succeeded,
+      let library = build.builtArtifacts.first(where: { $0.kind == .dynamicLibrary })
+    else {
+      throw PluginError.buildFailed(build.logText)
+    }
+    return library.url
+  }
+
+  private var parameters: PackageManager.BuildParameters {
+    PackageManager.BuildParameters(configuration: configuration, logging: .concise, echoLogs: false)
   }
 
   /// Links each resource bundle of the build, `<Package>_<Target>.bundle`

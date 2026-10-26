@@ -186,6 +186,55 @@ struct BenchmarkHostTests {
     #expect(isolated.records.contains { $0.kind == .sampleRecorded })
   }
 
+  @Test
+  func timingAndCountingProcessesMeasureTheirOwnMetrics() async throws {
+    let step = try #require(try await hostPlan(["list", "--case", "Measured"]).steps.first)
+    let overrides = ["--step", step.id, "--isolated", "--warmup", "0", "--batch-size", "2"]
+
+    let timing = try await hostMeasurement(["measure", "--timing-only"] + overrides)
+    let counting = try await hostMeasurement(["measure", "--counting-only"] + overrides)
+    let timedMetrics = Set(timing.records.flatMap(\.context.metrics))
+    let countedSamples = counting.records.filter { $0.kind == .sampleRecorded }
+
+    #expect(timedMetrics.contains(.wallClock))
+    #expect(!timedMetrics.contains(.swiftAllocations))
+    #expect(countedSamples.allSatisfy { !$0.context.metrics.contains(.wallClock) })
+    #expect(countedSamples.allSatisfy { $0.context.phase == "counting" })
+    #if canImport(Darwin)
+      #expect(countedSamples.first?.context.metrics.contains(.swiftAllocations) == true)
+    #endif
+    await #expect(throws: BenchmarkHostError.self) {
+      try await hostMeasurement(["measure", "--timing-only", "--counting-only"] + overrides)
+    }
+  }
+
+  @Test
+  func countingSamplesJoinTheTimedRowOfTheirStep() async throws {
+    let steps = try await hostPlan(["list", "--case", "Sized"]).steps
+    let step = try #require(steps.last)
+    var timing = try await hostMeasurement([
+      "measure", "--case", "Sized", "--timing-only", "--warmup", "0", "--batch-size", "3",
+      "--iterations", "2",
+    ])
+    var counted = try #require(
+      timing.records.last { $0.kind == .sampleRecorded && $0.context.stepID == step.id })
+    counted.context.phase = "counting"
+    counted.context.values = [Benchmark.Metric.heapAllocations.name: 2]
+    counted.context.metrics = [.heapAllocations]
+
+    #expect(timing.timedBatchSize(ofStep: step.id) == 3)
+    timing.insertCountingSamples(
+      ofStep: step.id, from: HostMeasurement(metadata: .fixture(), records: [counted]))
+    let document = try #require(try await BenchmarkCommand.document(measurements: [timing]))
+    let rows = try #require(document.suites.first?.cases.first?.measurement.rows)
+
+    #expect(
+      rows.map(\.size) == steps.map(\.dimensionSizes.first).map { $0.map(Benchmark.Scale.init) })
+    #expect(rows.last?.samples.map(\.iteration) == [0, 1, 2])
+    #expect(rows.last?.samples.last?.value(for: .heapAllocations) == 2)
+    #expect(rows.first?.samples.allSatisfy { $0.value(for: .heapAllocations) == nil } == true)
+  }
+
   private func hostPlan(_ arguments: [String]) async throws -> HostPlan {
     try JSONDecoder().decode(
       HostPlan.self,

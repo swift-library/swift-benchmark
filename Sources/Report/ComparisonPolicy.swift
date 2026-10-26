@@ -39,7 +39,10 @@ public struct ThresholdPolicy: Sendable, Equatable, Codable {
 /// The rules for comparing a run with a baseline and with budgets.
 ///
 /// Comparisons are made per measurement row, so each Dimension size or
-/// argument row of a case is compared with the same row of its baseline.
+/// argument row of a case is compared with the same row of its baseline. A
+/// regression must exceed its threshold and be significant at 95% confidence
+/// when both sides have at least two values; see
+/// ``Report/ConfidenceInterval``.
 /// Thresholds and budgets name metrics by name; their amounts are in the
 /// measured metric's unit, and the measured metric's direction decides which
 /// change is a regression.
@@ -106,6 +109,15 @@ public struct ComparisonPolicy: Sendable, Equatable {
           else {
             continue
           }
+          let interval = Report.ConfidenceInterval.difference(
+            of: statistic,
+            current: row.samples.compactMap { $0.value(for: metric) },
+            baseline: baselineRow.samples.compactMap { $0.value(for: metric) },
+            seed: Report.ConfidenceInterval.seed([
+              suiteName, caseName, row.id ?? "", row.size.map { String($0.rawValue) } ?? "",
+              metric.name, statistic.rawValue,
+            ])
+          )
           rowComparisons.append(
             BaselineComparison(
               metric: metric,
@@ -113,6 +125,7 @@ public struct ComparisonPolicy: Sendable, Equatable {
               current: statistic.value(from: current),
               baseline: statistic.value(from: previous),
               threshold: threshold(for: metric),
+              confidenceInterval: interval,
               size: row.size,
               rowID: row.id
             )

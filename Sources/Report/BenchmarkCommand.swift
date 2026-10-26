@@ -7,6 +7,7 @@ import Benchmark
 package enum ReportFormat: String, Sendable, Codable, CaseIterable {
   case console
   case json
+  case markdown
   case speedscope
 
   package func render(_ document: ReportDocument) throws -> String {
@@ -15,6 +16,8 @@ package enum ReportFormat: String, Sendable, Codable, CaseIterable {
       return ConsoleReportRenderer.render(document)
     case .json:
       return try JSONReportRenderer.render(document)
+    case .markdown:
+      return MarkdownReportRenderer.render(document)
     case .speedscope:
       return try SpeedscopeReportRenderer.render(document)
     }

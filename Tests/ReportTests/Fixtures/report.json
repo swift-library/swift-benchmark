@@ -79,10 +79,12 @@
                     "max": 2000,
                     "mean": 1500,
                     "median": 1500,
+                    "mildOutliers": 0,
                     "min": 1000,
                     "p90": 1900,
                     "p95": 1950,
                     "p99": 1990,
+                    "severeOutliers": 0,
                     "standardDeviation": 500
                   }
                 }

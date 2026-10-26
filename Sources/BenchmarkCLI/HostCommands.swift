@@ -8,9 +8,9 @@ import Report
 enum HostCommands {
   static func list(_ arguments: [String]) throws -> String {
     let options = try CLIOptions(arguments)
-    let host = HostProcess(path: try options.requiredValue(for: "--host"))
+    let host = try options.host()
     let format = try options.format()
-    guard format != .speedscope else {
+    guard format == .console || format == .json else {
       throw CLIError.invalidFormat(format.rawValue, allowed: ["console", "json"])
     }
     let steps = try host.plan(options.selectionArguments).steps
@@ -22,11 +22,12 @@ enum HostCommands {
 
   /// Measures the selected steps and reports them. Each step runs in a host
   /// process of its own, which isolates its memory and runtime state and
-  /// lets the step record peak memory; with `--xctrace-output`, one traced
-  /// process measures every step instead.
+  /// lets the step record peak memory, and with `--interposer` in a second
+  /// process that counts its allocations; with `--xctrace-output`, one
+  /// traced process measures every step instead.
   static func measure(_ command: String, _ arguments: [String]) async throws -> String {
     let options = try CLIOptions(arguments)
-    let host = HostProcess(path: try options.requiredValue(for: "--host"))
+    let host = try options.host()
     let format = try options.format()
     let comparison = try options.comparison()
     let baseline = try options.value(for: "--baseline").map(BaselineDocument.read(path:))
@@ -51,8 +52,7 @@ enum HostCommands {
       traceExporters.append(TraceArtifactExporter(artifact: traced.artifact))
     } else {
       measurements = try plan.steps.map { step in
-        try host.measure(
-          ["--step", step.id, "--isolated"] + options.configurationArguments + timeline)
+        try host.measureStep(step.id, options.configurationArguments + timeline)
       }
     }
     if let swiftVersion = options.value(for: "--swift-version") {

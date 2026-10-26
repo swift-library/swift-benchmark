@@ -112,6 +112,22 @@ func cliPath() throws -> String {
   return path
 }
 
+/// The interposer library built beside the CLI.
+func interposerPath() throws -> String {
+  #if canImport(Darwin)
+    let name = "lib_BenchmarkInterposer.dylib"
+  #else
+    let name = "lib_BenchmarkInterposer.so"
+  #endif
+  let path = URL(fileURLWithPath: try cliPath()).deletingLastPathComponent()
+    .appendingPathComponent(name).path
+  guard FileManager.default.fileExists(atPath: path) else {
+    throw PackageWorkflowError(
+      status: 127, output: "", errorOutput: "Missing interposer library: \(path)")
+  }
+  return path
+}
+
 func fixturePackagePath() -> String {
   fixturePath("BenchmarkPackage")
 }

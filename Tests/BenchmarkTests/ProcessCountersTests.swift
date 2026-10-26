@@ -86,23 +86,6 @@ struct ProcessCountersTests {
       #expect(values(of: .instructions, in: results).isEmpty)
     }
   #endif
-
-  // Reports which counters this environment provides, for the CI spike.
-  @Test
-  func probeCounterAvailability() async throws {
-    let suite = BenchmarkSuite(
-      "Probe",
-      configuration: BenchmarkConfiguration(
-        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
-    ) {
-      Benchmark("Sync") {
-        blackHole(spin(10_000))
-      }
-    }
-    let results = try await BenchmarkRunner(cpuClock: nil, countsAllocations: false).run(suite)
-    let metrics = Set(results.first?.measurement.samples.flatMap(\.values.keys) ?? [])
-    print("COUNTER-PROBE available: \(metrics.map(\.name).sorted().joined(separator: ","))")
-  }
 }
 
 private func values(of metric: Benchmark.Metric, in results: [BenchmarkResult]) -> [Double] {

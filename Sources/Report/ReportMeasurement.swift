@@ -53,7 +53,10 @@ extension Report {
   ///
   /// A percentile interpolates linearly between the two sorted values nearest
   /// to position `p × (count − 1)`, and the standard deviation is the
-  /// population standard deviation.
+  /// population standard deviation. Outliers are counted with Tukey's fences
+  /// around the first and third quartiles; the interquartile range counts as
+  /// at least 1% of the median, so values that differ only by a clock's
+  /// resolution are not outliers.
   public struct Statistics: Sendable, Equatable, Codable {
     /// The number of values.
     public var count: Int
@@ -73,6 +76,13 @@ extension Report {
     public var p95: Double
     /// The 99th percentile.
     public var p99: Double
+    /// Values more than 1.5 and at most 3 interquartile ranges outside the
+    /// quartiles: unusual, but common in timing.
+    public var mildOutliers: Int
+    /// Values more than 3 interquartile ranges outside the quartiles, which
+    /// something outside the workload, such as other work on the machine,
+    /// usually explains.
+    public var severeOutliers: Int
 
     /// Creates statistics from values computed elsewhere.
     public init(
@@ -84,7 +94,9 @@ extension Report {
       standardDeviation: Double,
       p90: Double,
       p95: Double,
-      p99: Double
+      p99: Double,
+      mildOutliers: Int = 0,
+      severeOutliers: Int = 0
     ) {
       self.count = count
       self.min = min
@@ -95,6 +107,8 @@ extension Report {
       self.p90 = p90
       self.p95 = p95
       self.p99 = p99
+      self.mildOutliers = mildOutliers
+      self.severeOutliers = severeOutliers
     }
 
     /// Computes the statistics of `values`. Every statistic is zero when
@@ -112,6 +126,8 @@ extension Report {
         self.p90 = 0
         self.p95 = 0
         self.p99 = 0
+        self.mildOutliers = 0
+        self.severeOutliers = 0
         return
       }
 
@@ -119,16 +135,32 @@ extension Report {
       self.max = values[values.count - 1]
       let meanValue = values.reduce(0, +) / Double(values.count)
       self.mean = meanValue
-      self.median = Self.percentile(0.5, values: values)
+      self.median = Self.percentile(0.5, sortedValues: values)
       let variance =
         values.reduce(0) { partial, value in
           let delta = value - meanValue
           return partial + delta * delta
         } / Double(values.count)
       self.standardDeviation = variance.squareRoot()
-      self.p90 = Self.percentile(0.90, values: values)
-      self.p95 = Self.percentile(0.95, values: values)
-      self.p99 = Self.percentile(0.99, values: values)
+      self.p90 = Self.percentile(0.90, sortedValues: values)
+      self.p95 = Self.percentile(0.95, sortedValues: values)
+      self.p99 = Self.percentile(0.99, sortedValues: values)
+
+      let lowerQuartile = Self.percentile(0.25, sortedValues: values)
+      let upperQuartile = Self.percentile(0.75, sortedValues: values)
+      let range = Swift.max(upperQuartile - lowerQuartile, abs(median) * 0.01)
+      var mild = 0
+      var severe = 0
+      for value in values {
+        let distance = Swift.max(lowerQuartile - value, value - upperQuartile)
+        if distance > 3 * range {
+          severe += 1
+        } else if distance > 1.5 * range {
+          mild += 1
+        }
+      }
+      self.mildOutliers = mild
+      self.severeOutliers = severe
     }
 
     /// The statistics divided by `size`, for per-unit comparisons across
@@ -147,11 +179,13 @@ extension Report {
         standardDeviation: standardDeviation / divisor,
         p90: p90 / divisor,
         p95: p95 / divisor,
-        p99: p99 / divisor
+        p99: p99 / divisor,
+        mildOutliers: mildOutliers,
+        severeOutliers: severeOutliers
       )
     }
 
-    private static func percentile(_ percentile: Double, values: [Double]) -> Double {
+    static func percentile(_ percentile: Double, sortedValues values: [Double]) -> Double {
       guard values.count > 1 else {
         return values.first ?? 0
       }

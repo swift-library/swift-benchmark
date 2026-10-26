@@ -75,6 +75,33 @@ struct CLIWorkflowTests {
   }
 
   @Test(.timeLimit(.minutes(3)))
+  func theInterposerCountsEachStepInASecondProcess() async throws {
+    let fake = try await FakeHost(buildConfiguration: "release")
+    defer { fake.remove() }
+
+    _ = try await runProcess(
+      executable: try cliPath(),
+      arguments: [
+        "run", "--host", fake.host.path, "--interposer", interposerPath(), "--iterations",
+        "3", "--format", "json",
+      ]
+    )
+    let measures = try fake.launches().dropFirst().map { $0.split(separator: " ") }
+
+    #expect(measures.count == 4)
+    for index in stride(from: 0, to: measures.count - 1, by: 2) {
+      let timing = measures[index]
+      let counting = measures[index + 1]
+      let batchSize = counting.lastIndex(of: "--batch-size").map { counting[$0 + 1] }
+      #expect(timing.contains("--timing-only"))
+      #expect(counting.contains("--counting-only"))
+      // The counting process calls the step in batches of the timed size.
+      #expect(batchSize == "1")
+      #expect(timing[2] == counting[2])
+    }
+  }
+
+  @Test(.timeLimit(.minutes(3)))
   func tracedCommandsMeasureEveryStepInOneHostProcess() async throws {
     let fake = try await FakeHost(buildConfiguration: "debug")
     defer { fake.remove() }
@@ -223,6 +250,26 @@ struct CLIWorkflowTests {
         ).utf8)
     ).suites.first?.cases.first?.measurement
 
+    // With the interposer, each step is also counted in a process that loads
+    // it, which counts every allocation through the system allocator.
+    func counted(_ caseName: String) async throws -> Report.Measurement? {
+      try await JSONDecoder().decode(
+        ReportDocument.self,
+        from: Data(
+          runProcess(
+            executable: cli,
+            arguments: [
+              "run", "--host", hostPath, "--interposer", interposerPath(), "--case", caseName,
+              "--warmup", "0", "--iterations", "1", "--format", "json",
+            ]
+          ).utf8)
+      ).suites.first?.cases.first?.measurement
+    }
+    let countedAllocations = try await counted("Allocate1000")
+    let leaked = try await counted("Leak16Bytes")
+    // A process the benchmark starts does not inherit the interposer.
+    let spawned = try await counted("RunTrue")
+
     let touched = try await JSONDecoder().decode(
       ReportDocument.self,
       from: Data(
@@ -245,6 +292,19 @@ struct CLIWorkflowTests {
     #else
       #expect(allocations?.statistics(for: .swiftAllocations) == nil)
     #endif
+    #expect(allocations?.statistics(for: .heapAllocations) == nil)
+    #expect(countedAllocations?.statistics(for: .swiftAllocations)?.median == 1_000)
+    #expect(countedAllocations?.statistics(for: .swiftAllocatedBytes)?.median == 24_000)
+    // Each object is one system allocation of its 24 bytes. The unoptimized
+    // range loop allocates too, so the debug host counts more.
+    #expect((countedAllocations?.statistics(for: .heapAllocations)?.median ?? 0) >= 1_000)
+    #expect((countedAllocations?.statistics(for: .heapAllocatedBytes)?.median ?? 0) >= 24_000)
+    #expect(countedAllocations?.statistics(for: .heapNetAllocations)?.median == 0)
+    #expect(countedAllocations?.statistics(for: .wallClock) != nil)
+    #expect(leaked?.statistics(for: .heapAllocations)?.median == 1)
+    #expect(leaked?.statistics(for: .heapAllocatedBytes)?.median == 16)
+    #expect(leaked?.statistics(for: .heapNetAllocations)?.median == 1)
+    #expect(spawned?.statistics(for: .heapAllocations) != nil)
     #expect(list.contains("\"suite\" : \"Fixture\""))
     #expect(list.contains("\"caseName\" : \"Noop\""))
     #expect(run.contains("\"wallClock\""))

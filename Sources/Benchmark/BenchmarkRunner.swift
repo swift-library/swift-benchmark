@@ -8,13 +8,17 @@ public struct BenchmarkRunner: Sendable {
   /// Whether timed samples count instructions, cycles and operating system
   /// events: context switches, page faults, system calls and disk bytes.
   public let countsProcessEvents: Bool
-  /// Whether each step ends with a pass that counts Swift heap allocations and
-  /// reference-counting operations.
+  /// Whether each step ends with a pass that counts heap allocations and
+  /// Swift reference-counting operations.
   public let countsAllocations: Bool
   /// Whether each step records ``Benchmark/Metric/peakMemory``. Enable it only
   /// when the process measures a single step, because the footprint peak
   /// covers the whole process lifetime.
   public let recordsPeakMemory: Bool
+  /// Whether each step only counts allocations: after its warmup, it runs the
+  /// counting pass twice and records the second. A counting host process
+  /// measures this way.
+  package var countsOnly = false
 
   /// Creates a runner. The defaults measure wall-clock time, CPU time,
   /// process events and allocation counts, and leave out peak memory.

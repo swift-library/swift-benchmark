@@ -230,6 +230,9 @@ struct PluginWorkflowTests {
     #expect(rows.allSatisfy { !$0.samples.isEmpty })
     #expect(!testingRows.isEmpty)
     #expect(testingRows.allSatisfy { !$0.samples.isEmpty })
+    // The plugin passes the interposer, so every step is also counted.
+    #expect(rows.allSatisfy { $0.statistics(for: .heapAllocations) != nil })
+    #expect(testingRows.allSatisfy { $0.statistics(for: .heapAllocations) != nil })
     #expect(diff.contains("\"baseline\""))
     #expect(testingCheck.contains("\"baseline\""))
     #expect(testingDiff.contains("\"baseline\""))

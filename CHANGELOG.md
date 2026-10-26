@@ -6,6 +6,26 @@
   machine load than time, and context switches, page faults, system calls and
   disk bytes, each where the platform provides them.
   `BenchmarkRunner(countsProcessEvents:)` turns the counting off.
+- The package workflow counts every heap allocation, from Swift, C, C++ and
+  Objective-C: `heapAllocations`, `heapAllocatedBytes`, and
+  `heapNetAllocations` for memory each call keeps. The plugin builds the
+  `_BenchmarkInterposer` library and measures each step in a timing process
+  and a counting process that loads it; `--interposer` passes the library to
+  the CLI with your own host. On Linux the counting process also records the
+  Swift allocation and reference-counting metrics.
+- Batch loops no longer allocate in unoptimized builds, so counts of a debug
+  build include only the workload's own allocations.
+- **Breaking**: a regression must also be significant. Each baseline
+  comparison carries a reproducible 95% bootstrap confidence interval of its
+  difference and its `significance`; a change whose interval includes zero
+  passes. Metrics with one value per row, such as counts, are judged by their
+  threshold alone.
+- **Breaking**: statistics count mild and severe outliers with Tukey's fences,
+  and a row warns when a tenth of a compared metric's values are severe
+  outliers.
+- Dimension curves of cases with three or more sizes carry the growth model
+  that best fits them, from O(1) to O(n³).
+- `--format markdown` renders a report summary for pull request comments.
 - **Breaking**: `Benchmark.Metric` carries `isComparedByDefault`. Context
   switches, page faults, system calls and disk bytes are reported but judged
   only when a threshold or budget names them. Report JSON records the property
