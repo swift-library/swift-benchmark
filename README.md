@@ -58,7 +58,7 @@ Add the package and the products you use to `Package.swift`:
 dependencies: [
   .package(
     url: "https://github.com/swift-library/swift-benchmark.git",
-    .upToNextMinor(from: "0.2.0")
+    .upToNextMinor(from: "0.3.0")
   ),
 ],
 targets: [

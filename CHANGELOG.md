@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0
+
 - **Breaking**: A regression must also be significant. Each baseline
   comparison carries a reproducible 95% bootstrap confidence interval of its
   difference and its `significance`, and a change whose interval includes zero
@@ -18,9 +20,11 @@
 - **Breaking**: The names of the new built-in metrics are reserved: values a
   workload records under `instructions`, `cycles`, `contextSwitches`,
   `pageFaults`, `systemCalls`, `diskReadBytes`, `diskWriteBytes`,
-  `heapAllocations`, `heapAllocatedBytes` or `heapNetAllocations` are ignored.
+  `heapAllocations`, `heapAllocatedBytes` or `heapNetAllocations` are ignored;
+  rename custom metrics that use them.
 - **Breaking**: `ReportWarning.Kind` gains `outliers`: a compared row warns when
-  a tenth of a compared metric's values are severe outliers.
+  a tenth of a compared metric's values are severe outliers. Exhaustive
+  `switch` statements over the kind need the new case.
 - Timed samples count instructions and cycles, which vary far less with
   machine load than time, and context switches, page faults, system calls and
   disk bytes, each where the platform provides them.
