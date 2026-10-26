@@ -16,15 +16,22 @@ package final class ProcessOutputCapture {
   private let directory: URL
 
   package init() throws {
-    directory = FileManager.default.temporaryDirectory
+    let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent("swift-benchmark-output-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let outputURL = directory.appendingPathComponent("stdout")
     let errorURL = directory.appendingPathComponent("stderr")
     _ = FileManager.default.createFile(atPath: outputURL.path, contents: nil)
     _ = FileManager.default.createFile(atPath: errorURL.path, contents: nil)
-    output = try FileHandle(forWritingTo: outputURL)
-    error = try FileHandle(forWritingTo: errorURL)
+    do {
+      output = try FileHandle(forWritingTo: outputURL)
+      error = try FileHandle(forWritingTo: errorURL)
+    } catch {
+      // `deinit` does not run for an instance that failed to initialize.
+      try? FileManager.default.removeItem(at: directory)
+      throw error
+    }
+    self.directory = directory
   }
 
   deinit {
