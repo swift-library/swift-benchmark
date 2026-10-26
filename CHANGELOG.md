@@ -10,9 +10,8 @@
   `Benchmark.record(_:for:)`; a separate counting pass records Swift runtime
   heap allocations, allocated bytes, retains and releases (`swiftAllocations`,
   `swiftAllocatedBytes`, `swiftRetains`, `swiftReleases`; C `malloc` and
-  Objective-C allocations are not counted) where the Swift runtime exposes its
-  instrumentation hooks; and a step measured in a process of its
-  own records its peak memory.
+  Objective-C allocations are not counted) on Apple platforms; and a step
+  measured in a process of its own records its peak memory.
   `Sample`, measurement rows, statistics, baselines, budgets, verdict causes
   and Dimension curves are keyed by metric, and Report JSON no longer carries
   `schemaVersion`. Reports and baselines written by 0.1.x cannot be read:

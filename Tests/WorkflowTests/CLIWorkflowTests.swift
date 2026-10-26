@@ -235,11 +235,7 @@ struct CLIWorkflowTests {
       #expect(allocations?.statistics(for: .swiftAllocations)?.median == 1_000)
       #expect(allocations?.statistics(for: .swiftAllocatedBytes)?.median == 24_000)
     #else
-      // A runtime without the instrumentation hooks leaves the counts out;
-      // counts it reports must still be exact.
-      if let counted = allocations?.statistics(for: .swiftAllocations) {
-        #expect(counted.median == 1_000)
-      }
+      #expect(allocations?.statistics(for: .swiftAllocations) == nil)
     #endif
     #expect(list.contains("\"suite\" : \"Fixture\""))
     #expect(list.contains("\"caseName\" : \"Noop\""))

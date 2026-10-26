@@ -96,22 +96,21 @@ struct BenchmarkMeasurementTests {
     let results = try await BenchmarkRunner(cpuClock: nil).run(suite)
     let samples = try #require(results.first?.measurement.samples)
     #expect(samples.first?.value(for: .swiftAllocations) == nil)
-    guard let counting = samples.first(where: { $0.value(for: .swiftAllocations) != nil }) else {
-      // A runtime without the instrumentation hooks leaves the counts out.
-      #if canImport(Darwin)
-        Issue.record("The Swift runtime on Darwin provides the instrumentation hooks.")
-      #endif
-      return
-    }
+    #if canImport(Darwin)
+      let counting = try #require(samples.first { $0.value(for: .swiftAllocations) != nil })
 
-    #expect(samples.count == 2)
-    #expect(counting.batchSize == 10)
-    // The runtime hooks count every thread of the test process, so other
-    // tests running at the same time can only add to these counts.
-    #expect(try #require(counting.value(for: .swiftAllocations)) >= 3)
-    #expect(try #require(counting.value(for: .swiftAllocatedBytes)) >= 3 * 24)
-    #expect(try #require(counting.value(for: .swiftReleases)) >= 3)
-    #expect(counting.value(for: .wallClock) == nil)
+      #expect(samples.count == 2)
+      #expect(counting.batchSize == 10)
+      // The runtime hooks count every thread of the test process, so other
+      // tests running at the same time can only add to these counts.
+      #expect(try #require(counting.value(for: .swiftAllocations)) >= 3)
+      #expect(try #require(counting.value(for: .swiftAllocatedBytes)) >= 3 * 24)
+      #expect(try #require(counting.value(for: .swiftReleases)) >= 3)
+      #expect(counting.value(for: .wallClock) == nil)
+    #else
+      // Only Apple platforms count.
+      #expect(samples.allSatisfy { $0.value(for: .swiftAllocations) == nil })
+    #endif
   }
 
   @Test

@@ -70,6 +70,11 @@ counts exact only in a process that measures nothing else. C and Objective-C
 `malloc` allocations are not counted. A runtime without the hook symbols leaves
 the counting metrics out.
 
+Only Apple platforms count. On Linux, CI showed that routing reference
+counting through the hook slots, which the runtime does whenever the switch is
+on, crashed in `swift_retain` and corrupted memory in the test process. Linux
+runs the counting pass's workload without hooks and records no counts.
+
 ## Peak Memory
 
 Platforms report only the highest footprint over the process lifetime: on
@@ -104,7 +109,7 @@ per sample. Adaptive iteration limits count each batch's whole duration.
 | Metric | Darwin | Linux |
 | --- | --- | --- |
 | `wallClock`, `cpuTime` | Yes | Yes |
-| Counting metrics | Yes | When the runtime exports the hook symbols |
+| Counting metrics | Yes | No |
 | `peakMemory` | Yes, in an isolated step | Yes, in an isolated step |
 
 A metric a platform cannot measure is absent from the samples, never reported

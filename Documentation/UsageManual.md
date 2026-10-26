@@ -278,7 +278,8 @@ the platform and runtime provide them; the notes after the table say when:
 Timing and counting are separate: the timed samples run without the counting
 hooks, so hooks cannot slow the times, and a counting pass then runs one more
 batch with the hooks installed. The counts come from the Swift runtime's
-instrumentation hooks and include every thread of the process.
+instrumentation hooks and include every thread of the process. They are
+recorded on Apple platforms only; Linux leaves the counting metrics out.
 
 `peakMemory` needs a process that measures nothing else, because platforms
 report only the highest footprint over the process lifetime. The package

@@ -382,7 +382,8 @@ to phases such as `Tokenize` or `ParseAST`. `SignpostRecorder` and
 
 ## Risks / Ongoing Extension Points
 
-- Counting metrics depend on the Swift runtime's instrumentation hooks.
+- Counting metrics depend on the Swift runtime's instrumentation hooks and are
+  recorded on Apple platforms only.
 - Presentation templates may grow, but they remain Report or tool artifacts
   over the structured report model.
 

@@ -400,7 +400,7 @@ Apple diagnostics do not belong in Benchmark core or Instruments runtime.
 - Testing/XCTest adapter depth depends on public Testing/XCTest surfaces and
   must stay behind compile/availability gates.
 - Counting metrics depend on the Swift runtime's instrumentation hooks and are
-  absent where a runtime lacks them; peak memory is attributable to a step only
+  recorded on Apple platforms only; peak memory is attributable to a step only
   in a process that measures nothing else.
 - `xctrace` behavior is Apple-tooling-dependent and must remain optional Report
   diagnostics.

@@ -136,8 +136,8 @@ recording. Known boundaries remain: executable-only declarations use the
 advanced `--host` override; the BenchmarkTesting bridge diagnoses
 `private`/`fileprivate` tests and extensions of types from other targets;
 argument rows are supported. Testing/XCTest adapter depth stays behind available
-APIs, counting metrics need the Swift runtime's instrumentation hooks, and the
-package workflow supports Apple platforms.
+APIs, counting metrics are recorded on Apple platforms only, and the package
+workflow supports Apple platforms.
 
 When implementation completes, absorb durable facts into
 `Documentation/Architecture/`, focused `Documentation/Reference/` checklists
