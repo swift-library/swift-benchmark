@@ -61,7 +61,7 @@
   the `BenchmarkRunner` to measure with.
 - The `Macros` package trait, enabled by default, declares the Instruments
   macros. Depending on swift-benchmark with `traits: []` gives the Instruments
-  runtime API without building swift-syntax for it.
+  runtime API without building swift-syntax for it, with Swift 6.4 or later.
 - The command plugin discovers declarations with SwiftSyntax alone, including
   `@Test` attributes on the function's line and members of extensions, and
   compiles the host with SwiftPM's toolchain. Hosts find the package's

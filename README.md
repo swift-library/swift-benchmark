@@ -86,7 +86,9 @@ The Instruments macros build swift-syntax. A target that only calls the
 runtime API, such as `Instruments.current.span(_:attributes:_:)`, can depend on
 the package with `traits: []` to leave the macros and swift-syntax out. SwiftPM
 merges traits across the dependency graph, so this takes effect only when no
-package in the graph depends on swift-benchmark with its default traits.
+package in the graph depends on swift-benchmark with its default traits. Swift
+6.3 still builds the macros and swift-syntax; the saving needs Swift 6.4 or
+later.
 
 > [!NOTE]
 > swift-benchmark is pre-1.0. Minor releases may include source-breaking

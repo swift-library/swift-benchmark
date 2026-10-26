@@ -122,8 +122,9 @@ Current package facts:
   `BenchmarkTesting`, and `BenchmarkXCTest`.
 - The `Macros` package trait, enabled by default, declares the macros and
   makes `Instruments` depend on `InstrumentsMacro`. Without it, `Instruments`
-  offers the runtime API alone and builds without swift-syntax. The macro
-  declarations are compiled only under `#if Macros`.
+  offers the runtime API alone and, with SwiftPM 6.4 or later, builds without
+  swift-syntax; SwiftPM 6.3 builds the macro target even when the trait is
+  off. The macro declarations are compiled only under `#if Macros`.
 - Runtime/API target: `Sources/Instruments`.
 - Macro implementation target: `Sources/InstrumentsMacro`.
 - Tests: `Tests/InstrumentsTests`.

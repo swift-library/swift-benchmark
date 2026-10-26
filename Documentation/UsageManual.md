@@ -77,7 +77,9 @@ Instruments.current.event("CacheMiss")
 SwiftPM merges each package's traits across the whole dependency graph. If any
 package in the graph depends on swift-benchmark with its default traits, the
 macros and swift-syntax are built for everyone; dropping the trait saves the
-build only when no package in the graph enables it.
+build only when no package in the graph enables it. Swift 6.3 builds the macro
+target and swift-syntax even without the trait; the saving needs Swift 6.4 or
+later.
 
 ## Recommended Workflow
 
