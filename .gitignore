@@ -2,4 +2,7 @@
 .swiftpm/
 .vscode/
 .DS_Store
-
+/.agent/*
+!/.agent/instructions/
+!/.agent/agents.json
+!/.agent/agents.resolved
