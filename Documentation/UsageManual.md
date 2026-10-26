@@ -452,7 +452,35 @@ swift package --allow-writing-to-directory .build benchmark render --input .buil
 ```
 
 A baseline written by an older release fails to load with an error that asks
-you to record it again.
+you to record it again, and decoding a report an older release wrote fails
+with an error that asks you to generate it again.
+
+Code that consumes reports can build one in its tests from typed results
+instead of writing JSON or report identifiers by hand. `ReportDocument`
+computes the identifiers, statistics and verdicts the same way a run does:
+
+```swift
+import Benchmark
+import Report
+
+let result = BenchmarkResult(
+  suiteName: "Parser",
+  caseName: "Parse",
+  configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(2)),
+  measurement: Benchmark.Measurement(rows: [
+    Benchmark.Measurement.Row(
+      id: "small",
+      size: nil,
+      arguments: [Benchmark.ArgumentValue("small")],
+      samples: [
+        Sample(iteration: 0, values: [.wallClock: 1_200]),
+        Sample(iteration: 1, values: [.wallClock: 1_100]),
+      ]
+    )
+  ])
+)
+let document = ReportDocument(metadata: .local(id: "run:fixture"), results: [result])
+```
 
 HTML, dashboards, and richer presentations should consume `ReportDocument`
 JSON. Swift library code owns data shape and report contracts, not hardcoded
