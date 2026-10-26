@@ -10,7 +10,7 @@ public enum BenchmarkDiscoveryToolDriver {
     do {
       try DiscoveryCommand.run(arguments)
     } catch {
-      fputs("BenchmarkDiscoveryTool: \(error)\n", stderr)
+      FileHandle.standardError.write(Data("BenchmarkDiscoveryTool: \(error)\n".utf8))
       Foundation.exit(1)
     }
   }

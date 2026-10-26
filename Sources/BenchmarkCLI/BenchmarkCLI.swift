@@ -17,7 +17,7 @@ struct BenchmarkCLI {
         print(output)
       }
       if !error.description.isEmpty {
-        fputs("swift-benchmark-cli: \(error.description)\n", stderr)
+        FileHandle.standardError.write(Data("swift-benchmark-cli: \(error.description)\n".utf8))
       }
       Foundation.exit(error.exitCode.rawValue)
     } catch let error as ComparisonArgumentError {
@@ -112,7 +112,7 @@ struct BenchmarkCLI {
   }
 
   private static func fail(_ message: String, _ code: CLIExitCode) -> Never {
-    fputs("swift-benchmark-cli: \(message)\n", stderr)
+    FileHandle.standardError.write(Data("swift-benchmark-cli: \(message)\n".utf8))
     Foundation.exit(code.rawValue)
   }
 }
