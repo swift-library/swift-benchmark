@@ -21,8 +21,8 @@ package final class ProcessOutputCapture {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let outputURL = directory.appendingPathComponent("stdout")
     let errorURL = directory.appendingPathComponent("stderr")
-    FileManager.default.createFile(atPath: outputURL.path, contents: nil)
-    FileManager.default.createFile(atPath: errorURL.path, contents: nil)
+    _ = FileManager.default.createFile(atPath: outputURL.path, contents: nil)
+    _ = FileManager.default.createFile(atPath: errorURL.path, contents: nil)
     output = try FileHandle(forWritingTo: outputURL)
     error = try FileHandle(forWritingTo: errorURL)
   }
