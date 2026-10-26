@@ -32,7 +32,6 @@ Keep these concerns in their own product/adaptor boundaries:
 - Swift Testing adapter,
 - XCTest adapter,
 - Report Dimension curves,
-- Memory/allocation metrics,
 - Instruments timeline aggregation.
 
 Benchmark may be implemented in the same coordinated effort as Instruments, but
@@ -48,8 +47,8 @@ reopen the architecture unless local facts contradict that decision record.
 
 1. Verify current package facts still match architecture docs after the
    implementation pass: products `Instruments`, `Benchmark`, `Report`,
-   `Memory`, `BenchmarkTesting`, `BenchmarkXCTest`, executable
-   `BenchmarkCLI`, and plugin `BenchmarkPlugin`.
+   `BenchmarkTesting`, `BenchmarkXCTest`, executable `BenchmarkCLI`, and
+   plugin `BenchmarkPlugin`.
 2. Keep the `Benchmark` product and `Benchmark` target independent from
    Instruments internals.
 3. Keep `BenchmarkTests` focused on Benchmark behavior.
@@ -105,7 +104,7 @@ decisions, architecture contradictions, or product-boundary violations.
 7. Preserve thrown errors instead of converting failures into silent samples.
 8. Store raw samples and measurement rows; Report derives metrics.
 9. Return structured results suitable for future Report consumption.
-10. Keep baseline, CI, adapter, Dimension, memory, and Report capabilities in
+10. Keep baseline, CI, adapter, Dimension, and Report capabilities in
     extension seams without collapsing those domains into the core runner.
 11. Keep Swift Testing traits as adapters over Benchmark core, not as the core
     benchmark execution model.
@@ -186,5 +185,4 @@ Explicitly answer:
 - Are samples and Measurement rows implemented?
 - Are structured results implemented?
 - Did Benchmark depend on Instruments internals?
-- Was any Report, baseline, CI gate, adapter, Dimension, or memory work
-  introduced?
+- Was any Report, baseline, CI gate, adapter, or Dimension work introduced?

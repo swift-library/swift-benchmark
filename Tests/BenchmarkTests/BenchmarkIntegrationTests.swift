@@ -35,14 +35,17 @@ struct BenchmarkIntegrationTests {
   func runnerReturnsStructuredResults() async throws {
     let suite = BenchmarkSuite(
       "Integration",
-      configuration: BenchmarkConfiguration(warmup: .none, iterations: .iterations(1))
+      configuration: BenchmarkConfiguration(
+        warmup: .none, iterations: .iterations(1), batching: .fixed(1))
     ) {
       Benchmark("ReturnsValue") {
         "result"
       }
     }
 
-    let results = try await BenchmarkRunner(clock: FixedClock()).run(suite)
+    let results = try await BenchmarkRunner(
+      clock: FixedClock(), cpuClock: nil, countsAllocations: false
+    ).run(suite)
 
     #expect(results.count == 1)
     #expect(results[0].suiteName == "Integration")
@@ -55,7 +58,9 @@ struct BenchmarkIntegrationTests {
   func macroDiscoveryMaterializesRunnerPlan() async throws {
     let discovery = BenchmarkDiscovery([MacroDiscoveredBenchmarks.self])
     let plan = try discovery.plan()
-    let results = try await BenchmarkRunner(clock: FixedClock()).run(plan)
+    let results = try await BenchmarkRunner(
+      clock: FixedClock(), cpuClock: nil, countsAllocations: false
+    ).run(plan)
 
     #expect(discovery.suites.map(\.name) == ["Macro"])
     #expect(plan.steps.map(\.caseName) == ["Discovered"])
@@ -78,7 +83,9 @@ struct BenchmarkIntegrationTests {
   func macroDiscoveryLowersDimensionParameterIntoRows() async throws {
     let discovery = BenchmarkDiscovery([MacroDimensionDiscoveredBenchmarks.self])
     let plan = try discovery.plan()
-    let results = try await BenchmarkRunner(clock: StepClock(step: 2)).run(plan)
+    let results = try await BenchmarkRunner(
+      clock: StepClock(step: 2), cpuClock: nil, countsAllocations: false
+    ).run(plan)
 
     #expect(plan.steps.map(\.size?.rawValue) == [3, 5])
     #expect(results.first?.measurement.rows.map(\.size?.rawValue) == [3, 5])
@@ -89,32 +96,5 @@ struct BenchmarkIntegrationTests {
 private struct FixedClock: BenchmarkClock {
   func now() -> BenchmarkInstant {
     BenchmarkInstant(nanoseconds: 1)
-  }
-}
-
-private struct StepClock: BenchmarkClock {
-  private let counter = StepCounter()
-  private let step: UInt64
-
-  init(step: UInt64) {
-    self.step = step
-  }
-
-  func now() -> BenchmarkInstant {
-    BenchmarkInstant(nanoseconds: UInt64(counter.next()) * step)
-  }
-}
-
-private final class StepCounter: @unchecked Sendable {
-  private let lock = NSLock()
-  private var value = 0
-
-  func next() -> Int {
-    lock.withLock {
-      defer {
-        value += 1
-      }
-      return value
-    }
   }
 }

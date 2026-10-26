@@ -88,10 +88,11 @@ rows and samples:
 - Dimension benchmarks produce one row per `Benchmark.Scale`,
 - the Dimension generator runs before measured iterations and is not sampled.
 
-Report projects measurement rows into `Report.Measurement`. Derived metrics
-such as mean, median, p95, and p99 live in
-`Report.Measurement.Row.metrics`. Baseline, budget, diff, and renderer code
-must not compute independent facts from display strings.
+Each sample records the per-call value of every metric the step measured;
+`Metrics.md` owns which metrics those are and how they are measured. Report
+projects measurement rows into `Report.Measurement`, with per-metric
+statistics on each row. Baseline, budget, diff, and renderer code must not
+compute independent facts from display strings.
 
 ## Live Event Stream
 
@@ -102,12 +103,13 @@ Benchmark execution emits Swift-Testing-style nested events:
 - `Benchmark.Event.Context`
 - `Benchmark.Event.Stream`
 - `Benchmark.Event.Stream.Record`
-- `Benchmark.Event.Stream.Configuration`
-- `Benchmark.Event.ConsoleOutputRecorder`
+- `Benchmark.Event.InMemoryRecorder`
+- `Benchmark.Event.ConsoleRecorder`
 - `Benchmark.Event.JSONLinesRecorder`
 
-The stream is a live observation and tooling protocol. It carries lifecycle,
-plan, sample, verdict, diagnostic, and attachment events.
+The stream is a live observation and tooling protocol, and the input Report
+builds documents from. Records are `Codable`, so a host process can hand them to
+the CLI.
 
 `ReportDocument` remains the durable, diffable, CI-stable snapshot truth.
 
@@ -115,14 +117,13 @@ plan, sample, verdict, diagnostic, and attachment events.
 
 Implemented event coverage:
 
-- run discovered/started/ended,
-- suite/case planned/started/ended/skipped/failed,
+- plan started/ended around the run's steps,
+- case started/ended, and skipped,
+- Dimension or argument row started/ended,
 - warmup started/ended,
-- iteration/sample started/ended,
-- measurement captured,
-- verdict cause recorded,
-- diagnostic metric captured/unavailable/failed,
-- attachment recorded.
+- iteration started/ended,
+- sample recorded, for timed, counting and peak memory samples,
+- issue recorded, for planning and execution failures.
 
 ## Acceptance Checks
 

@@ -1,103 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0 WITH Swift-exception
 // Copyright (c) 2020-present Xudong Xu
 
+import Foundation
 import Report
 import Testing
 
 @Suite("Apple Diagnostics")
 struct AppleDiagnosticsTests {
   @Test
-  func metricKitProviderReportsUnavailableWithoutPlatformPayload() async {
+  func traceArtifactExporterAttachesTheTraceOnlyWhenItExists() async {
     let scope = ReportScope(
       runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
-    let metrics = await MetricKitDiagnosticProvider().metrics(for: scope)
-
-    #expect(metrics.map(\.name) == [AppleDiagnosticMetricName.metricKitPayload])
-    #expect(metrics.first?.state.kind == .unavailable)
-    #expect(metrics.first?.state.value == nil)
-  }
-
-  @Test
-  func metricKitProviderMapsSnapshotToRunScopedMetrics() async {
-    let scope = ReportScope(
-      runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
-    let provider = MetricKitDiagnosticProvider(
-      source: StaticMetricKitSnapshotSource(
-        snapshot: MetricKitDiagnosticSnapshot(
-          cpuTimeSeconds: 1.5,
-          peakMemoryBytes: 4096,
-          logicalWritesBytes: 2048,
-          hangCount: 1,
-          diagnosticCount: 2
-        )
-      )
+    let artifact = TraceArtifact(
+      tracePath: "/tmp/run.trace",
+      command: ["xcrun", "xctrace", "record"],
+      metadata: ["tool": "xctrace"]
     )
 
-    let metrics = await provider.metrics(for: scope)
+    let present = await TraceArtifactExporter(artifact: artifact, fileExists: { _ in true })
+      .attachments(for: scope)
+    let missing = await TraceArtifactExporter(artifact: artifact, fileExists: { _ in false })
+      .attachments(for: scope)
 
-    #expect(
-      metrics.map(\.name) == [
-        AppleDiagnosticMetricName.metricKitCPUTimeSeconds,
-        AppleDiagnosticMetricName.metricKitPeakMemoryBytes,
-        AppleDiagnosticMetricName.metricKitLogicalWritesBytes,
-        AppleDiagnosticMetricName.metricKitHangCount,
-        AppleDiagnosticMetricName.metricKitDiagnosticCount,
-      ])
-    #expect(metrics.map(\.state.kind).allSatisfy { $0 == .measured })
-    #expect(metrics.map(\.state.value) == [1.5, 4096, 2048, 1, 2])
-  }
-
-  @Test
-  func metricKitAttachmentExporterReturnsStructuredPayloadAttachments() async {
-    let scope = ReportScope(
-      runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
-    let attachment = DiagnosticAttachment(
-      id: "attachment:metrickit-payload",
-      scope: scope,
-      kind: .structuredData,
-      title: "MetricKit payload",
-      location: "/tmp/metrickit.json",
-      contentType: "application/json",
-      metadata: ["scope": "run-session"]
-    )
-    let exporter = MetricKitAttachmentExporter(
-      source: StaticMetricKitSnapshotSource(
-        snapshot: MetricKitDiagnosticSnapshot(attachments: [attachment])
-      )
-    )
-
-    let attachments = await exporter.attachments(for: scope)
-
-    #expect(attachments == [attachment])
-  }
-
-  @Test
-  func traceArtifactExporterAttachesTraceAndOfficialExportsOnlyWhenPresent() async {
-    let scope = ReportScope(
-      runID: "run:apple", suiteID: "suite:parser", caseID: "case:parser.parse")
-    let exporter = TraceArtifactExporter(
-      artifact: TraceArtifact(
-        tracePath: "/tmp/run.trace",
-        exportedXMLPath: "/tmp/run.xml",
-        tableOfContentsPath: "/tmp/run-toc.xml",
-        command: ["xctrace", "export", "--input", "/tmp/run.trace"],
-        metadata: ["tool": "xctrace"]
-      ),
-      fileExists: { path in
-        path == "/tmp/run.trace" || path == "/tmp/run.xml" || path == "/tmp/run-toc.xml"
-      }
-    )
-
-    let attachments = await exporter.attachments(for: scope)
-
-    #expect(attachments.map(\.kind) == [.trace, .structuredData, .structuredData])
-    #expect(
-      attachments.map(\.contentType) == [
-        "application/vnd.apple.instruments.trace",
-        "application/xml",
-        "application/xml",
-      ])
-    #expect(attachments.allSatisfy { $0.metadata["command"]?.contains("xctrace export") == true })
+    #expect(present.map(\.kind) == [.trace])
+    #expect(present.first?.contentType == "application/vnd.apple.instruments.trace")
+    #expect(present.first?.metadata == ["tool": "xctrace", "command": "xcrun xctrace record"])
+    #expect(missing.isEmpty)
   }
 
   @Test
@@ -146,24 +74,26 @@ struct AppleDiagnosticsTests {
     #expect(artifact.metadata["run"] == "fixture")
   }
 
-  @Test
-  func xctraceRecorderRoutesTargetStandardOutputBeforeLaunch() async throws {
-    let recorder = XctraceRecorder(xcrunPath: "/usr/bin/xcrun") { arguments in
-      #expect(
-        arguments.suffix(6) == [
-          "--target-stdout", "/tmp/host.json", "--launch", "/tmp/generated-host", "--", "run",
-        ])
-      return XctraceCommandResult(terminationStatus: 0)
-    }
+  @Test(.timeLimit(.minutes(1)))
+  func xctraceRecorderDrainsOutputWhileTheCommandRuns() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("swift-benchmark-xcrun-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let xcrun = directory.appendingPathComponent("xcrun")
+    // Each stream carries more than a pipe buffers.
+    try """
+    #!/bin/sh
+    head -c 1048576 /dev/zero | tr '\\0' o
+    head -c 1048576 /dev/zero | tr '\\0' e >&2
+    """.write(to: xcrun, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: xcrun.path)
+    let tracePath = directory.appendingPathComponent("run.trace").path
 
-    let artifact = try await recorder.record(
-      executablePath: "/tmp/generated-host",
-      executableArguments: ["run"],
-      outputTracePath: "/tmp/run.trace",
-      targetStandardOutputPath: "/tmp/host.json"
-    )
+    let artifact = try await XctraceRecorder(xcrunPath: xcrun.path)
+      .record(executablePath: "/bin/true", outputTracePath: tracePath)
 
-    #expect(artifact.command.contains("--target-stdout"))
+    #expect(artifact.tracePath == tracePath)
   }
 
   @Test

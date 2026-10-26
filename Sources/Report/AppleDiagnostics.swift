@@ -3,222 +3,25 @@
 
 import Foundation
 
-public enum AppleDiagnosticMetricName {
-  public static let metricKitPayload = "metrickit.payload"
-  public static let metricKitCPUTimeSeconds = "metrickit.cpuTimeSeconds"
-  public static let metricKitPeakMemoryBytes = "metrickit.peakMemoryBytes"
-  public static let metricKitLogicalWritesBytes = "metrickit.logicalWritesBytes"
-  public static let metricKitHangCount = "metrickit.hangCount"
-  public static let metricKitDiagnosticCount = "metrickit.diagnosticCount"
-}
+/// An Instruments trace on disk and how it was produced.
+package struct TraceArtifact: Sendable, Equatable {
+  package var tracePath: String
+  package var command: [String]
+  package var metadata: [String: String]
 
-public struct MetricKitDiagnosticSnapshot: Sendable, Equatable {
-  public var cpuTimeSeconds: Double?
-  public var peakMemoryBytes: Double?
-  public var logicalWritesBytes: Double?
-  public var hangCount: Double?
-  public var diagnosticCount: Double?
-  public var attachments: [DiagnosticAttachment]
-
-  public init(
-    cpuTimeSeconds: Double? = nil,
-    peakMemoryBytes: Double? = nil,
-    logicalWritesBytes: Double? = nil,
-    hangCount: Double? = nil,
-    diagnosticCount: Double? = nil,
-    attachments: [DiagnosticAttachment] = []
-  ) {
-    self.cpuTimeSeconds = cpuTimeSeconds
-    self.peakMemoryBytes = peakMemoryBytes
-    self.logicalWritesBytes = logicalWritesBytes
-    self.hangCount = hangCount
-    self.diagnosticCount = diagnosticCount
-    self.attachments = attachments
-  }
-}
-
-public protocol MetricKitSnapshotSource: Sendable {
-  func snapshot(for scope: ReportScope) async -> MetricKitDiagnosticSnapshot?
-}
-
-public struct StaticMetricKitSnapshotSource: MetricKitSnapshotSource {
-  public var snapshot: MetricKitDiagnosticSnapshot?
-
-  public init(snapshot: MetricKitDiagnosticSnapshot?) {
-    self.snapshot = snapshot
-  }
-
-  public func snapshot(for scope: ReportScope) async -> MetricKitDiagnosticSnapshot? {
-    snapshot
-  }
-}
-
-public struct MetricKitDiagnosticProvider: MetricProvider {
-  public var requirement: DiagnosticRequirement
-  public var source: (any MetricKitSnapshotSource)?
-
-  public init(
-    source: (any MetricKitSnapshotSource)? = nil,
-    requirement: DiagnosticRequirement = .optional
-  ) {
-    self.source = source
-    self.requirement = requirement
-  }
-
-  public func metrics(for scope: ReportScope) async -> [DiagnosticMetric] {
-    guard let source else {
-      return [
-        DiagnosticMetric(
-          id: "metric:metrickit-payload",
-          scope: scope,
-          name: AppleDiagnosticMetricName.metricKitPayload,
-          state: .unavailable(
-            "MetricKit payloads are app-session scoped and require platform delivery."
-          )
-        )
-      ]
-    }
-    guard let snapshot = await source.snapshot(for: scope) else {
-      return [
-        DiagnosticMetric(
-          id: "metric:metrickit-payload",
-          scope: scope,
-          name: AppleDiagnosticMetricName.metricKitPayload,
-          state: .notConfigured("No MetricKit payload snapshot was provided for this run.")
-        )
-      ]
-    }
-
-    var metrics: [DiagnosticMetric] = []
-    appendMetric(
-      &metrics,
-      id: "metric:metrickit-cpu-time-seconds",
-      scope: scope,
-      name: AppleDiagnosticMetricName.metricKitCPUTimeSeconds,
-      value: snapshot.cpuTimeSeconds,
-      unit: "seconds"
-    )
-    appendMetric(
-      &metrics,
-      id: "metric:metrickit-peak-memory-bytes",
-      scope: scope,
-      name: AppleDiagnosticMetricName.metricKitPeakMemoryBytes,
-      value: snapshot.peakMemoryBytes,
-      unit: "bytes"
-    )
-    appendMetric(
-      &metrics,
-      id: "metric:metrickit-logical-writes-bytes",
-      scope: scope,
-      name: AppleDiagnosticMetricName.metricKitLogicalWritesBytes,
-      value: snapshot.logicalWritesBytes,
-      unit: "bytes"
-    )
-    appendMetric(
-      &metrics,
-      id: "metric:metrickit-hang-count",
-      scope: scope,
-      name: AppleDiagnosticMetricName.metricKitHangCount,
-      value: snapshot.hangCount,
-      unit: "count"
-    )
-    appendMetric(
-      &metrics,
-      id: "metric:metrickit-diagnostic-count",
-      scope: scope,
-      name: AppleDiagnosticMetricName.metricKitDiagnosticCount,
-      value: snapshot.diagnosticCount,
-      unit: "count"
-    )
-
-    if metrics.isEmpty {
-      metrics.append(
-        DiagnosticMetric(
-          id: "metric:metrickit-payload",
-          scope: scope,
-          name: AppleDiagnosticMetricName.metricKitPayload,
-          state: .notConfigured("MetricKit payload snapshot did not include supported values.")
-        )
-      )
-    }
-    return metrics
-  }
-
-  private func appendMetric(
-    _ metrics: inout [DiagnosticMetric],
-    id: ReportID,
-    scope: ReportScope,
-    name: String,
-    value: Double?,
-    unit: String
-  ) {
-    guard let value else {
-      return
-    }
-    metrics.append(
-      DiagnosticMetric(id: id, scope: scope, name: name, state: .measured(value, unit: unit))
-    )
-  }
-}
-
-public struct MetricKitAttachmentExporter: TraceExporter {
-  public var requirement: DiagnosticRequirement
-  public var source: (any MetricKitSnapshotSource)?
-
-  public init(
-    source: (any MetricKitSnapshotSource)? = nil,
-    requirement: DiagnosticRequirement = .optional
-  ) {
-    self.source = source
-    self.requirement = requirement
-  }
-
-  public func attachments(for scope: ReportScope) async -> [DiagnosticAttachment] {
-    guard let source, let snapshot = await source.snapshot(for: scope) else {
-      return []
-    }
-    return snapshot.attachments.map { attachment in
-      DiagnosticAttachment(
-        id: attachment.id,
-        scope: scope,
-        kind: attachment.kind,
-        title: attachment.title,
-        location: attachment.location,
-        contentType: attachment.contentType,
-        metadata: attachment.metadata
-      )
-    }
-  }
-}
-
-public struct TraceArtifact: Sendable, Equatable {
-  public var tracePath: String
-  public var exportedXMLPath: String?
-  public var tableOfContentsPath: String?
-  public var command: [String]
-  public var metadata: [String: String]
-
-  public init(
-    tracePath: String,
-    exportedXMLPath: String? = nil,
-    tableOfContentsPath: String? = nil,
-    command: [String] = [],
-    metadata: [String: String] = [:]
-  ) {
+  package init(tracePath: String, command: [String] = [], metadata: [String: String] = [:]) {
     self.tracePath = tracePath
-    self.exportedXMLPath = exportedXMLPath
-    self.tableOfContentsPath = tableOfContentsPath
     self.command = command
     self.metadata = metadata
   }
 }
 
-public struct TraceArtifactExporter: TraceExporter {
-  public var artifact: TraceArtifact
-  public var requirement: DiagnosticRequirement
+package struct TraceArtifactExporter: TraceExporter {
+  package var artifact: TraceArtifact
+  package var requirement: DiagnosticRequirement
   private var fileExists: @Sendable (String) -> Bool
 
-  public init(
+  package init(
     artifact: TraceArtifact,
     requirement: DiagnosticRequirement = .optional,
     fileExists: @escaping @Sendable (String) -> Bool = {
@@ -230,7 +33,7 @@ public struct TraceArtifactExporter: TraceExporter {
     self.fileExists = fileExists
   }
 
-  public func attachments(for scope: ReportScope) async -> [DiagnosticAttachment] {
+  package func attachments(for scope: ReportScope) async -> [DiagnosticAttachment] {
     guard fileExists(artifact.tracePath) else {
       return []
     }
@@ -240,7 +43,7 @@ public struct TraceArtifactExporter: TraceExporter {
       metadata["command"] = artifact.command.joined(separator: " ")
     }
 
-    var attachments = [
+    return [
       DiagnosticAttachment(
         id: ReportID(rawValue: "attachment:trace:\(stable(artifact.tracePath))"),
         scope: scope,
@@ -251,36 +54,6 @@ public struct TraceArtifactExporter: TraceExporter {
         metadata: metadata
       )
     ]
-
-    if let exportedXMLPath = artifact.exportedXMLPath, fileExists(exportedXMLPath) {
-      attachments.append(
-        DiagnosticAttachment(
-          id: ReportID(rawValue: "attachment:trace-export-xml:\(stable(exportedXMLPath))"),
-          scope: scope,
-          kind: .structuredData,
-          title: "xctrace export XML",
-          location: exportedXMLPath,
-          contentType: "application/xml",
-          metadata: metadata
-        )
-      )
-    }
-
-    if let tableOfContentsPath = artifact.tableOfContentsPath, fileExists(tableOfContentsPath) {
-      attachments.append(
-        DiagnosticAttachment(
-          id: ReportID(rawValue: "attachment:trace-toc:\(stable(tableOfContentsPath))"),
-          scope: scope,
-          kind: .structuredData,
-          title: "xctrace table of contents",
-          location: tableOfContentsPath,
-          contentType: "application/xml",
-          metadata: metadata
-        )
-      )
-    }
-
-    return attachments
   }
 
   private func stable(_ value: String) -> String {
@@ -301,12 +74,12 @@ public struct TraceArtifactExporter: TraceExporter {
   }
 }
 
-public struct XctraceCommandResult: Sendable, Equatable {
-  public var terminationStatus: Int32
-  public var standardOutput: String
-  public var standardError: String
+package struct XctraceCommandResult: Sendable, Equatable {
+  package var terminationStatus: Int32
+  package var standardOutput: String
+  package var standardError: String
 
-  public init(
+  package init(
     terminationStatus: Int32,
     standardOutput: String = "",
     standardError: String = ""
@@ -317,10 +90,10 @@ public struct XctraceCommandResult: Sendable, Equatable {
   }
 }
 
-public enum XctraceRecorderError: Error, CustomStringConvertible {
+package enum XctraceRecorderError: Error, CustomStringConvertible {
   case commandFailed(arguments: [String], result: XctraceCommandResult)
 
-  public var description: String {
+  package var description: String {
     switch self {
     case .commandFailed(let arguments, let result):
       return
@@ -329,11 +102,11 @@ public enum XctraceRecorderError: Error, CustomStringConvertible {
   }
 }
 
-public struct XctraceRecorder: Sendable {
-  public var xcrunPath: String
-  public var runner: @Sendable ([String]) async -> XctraceCommandResult
+package struct XctraceRecorder: Sendable {
+  package var xcrunPath: String
+  package var runner: @Sendable ([String]) async -> XctraceCommandResult
 
-  public init(
+  package init(
     xcrunPath: String = "/usr/bin/xcrun",
     runner: (@Sendable ([String]) async -> XctraceCommandResult)? = nil
   ) {
@@ -344,12 +117,11 @@ public struct XctraceRecorder: Sendable {
       }
   }
 
-  public func record(
+  package func record(
     executablePath: String,
     executableArguments: [String] = [],
     outputTracePath: String,
     template: String = "Time Profiler",
-    targetStandardOutputPath: String? = nil,
     metadata: [String: String] = [:]
   ) async throws -> TraceArtifact {
     var arguments = [
@@ -360,9 +132,6 @@ public struct XctraceRecorder: Sendable {
       "--output",
       outputTracePath,
     ]
-    if let targetStandardOutputPath {
-      arguments += ["--target-stdout", targetStandardOutputPath]
-    }
     arguments += ["--launch", executablePath, "--"] + executableArguments
     let result = await runner(arguments)
     guard result.terminationStatus == 0 else {
@@ -386,23 +155,16 @@ public struct XctraceRecorder: Sendable {
       let process = Process()
       process.executableURL = URL(fileURLWithPath: xcrunPath)
       process.arguments = arguments
-      let stdout = Pipe()
-      let stderr = Pipe()
-      process.standardOutput = stdout
-      process.standardError = stderr
       do {
+        let capture = try ProcessOutputCapture()
+        process.standardOutput = capture.output
+        process.standardError = capture.error
         try process.run()
         process.waitUntilExit()
         return XctraceCommandResult(
           terminationStatus: process.terminationStatus,
-          standardOutput: String(
-            decoding: stdout.fileHandleForReading.readDataToEndOfFile(),
-            as: UTF8.self
-          ),
-          standardError: String(
-            decoding: stderr.fileHandleForReading.readDataToEndOfFile(),
-            as: UTF8.self
-          )
+          standardOutput: capture.standardOutput(),
+          standardError: capture.standardError()
         )
       } catch {
         return XctraceCommandResult(

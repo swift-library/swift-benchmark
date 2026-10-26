@@ -9,9 +9,9 @@ Run benchmark measurements from XCTest.
 
 ## Overview
 
-This adapter connects XCTest-driven performance checks to Benchmark and
-Report. It keeps test-framework integration separate from the measurement
-runner and report formats.
+This adapter measures benchmark suites from XCTest, attaches the structured
+report and reports its verdicts as failures. It keeps test-framework
+integration separate from the measurement runner and report formats.
 
 See the [package usage guide](https://github.com/swift-library/swift-benchmark/blob/master/Documentation/UsageManual.md)
 for installation and complete examples.

@@ -70,13 +70,13 @@ import their runtimes.
 Benchmark adds capabilities Swift Testing does not provide:
 
 - warmup,
+- batching,
 - measured iterations,
 - fixed/adaptive/min-duration/max-duration policy,
-- raw samples,
+- raw samples of built-in and custom metrics,
 - `Benchmark.Measurement` rows,
 - `Benchmark.Dimension` input-size parameterization,
-- `Report.Measurement` metrics and `Report.DimensionCurve`,
-- memory/allocation diagnostics,
+- `Report.Measurement` statistics and `Report.DimensionCurve`,
 - timeline attribution,
 - baseline/budget/diff/check,
 - `ReportDocument`,

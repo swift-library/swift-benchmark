@@ -83,5 +83,5 @@ extension Benchmark.Scale {
 
 struct BenchmarkCaseRow: Sendable {
   var metadata: Benchmark.ArgumentRow
-  var makeOperation: @Sendable () async throws -> @Sendable () async throws -> Void
+  var makeOperation: @Sendable () async throws -> BenchmarkWorkload
 }

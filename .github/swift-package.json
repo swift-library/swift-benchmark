@@ -4,10 +4,40 @@
       "name": "macos-26-xcode-26.6",
       "runner": "macos-26",
       "xcode": "26.6"
+    },
+    {
+      "name": "macos-27-xcode-27.1",
+      "runner": "xcode-27",
+      "xcode": "27.1"
     }
   ],
   "format": {
     "paths": ["Package.swift", "Sources", "Tests", "Plugins"]
+  },
+  "platforms": {
+    "linux": [
+      {
+        "name": "linux-swift-6.3",
+        "image": "swift:6.3.3-noble@sha256:c2f3ac2eb806ce43f68859c3d52bd3bb1cfc88672fb3a948b76e136d98e39278"
+      }
+    ],
+    "apple": [
+      {
+        "name": "ios-report",
+        "platform": "iOS",
+        "scheme": "Report"
+      },
+      {
+        "name": "ios-benchmark-testing",
+        "platform": "iOS",
+        "scheme": "BenchmarkTesting"
+      },
+      {
+        "name": "ios-benchmark-xctest",
+        "platform": "iOS",
+        "scheme": "BenchmarkXCTest"
+      }
+    ]
   },
   "docs": {
     "targets": [
@@ -15,7 +45,6 @@
       "BenchmarkTesting",
       "BenchmarkXCTest",
       "Instruments",
-      "Memory",
       "Report"
     ]
   },
@@ -24,5 +53,6 @@
       "name": "cli-plugin-version",
       "run": "version=$(python3 -c 'import json, pathlib, re; config = json.loads(pathlib.Path(\".github/release.json\").read_text()); print(re.search(config[\"version_pattern\"], pathlib.Path(config[\"version_file\"]).read_text())[1])')\nswift build -c release\nbin=$(swift build -c release --show-bin-path)\ntest \"$(\"$bin/swift-benchmark-cli\" --version)\" = \"swift-benchmark-cli $version\"\ntest \"$(\"$bin/BenchmarkCLI\" --version)\" = \"swift-benchmark-cli $version\"\ntest \"$(swift package --configuration release benchmark --version)\" = \"swift-benchmark-cli $version\""
     }
-  ]
+  ],
+  "timeout_minutes": 90
 }

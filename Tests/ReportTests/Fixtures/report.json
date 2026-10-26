@@ -1,0 +1,152 @@
+{
+  "metadata": {
+    "architecture": "arm64",
+    "buildConfiguration": "debug",
+    "generatedAt": "2026-05-11T00:00:00Z",
+    "gitCommit": "fixture",
+    "id": "run:fixture",
+    "osVersion": "15",
+    "packageIdentity": "swift-benchmark",
+    "platform": "macOS",
+    "swiftVersion": "6.3.1"
+  },
+  "suites": [
+    {
+      "cases": [
+        {
+          "attachments": [],
+          "attributions": [],
+          "baselines": [],
+          "budgets": [
+            {
+              "actual": 1950,
+              "delta": 450,
+              "policy": {
+                "limit": 1500,
+                "metric": {
+                  "direction": "lowerIsBetter",
+                  "name": "wallClock",
+                  "unit": "nanoseconds"
+                },
+                "statistic": "p95"
+              },
+              "verdict": "failed"
+            }
+          ],
+          "configuration": {
+            "batching": "fixed(1)",
+            "iterations": "iterations(2)",
+            "warmup": "none"
+          },
+          "dimensionCurves": [],
+          "id": "case:parser.parsedocument",
+          "measurement": {
+            "rows": [
+              {
+                "arguments": [],
+                "metrics": [
+                  {
+                    "direction": "lowerIsBetter",
+                    "name": "wallClock",
+                    "unit": "nanoseconds"
+                  }
+                ],
+                "samples": [
+                  {
+                    "batchSize": 1,
+                    "id": "sample:parser.parsedocument.0",
+                    "iteration": 0,
+                    "iterationID": "iteration:parser.parsedocument.0",
+                    "values": {
+                      "wallClock": 1000
+                    }
+                  },
+                  {
+                    "batchSize": 1,
+                    "id": "sample:parser.parsedocument.1",
+                    "iteration": 1,
+                    "iterationID": "iteration:parser.parsedocument.1",
+                    "values": {
+                      "wallClock": 2000
+                    }
+                  }
+                ],
+                "statistics": {
+                  "wallClock": {
+                    "count": 2,
+                    "max": 2000,
+                    "mean": 1500,
+                    "median": 1500,
+                    "min": 1000,
+                    "p90": 1900,
+                    "p95": 1950,
+                    "p99": 1990,
+                    "standardDeviation": 500
+                  }
+                }
+              }
+            ]
+          },
+          "name": "ParseDocument",
+          "scope": {
+            "caseID": "case:parser.parsedocument",
+            "runID": "run:fixture",
+            "suiteID": "suite:parser"
+          },
+          "sourceLocation": {
+            "column": 5,
+            "fileID": "ParserBenchmarks/ParserBenchmarks.swift",
+            "filePath": "/tmp/ParserBenchmarks.swift",
+            "line": 42
+          },
+          "status": "passed",
+          "verdict": "failed",
+          "verdictCauses": [
+            {
+              "actual": 1950,
+              "budget": {
+                "limit": 1500,
+                "metric": {
+                  "direction": "lowerIsBetter",
+                  "name": "wallClock",
+                  "unit": "nanoseconds"
+                },
+                "statistic": "p95"
+              },
+              "delta": 450,
+              "expected": 1500,
+              "kind": "budgetExceeded",
+              "message": "Budget exceeded for wallClock p95.",
+              "metric": {
+                "direction": "lowerIsBetter",
+                "name": "wallClock",
+                "unit": "nanoseconds"
+              },
+              "scope": {
+                "caseID": "case:parser.parsedocument",
+                "runID": "run:fixture",
+                "suiteID": "suite:parser"
+              },
+              "statistic": "p95"
+            }
+          ]
+        }
+      ],
+      "id": "suite:parser",
+      "name": "Parser",
+      "scope": {
+        "runID": "run:fixture",
+        "suiteID": "suite:parser"
+      }
+    }
+  ],
+  "summary": {
+    "caseCount": 1,
+    "failedBudgetCount": 1,
+    "failedRegressionCount": 0,
+    "suiteCount": 1,
+    "verdict": "failed",
+    "warningCount": 0
+  },
+  "warnings": []
+}

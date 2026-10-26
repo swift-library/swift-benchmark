@@ -3,9 +3,28 @@
 
 public struct BenchmarkRunner: Sendable {
   public let clock: any BenchmarkClock
+  /// Reads CPU time for ``Benchmark/Metric/cpuTime``; `nil` leaves the metric out.
+  public let cpuClock: (any BenchmarkClock)?
+  /// Whether each step ends with a pass that counts Swift heap allocations and
+  /// reference-counting operations.
+  public let countsAllocations: Bool
+  /// Whether each step records ``Benchmark/Metric/peakMemory``. Enable it only
+  /// when the process measures a single step, because the footprint peak
+  /// covers the whole process lifetime.
+  public let recordsPeakMemory: Bool
 
-  public init(clock: any BenchmarkClock = ContinuousBenchmarkClock()) {
+  /// Creates a runner. The defaults measure wall-clock time, CPU time and
+  /// allocation counts, and leave out peak memory.
+  public init(
+    clock: any BenchmarkClock = ContinuousBenchmarkClock(),
+    cpuClock: (any BenchmarkClock)? = ProcessCPUClock(),
+    countsAllocations: Bool = true,
+    recordsPeakMemory: Bool = false
+  ) {
     self.clock = clock
+    self.cpuClock = cpuClock
+    self.countsAllocations = countsAllocations
+    self.recordsPeakMemory = recordsPeakMemory
   }
 
   public func run(
@@ -74,13 +93,16 @@ public struct BenchmarkRunner: Sendable {
         context: Benchmark.Event.Context(step: step),
         eventRecorders: eventRecorders
       )
-      let row = try await runRow(
-        step: step,
-        suite: step.suite,
-        policy: policy,
-        observers: observers,
-        eventRecorders: eventRecorders
-      )
+      let row = try await MeasurementGate.shared.withExclusiveAccess {
+        RuntimeCounters.restoreRuntimeSwitch()
+        return try await runRow(
+          step: step,
+          suite: step.suite,
+          policy: policy,
+          observers: observers,
+          eventRecorders: eventRecorders
+        )
+      }
       await record(
         kind: .caseEnded,
         context: Benchmark.Event.Context(step: step),
@@ -121,198 +143,6 @@ public struct BenchmarkRunner: Sendable {
     )
     return results
   }
-
-  private func runRow(
-    step: Plan.Step,
-    suite: BenchmarkSuite,
-    policy: BenchmarkExecutionPolicy,
-    observers: [any BenchmarkExecutionObserver],
-    eventRecorders: [any BenchmarkEventRecorder]
-  ) async throws -> Benchmark.Measurement.Row {
-    await record(
-      kind: .dimensionRowStarted,
-      context: Benchmark.Event.Context(step: step),
-      eventRecorders: eventRecorders
-    )
-    let operation: @Sendable () async throws -> Void
-    do {
-      guard step.action.isMeasure, let row = step.caseRow else {
-        throw BenchmarkRunnerError.invalidConfiguration(
-          "Step '\(step.id)' does not contain a measurement row."
-        )
-      }
-      operation = try await row.makeOperation()
-    } catch {
-      throw BenchmarkRunnerError.caseFailed(
-        suite: suite.name,
-        case: step.benchmarkCase.name,
-        phase: .dimensionSetup(size: step.size),
-        underlying: error
-      )
-    }
-
-    for iteration in 0..<policy.warmupCount {
-      let context = BenchmarkExecutionContext(
-        suiteName: suite.name,
-        caseName: step.benchmarkCase.name,
-        size: step.size,
-        arguments: step.arguments,
-        phase: .warmup(iteration: iteration)
-      )
-      await record(
-        kind: .warmupStarted,
-        context: Benchmark.Event.Context(
-          step: step, iteration: iteration, phase: .warmup(iteration: iteration)),
-        eventRecorders: eventRecorders
-      )
-      await notifyWillRun(context: context, observers: observers)
-      do {
-        try await operation()
-        await notifyDidRun(context: context, durationNanoseconds: nil, observers: observers)
-        await record(
-          kind: .warmupEnded,
-          context: Benchmark.Event.Context(
-            step: step, iteration: iteration, phase: .warmup(iteration: iteration)),
-          eventRecorders: eventRecorders
-        )
-      } catch {
-        await notifyDidFail(context: context, error: error, observers: observers)
-        await record(
-          kind: .issueRecorded,
-          context: Benchmark.Event.Context(
-            step: step, iteration: iteration, phase: .warmup(iteration: iteration),
-            message: String(describing: error)),
-          eventRecorders: eventRecorders
-        )
-        throw BenchmarkRunnerError.caseFailed(
-          suite: suite.name,
-          case: step.benchmarkCase.name,
-          phase: .warmup(iteration: iteration),
-          underlying: error
-        )
-      }
-    }
-
-    var samples: [Sample] = []
-    samples.reserveCapacity(policy.iterations.maxIterations)
-    while policy.iterations.shouldContinue(after: samples) {
-      let iteration = samples.count
-      let context = BenchmarkExecutionContext(
-        suiteName: suite.name,
-        caseName: step.benchmarkCase.name,
-        size: step.size,
-        arguments: step.arguments,
-        phase: .measurement(iteration: iteration)
-      )
-      await record(
-        kind: .iterationStarted,
-        context: Benchmark.Event.Context(
-          step: step, iteration: iteration, phase: .measurement(iteration: iteration)),
-        eventRecorders: eventRecorders
-      )
-      await notifyWillRun(context: context, observers: observers)
-      let start = clock.now()
-      do {
-        try await operation()
-      } catch {
-        await notifyDidFail(context: context, error: error, observers: observers)
-        await record(
-          kind: .issueRecorded,
-          context: Benchmark.Event.Context(
-            step: step, iteration: iteration, phase: .measurement(iteration: iteration),
-            message: String(describing: error)),
-          eventRecorders: eventRecorders
-        )
-        throw BenchmarkRunnerError.caseFailed(
-          suite: suite.name,
-          case: step.benchmarkCase.name,
-          phase: .measurement(iteration: iteration),
-          underlying: error
-        )
-      }
-      let end = clock.now()
-      let duration = start.duration(to: end)
-      samples.append(
-        Sample(iteration: iteration, durationNanoseconds: duration)
-      )
-      await record(
-        kind: .sampleRecorded,
-        context: Benchmark.Event.Context(
-          step: step,
-          iteration: iteration,
-          phase: .measurement(iteration: iteration),
-          durationNanoseconds: duration
-        ),
-        eventRecorders: eventRecorders
-      )
-      await notifyDidRun(context: context, durationNanoseconds: duration, observers: observers)
-      await record(
-        kind: .iterationEnded,
-        context: Benchmark.Event.Context(
-          step: step,
-          iteration: iteration,
-          phase: .measurement(iteration: iteration),
-          durationNanoseconds: duration
-        ),
-        eventRecorders: eventRecorders
-      )
-    }
-
-    await record(
-      kind: .dimensionRowEnded,
-      context: Benchmark.Event.Context(step: step),
-      eventRecorders: eventRecorders
-    )
-    return Benchmark.Measurement.Row(
-      id: step.argumentRow?.id,
-      size: step.size,
-      arguments: step.arguments,
-      samples: samples
-    )
-  }
-
-  private func notifyWillRun(
-    context: BenchmarkExecutionContext,
-    observers: [any BenchmarkExecutionObserver]
-  ) async {
-    for observer in observers {
-      await observer.benchmarkWillRun(context: context)
-    }
-  }
-
-  private func notifyDidRun(
-    context: BenchmarkExecutionContext,
-    durationNanoseconds: UInt64?,
-    observers: [any BenchmarkExecutionObserver]
-  ) async {
-    for observer in observers {
-      await observer.benchmarkDidRun(context: context, durationNanoseconds: durationNanoseconds)
-    }
-  }
-
-  private func notifyDidFail(
-    context: BenchmarkExecutionContext,
-    error: any Error,
-    observers: [any BenchmarkExecutionObserver]
-  ) async {
-    for observer in observers {
-      await observer.benchmarkDidFail(context: context, error: error)
-    }
-  }
-
-  private func record(
-    kind: Benchmark.Event.Kind,
-    context: Benchmark.Event.Context,
-    eventRecorders: [any BenchmarkEventRecorder]
-  ) async {
-    guard !eventRecorders.isEmpty else {
-      return
-    }
-    let record = Benchmark.Event.Stream.Record(kind: kind, context: context)
-    for eventRecorder in eventRecorders {
-      await eventRecorder.record(record)
-    }
-  }
 }
 
 private struct CaseKey: Hashable {
@@ -333,7 +163,9 @@ public enum BenchmarkPhase: Sendable, Equatable {
   case configuration
   case dimensionSetup(size: Benchmark.Scale?)
   case warmup(iteration: Int)
+  case calibration
   case measurement(iteration: Int)
+  case counting
 }
 
 public enum BenchmarkRunnerError: Error, CustomStringConvertible {

@@ -3,7 +3,7 @@
     "chatgpt": {},
     "sections": [
       {
-        "hash": "sha256:79d7002c1f5974677a04764164e30ed60e1c923e0bcbbb0250bc49ec252b7713",
+        "hash": "sha256:360b6ec8216f18d10ecfb79da4448121c18ae21ee27e6451ecb17fc2d2d16256",
         "name": "guide",
         "path": ".agent/instructions/guide.md",
         "source": "."
@@ -26,7 +26,7 @@
     "targets": {
       "AGENTS.md": {
         "agents": ["claude-code", "codex"],
-        "blockHash": "sha256:02788eb118432bf70c36c003edca7c9204342e0c8c95e182a4205a9be5a13936",
+        "blockHash": "sha256:a1f52dd05c36eba896a28d67e0b3de5e07b2ac317542862e5733296731f4b024",
         "created": false,
         "headingOffset": 0
       }

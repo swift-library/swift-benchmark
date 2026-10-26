@@ -7,7 +7,8 @@
 - Read the owning architecture document before changing a layer:
   `Documentation/Architecture/Instruments.md` for Instruments,
   `ProductDomains.md` for product boundaries, `Benchmark.md` for the runner,
-  and `Report.md` for reports, baselines, attribution, diagnostics adapters and
+  `Metrics.md` for what a benchmark sample measures and how, and `Report.md`
+  for reports, baselines, warnings, attribution, trace attachments and
   renderers.
 - When a change affects user-facing usage, update `README.md` and
   `Documentation/UsageManual.md` in the same change.

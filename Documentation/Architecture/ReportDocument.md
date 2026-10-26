@@ -2,110 +2,81 @@
 
 ## Scope / Purpose
 
-This document owns the structured report architecture: report documents,
-baseline/budget comparison, CI verdicts, output contracts, and the relationship
-between live event streams and durable report snapshots.
+This document owns the capability-level view of structured reports: report
+documents, baseline/budget comparison, CI verdicts, output contracts, and the
+relationship between live event streams and durable report snapshots.
 
-`Report.md` remains the detailed Report layer source of truth. This document is
-the capability-level view.
-
-## Current Implementation Status
-
-Current source implements `ReportDocument` schema version 2, run metadata,
-stable suite/case/sample identities, raw samples, row metrics, baseline
-comparison, single-run budgets, verdict causes, diagnostics, attachments,
-timeline attribution, JSON output, and console/Markdown/speedscope
-consumers. `Benchmark.Event.Stream`, `ReportRecorder`, and `ReportBuilder`
-build the same durable `ReportDocument` truth from runner lifecycle events.
-CLI, plugin, Testing/XCTest adapters, diagnostics, and trace attachment flows
-consume that same schema.
+`Report.md` remains the detailed Report layer source of truth.
 
 ## Data Flow
 
 ```text
-Benchmark.Event.Stream
+Benchmark.Event.Stream records (one host process per step)
   -> ReportRecorder / ReportBuilder
   -> ReportDocument
-  -> baseline / budget / diff / check
+  -> baseline / budget / diff / check, warnings
   -> CLI / plugin / Testing / XCTest / agent outputs
 ```
 
 ## Stable Truth
 
-The stable machine contract is `ReportDocument: Codable` JSON.
+The stable machine contract is `ReportDocument: Codable` JSON. It carries no
+schema version: a document or baseline from a release with another shape fails
+to decode and is regenerated.
 
 `ReportDocument` owns:
 
-- schema version,
 - run metadata,
-- suite/case identities,
-- source locations,
-- raw samples,
-- `Report.Measurement` projections,
-- `Report.Measurement.Row.metrics`,
+- suite/case identities and source locations,
+- raw samples with batch sizes and per-call values of each metric,
+- `Report.Measurement` rows with per-metric statistics,
 - `Report.DimensionCurve` records,
-- baseline comparison,
-- single-run budget comparison,
-- threshold verdict,
-- diagnostics metrics,
+- baseline and budget comparisons per row and metric,
+- structured verdict causes,
+- run and case warnings,
 - timeline attribution,
-- attachments,
-- structured verdict causes.
+- trace attachments.
 
-Console output is a workflow convenience. Markdown, HTML, CSV, JMH, Influx,
-HDR, and non-core result formats are not core Swift library contracts.
+Console output is a workflow convenience. HTML, CSV, Markdown and other result
+formats are not Swift library contracts.
 
 ## Live Stream Relationship
 
-`Benchmark.Event.Stream` is a live protocol for progress, tools, and adapters.
-It is not a replacement for `ReportDocument`.
-
-The stream can feed:
-
-- console progress,
-- Swift Testing/XCTest adapters,
-- live agent/tool observation,
-- `ReportRecorder`,
-- `ReportBuilder`.
-
-The final `ReportDocument` is the artifact used for baseline, diff, check, CI
-verdicts, and long-lived storage.
+`Benchmark.Event.Stream` is the live protocol for progress, tools and adapters,
+and the input `ReportBuilder` builds documents from. It is not a replacement for
+`ReportDocument`. The final document is the artifact used for baselines, diff,
+check, CI verdicts and long-lived storage.
 
 ## Baseline, Budget, Diff, Check
 
 Report owns comparison policy:
 
-- versioned baseline documents,
-- per-suite/per-case/per-metric thresholds,
-- `Report.Measurement.Metric` selectors such as mean, median, p90, p95, and
-  p99,
-- absolute budgets,
-- relative budgets,
-- single-run budgets without a saved baseline,
+- baseline documents written from reports,
+- the statistic comparisons use, median by default,
+- a default threshold and per-metric thresholds, relative or absolute,
+- budgets on one statistic of one metric, for every case or one case,
+- per-row comparison of argument rows and Dimension sizes,
+- direction-aware regressions,
 - structured verdict causes,
-- regression exit-code input for CLI/plugin.
+- regression exit-code input for the CLI and plugin.
+
+The CLI applies the policy to measurements from host processes and to saved
+reports alike, and refuses to check a debug build without `--allow-debug`.
 
 ## Attachments
 
-Report attachments are structured data, not presentation strings.
-
-Attachment examples:
-
-- trace artifacts,
-- exported `xctrace` metadata,
-- future MetricKit payload references,
-- memory and allocation measurements,
-- agent/tool presentation assets.
-
-Swift Testing `Issue` and `Attachment` are adapter sinks only. They do not
-become Report truth.
+Report attachments are structured data, not presentation strings: trace
+artifacts with their recording command and tool metadata. Swift Testing
+`Issue` and `Attachment` are adapter sinks only; they do not become Report
+truth.
 
 ## Acceptance Checks
 
-- JSON schema fixture compatibility tests.
-- Baseline read/write/update/check/diff tests.
-- Budget tests without baselines.
-- `Report.Measurement.Metric` selector tests for mean/median/p90/p95/p99.
-- Event-to-report tests.
-- Attachment provenance tests.
-- CLI regression verdict and exit-code tests.
+- JSON fixture round-trip and typed verdict causes (`ReportDocumentTests`).
+- Baseline read errors, write/update/check/diff flows (`ReportWarningTests`,
+  package workflow tests).
+- Budgets without baselines and per-metric thresholds
+  (`ReportComparisonTests`, `ComparisonArgumentsTests`).
+- Event-to-report equivalence (`ReportDocumentTests`, `BenchmarkHostTests`).
+- Trace attachment provenance (`AppleDiagnosticsTests`, `BenchmarkHostTests`).
+- CLI regression verdicts and exit codes (package workflow tests).
