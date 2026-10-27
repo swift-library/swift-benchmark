@@ -326,8 +326,9 @@ so the timing process never loads it. On Linux the same counting process also
 records the Swift counts, for the calls compiled code makes into the runtime.
 Outside the counting process, such as in tests, the heap metrics are left out,
 and on Linux the Swift counts too. The Linux interposer replaces glibc's
-allocator, so on a system built on another C library, such as musl, the counting
-process records no heap metrics and the run fails. A counting process counts
+allocator, so on a system built on another C library, such as musl, the plugin
+measures each step in one process without heap metrics, and a library passed
+with `--interposer` there fails the run. A counting process counts
 allocations as the build produces them, so a debug build can count more than a
 release build.
 

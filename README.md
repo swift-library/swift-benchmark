@@ -104,7 +104,7 @@ The [usage manual](Documentation/UsageManual.md) covers native and Swift Testing
 
 - Swift 6.3 or later; Swift 6.0 through 6.2 use 0.1.x
 - iOS 18 or later, macOS 15 or later
-- Linux with glibc, for the libraries and the command plugin
+- Linux, for the libraries and the command plugin; heap counting there needs glibc
 - With Swift 6.3 (Xcode 26), run the command plugin as
   `swift package --disable-experimental-prebuilts benchmark ...`. SwiftPM 6.3
   cannot build the plugin's SwiftSyntax tool beside macros that use SwiftSyntax

@@ -116,9 +116,12 @@ Apple platforms, where it replaces `malloc` and its relatives, the
 dyld interposing, and with `LD_PRELOAD` on Linux, where it defines glibc's
 allocation functions and forwards to glibc's `__libc_*` implementations. Every
 allocation in the process passes through it, from C, C++, Objective-C and the
-Swift runtime. Its replacements cost time on every call even while not
-counting, which is why only the counting process loads it and timing never
-runs with it.
+Swift runtime. The exception is `malloc_zone_malloc_with_options` and its typed
+variant on Apple platforms: they exist only from macOS 26, above the package's
+deployment floor, so the interposer leaves them alone; the Swift runtime,
+Foundation and the C allocation functions do not route through them. The
+replacements cost time on every call even while not counting, which is why only
+the counting process loads the interposer and timing never runs with it.
 
 libmalloc's entry points call one another through their exported symbols,
 which interposing replaces too, so one allocation can pass through several
