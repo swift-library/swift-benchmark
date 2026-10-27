@@ -6,9 +6,13 @@ import SwiftSyntaxMacros
 import SwiftSyntaxMacrosGenericTestSupport
 import Testing
 
+/// A diagnostic an expansion is expected to emit.
+public typealias MacroDiagnostic = DiagnosticSpec
+
 public func assertMacroExpansion(
   _ source: String,
   expandedSource: String,
+  diagnostics: [MacroDiagnostic] = [],
   macros: [String: Macro.Type],
   fileID: StaticString = #fileID,
   filePath: StaticString = #filePath,
@@ -18,6 +22,7 @@ public func assertMacroExpansion(
   SwiftSyntaxMacrosGenericTestSupport.assertMacroExpansion(
     source,
     expandedSource: expandedSource,
+    diagnostics: diagnostics,
     macroSpecs: macros.mapValues { MacroSpec(type: $0) },
     indentationWidth: .spaces(2),
     failureHandler: { failure in

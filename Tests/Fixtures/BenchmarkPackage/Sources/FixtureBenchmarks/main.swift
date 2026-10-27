@@ -2,6 +2,7 @@
 // Copyright (c) 2020-present Xudong Xu
 
 import Benchmark
+import Foundation
 import Report
 
 @BenchmarkSuite("Fixture")
@@ -21,6 +22,41 @@ struct FixtureBenchmarks {
     for _ in 0..<1_000 {
       blackHole(AllocationProbe())
     }
+  }
+
+  @Benchmark("Leak16Bytes")
+  func leak16Bytes() {
+    blackHole(UnsafeMutableRawPointer.allocate(byteCount: 16, alignment: 8))
+  }
+
+  @Benchmark("SetupAllocates", setup: Self.makeProbe)
+  func setupAllocates(_ probe: inout AllocationProbe) {
+    probe.value += 1
+  }
+
+  static func makeProbe() -> AllocationProbe {
+    AllocationProbe()
+  }
+
+  /// Four blocks from the Darwin zone's batch allocator; nothing elsewhere.
+  @Benchmark("BatchMalloc")
+  func batchMalloc() {
+    #if canImport(Darwin)
+      withUnsafeTemporaryAllocation(of: UnsafeMutableRawPointer?.self, capacity: 4) { blocks in
+        let zone = malloc_default_zone()
+        let allocated = malloc_zone_batch_malloc(zone, 16, blocks.baseAddress, 4)
+        malloc_zone_batch_free(zone, blocks.baseAddress, allocated)
+      }
+    #endif
+  }
+
+  @Benchmark("RunTrue")
+  func runTrue() throws {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+    try process.run()
+    process.waitUntilExit()
+    precondition(process.terminationStatus == 0)
   }
 
   @Benchmark("Touch64MiB")

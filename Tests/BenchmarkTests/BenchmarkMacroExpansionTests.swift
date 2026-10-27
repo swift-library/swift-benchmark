@@ -57,6 +57,145 @@ struct BenchmarkMacroExpansionTests {
     )
   }
 
+  // `sort` writes `inout` and its type on separate lines, because setup
+  // recognizes the parameter from the syntax tree, not from its text.
+  @Test
+  func benchmarkSuiteLowersSetupIntoPerCallInputs() {
+    assertMacroExpansion(
+      """
+      @BenchmarkSuite("Sorting")
+      struct SortingBenchmarks {
+        @Benchmark("Sort", setup: Self.shuffled)
+        func sort(_ values: inout
+          [Int]) {
+          values.sort()
+        }
+
+        @Benchmark("Sort sized", .dimension(sizes: [10, 100]), setup: Self.shuffled(_:))
+        static func sortSized(values: inout [Int]) throws {
+          values.sort()
+        }
+      }
+      """,
+      expandedSource: """
+
+        struct SortingBenchmarks {
+          func sort(_ values: inout
+            [Int]) {
+            values.sort()
+          }
+          static func sortSized(values: inout [Int]) throws {
+            values.sort()
+          }
+
+          public static var __benchmarkSuites: [BenchmarkSuite] {
+            [
+              BenchmarkSuite("Sorting", traits: []) {
+              Benchmark("Sort", traits: [], setup: Self.shuffled) { values in
+                Self().sort(&values)
+              }
+              Benchmark("Sort sized", dimension: Benchmark.Dimension(sizes: [10, 100]), traits: [.dimension(sizes: [10, 100])], setup: Self.shuffled(_:)) { values in
+                try Self.sortSized(values: &values)
+              }
+                }
+            ]
+          }
+        }
+
+        public enum __BenchmarkDiscovery_SortingBenchmarks: _BenchmarkDiscovery {
+          public static var __benchmarkSuites: [BenchmarkSuite] {
+            SortingBenchmarks.__benchmarkSuites
+          }
+        }
+
+        extension SortingBenchmarks: _BenchmarkDiscovery {
+        }
+        """,
+      macros: macros
+    )
+  }
+
+  @Test
+  func setupWithoutOneInoutParameterIsAnError() {
+    assertMacroExpansion(
+      """
+      @BenchmarkSuite("Sorting")
+      struct SortingBenchmarks {
+        @Benchmark("Sort", setup: Self.shuffled)
+        func sort(_ values: [Int]) {}
+      }
+      """,
+      expandedSource: """
+
+        struct SortingBenchmarks {
+          func sort(_ values: [Int]) {}
+
+          public static var __benchmarkSuites: [BenchmarkSuite] {
+            [
+              BenchmarkSuite("Sorting", traits: []) {
+              }
+            ]
+          }
+        }
+
+        public enum __BenchmarkDiscovery_SortingBenchmarks: _BenchmarkDiscovery {
+          public static var __benchmarkSuites: [BenchmarkSuite] {
+            SortingBenchmarks.__benchmarkSuites
+          }
+        }
+
+        extension SortingBenchmarks: _BenchmarkDiscovery {
+        }
+        """,
+      diagnostics: [
+        MacroDiagnostic(
+          message: "@Benchmark 'sort' with setup: must take its input as one inout parameter.",
+          line: 3, column: 3)
+      ],
+      macros: macros
+    )
+  }
+
+  @Test
+  func setupCannotCombineWithArguments() {
+    assertMacroExpansion(
+      """
+      @BenchmarkSuite("Sorting")
+      struct SortingBenchmarks {
+        @Benchmark("Sort", setup: Self.shuffled, arguments: [1, 2])
+        func sort(_ values: inout [Int]) {}
+      }
+      """,
+      expandedSource: """
+
+        struct SortingBenchmarks {
+          func sort(_ values: inout [Int]) {}
+
+          public static var __benchmarkSuites: [BenchmarkSuite] {
+            [
+              BenchmarkSuite("Sorting", traits: []) {
+              }
+            ]
+          }
+        }
+
+        public enum __BenchmarkDiscovery_SortingBenchmarks: _BenchmarkDiscovery {
+          public static var __benchmarkSuites: [BenchmarkSuite] {
+            SortingBenchmarks.__benchmarkSuites
+          }
+        }
+
+        extension SortingBenchmarks: _BenchmarkDiscovery {
+        }
+        """,
+      diagnostics: [
+        MacroDiagnostic(
+          message: "@Benchmark 'sort' cannot combine setup: with arguments:.", line: 3, column: 3)
+      ],
+      macros: macros
+    )
+  }
+
   @Test
   func benchmarkSuiteLowersTraitsIntoDiscoverySuites() {
     assertMacroExpansion(

@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/swift-library/swift-benchmark/actions/workflows/ci.yml"><img src="https://github.com/swift-library/swift-benchmark/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
   <img src="https://img.shields.io/badge/Swift-6.3%2B-F05138?style=flat" alt="Swift 6.3+">
-  <img src="https://img.shields.io/badge/platforms-iOS%2018%2B%20%7C%20macOS%2015%2B-lightgrey?style=flat" alt="Platforms: iOS 18+ | macOS 15+">
+  <img src="https://img.shields.io/badge/platforms-iOS%2018%2B%20%7C%20macOS%2015%2B%20%7C%20Linux-lightgrey?style=flat" alt="Platforms: iOS 18+ | macOS 15+ | Linux">
   <a href="LICENSE.txt"><img src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat" alt="License: Apache-2.0 WITH Swift-exception"></a>
 </p>
 
@@ -32,7 +32,7 @@
 
 ## Overview
 
-Each benchmark step is timed for wall-clock and CPU time, then counted for Swift allocations, retains and releases on Apple platforms. The package workflow measures each step in a process of its own, which also records the step's peak memory, and short workloads are timed in calibrated batches. Choose the metric and statistic that define a regression and compare runs with a saved baseline: a p95 budget can fail even when the median passes, the report records a typed verdict for CI, and it warns when a comparison is unreliable, such as a debug build, a baseline from another machine, or samples too noisy for the threshold. The [usage manual](Documentation/UsageManual.md) covers measurement policies, instrumentation, and platform limits.
+Each benchmark step is timed in calibrated batches for wall-clock and CPU time, instructions and cycles, then counted. The package workflow measures each step in a process of its own, which records its peak memory, and counts it in a second process that sees every heap allocation, from Swift, C, C++ and Objective-C, and can show where they come from, alongside Swift retains and releases. Choose the metric and statistic that define a regression and compare runs with a saved baseline: a change fails only past its threshold and beyond what noise explains, a p95 budget can fail even when the median passes, the report records a typed verdict for CI and a Markdown summary for pull requests, and it warns when a comparison is unreliable, such as a debug build, a baseline from another machine, outliers, or samples too noisy for the threshold. The [usage manual](Documentation/UsageManual.md) covers measurement policies, instrumentation, and platform limits.
 
 ## Quick look
 
@@ -58,7 +58,7 @@ Add the package and the products you use to `Package.swift`:
 dependencies: [
   .package(
     url: "https://github.com/swift-library/swift-benchmark.git",
-    .upToNextMinor(from: "0.2.0")
+    .upToNextMinor(from: "0.3.0")
   ),
 ],
 targets: [
@@ -104,6 +104,7 @@ The [usage manual](Documentation/UsageManual.md) covers native and Swift Testing
 
 - Swift 6.3 or later; Swift 6.0 through 6.2 use 0.1.x
 - iOS 18 or later, macOS 15 or later
+- Linux, for the libraries and the command plugin; heap counting there needs glibc
 - With Swift 6.3 (Xcode 26), run the command plugin as
   `swift package --disable-experimental-prebuilts benchmark ...`. SwiftPM 6.3
   cannot build the plugin's SwiftSyntax tool beside macros that use SwiftSyntax

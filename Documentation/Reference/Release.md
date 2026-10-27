@@ -22,7 +22,8 @@ restate those rules.
 Compatibility includes public Swift APIs and macros, discovery and plugin
 behavior, CLI options and exit codes, Report JSON, and compiler/platform requirements.
 
-Core APIs compile for the declared Apple platforms and on Linux. Xctrace
+Core APIs compile for the declared Apple platforms and on Linux, and the
+command plugin's package workflow runs on macOS and Linux. Xctrace
 orchestration uses a desktop host; other platforms receive a
 command-unavailable result from the default process runner. Portable recording
 fallbacks retain their documented behavior, and metrics a platform cannot
@@ -34,6 +35,7 @@ measure are absent from samples rather than zero.
 | --- | --- | --- |
 | 0.1.x | Swift tools 6.0 or later | iOS 18, macOS 15 or later |
 | 0.2.x | Swift 6.3 or later | iOS 18, macOS 15 or later |
+| 0.3.x | Swift 6.3 or later | iOS 18, macOS 15 or later; Linux |
 
 Toolchains older than a release's minimum use the newest release that supports
 them.
@@ -45,8 +47,7 @@ Shared CI tests and builds release with two compilers: the minimum, Xcode
 the `xcode-27` runner. Xcode 27.1, the last entry, also builds the
 documentation, builds Report, BenchmarkTesting and BenchmarkXCTest for generic
 iOS, and runs the CLI/plugin version command. A Swift 6.3 Linux image tests the
-package; the command plugin workflow is Apple-only, so its tests are skipped
-there. The latest SDKs check API availability against the deployment floors at
+package, including the command plugin workflow. The latest SDKs check API availability against the deployment floors at
 compile time; CI does not run on older systems.
 
 ## Validation

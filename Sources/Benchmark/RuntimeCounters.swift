@@ -118,11 +118,11 @@ enum RuntimeCounters {
     let originalReleaseN: ReleaseNFunction
 
     init?() {
-      guard let allocObject = Self.symbol("_swift_allocObject"),
-        let retain = Self.symbol("_swift_retain"),
-        let release = Self.symbol("_swift_release"),
-        let retainN = Self.symbol("_swift_retain_n"),
-        let releaseN = Self.symbol("_swift_release_n")
+      guard let allocObject = dynamicSymbol("_swift_allocObject"),
+        let retain = dynamicSymbol("_swift_retain"),
+        let release = dynamicSymbol("_swift_release"),
+        let retainN = dynamicSymbol("_swift_retain_n"),
+        let releaseN = dynamicSymbol("_swift_release_n")
       else {
         return nil
       }
@@ -131,7 +131,7 @@ enum RuntimeCounters {
       self.release = release.assumingMemoryBound(to: ReleaseFunction.self)
       self.retainN = retainN.assumingMemoryBound(to: RetainNFunction.self)
       self.releaseN = releaseN.assumingMemoryBound(to: ReleaseNFunction.self)
-      self.swizzlingFlag = Self.symbol(
+      self.swizzlingFlag = dynamicSymbol(
         "_swift_enableSwizzlingOfAllocationAndRefCountingFunctions_forInstrumentsOnly")
       self.originalSwizzlingFlag = self.swizzlingFlag?.load(as: UInt8.self)
       self.originalAllocObject = self.allocObject.pointee
@@ -168,11 +168,6 @@ enum RuntimeCounters {
         return
       }
       swizzlingFlag.storeBytes(of: originalSwizzlingFlag, as: UInt8.self)
-    }
-
-    private static func symbol(_ name: String) -> UnsafeMutableRawPointer? {
-      // RTLD_DEFAULT
-      dlsym(UnsafeMutableRawPointer(bitPattern: -2), name)
     }
   }
 

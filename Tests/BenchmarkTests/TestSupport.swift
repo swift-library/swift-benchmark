@@ -33,7 +33,9 @@ private final class StepClockState: @unchecked Sendable {
 /// A runner whose every sample measures `step` nanoseconds of wall-clock time
 /// and nothing else.
 func exactRunner(step: UInt64) -> BenchmarkRunner {
-  BenchmarkRunner(clock: StepClock(step: step), cpuClock: nil, countsAllocations: false)
+  BenchmarkRunner(
+    clock: StepClock(step: step), cpuClock: nil, countsProcessEvents: false,
+    countsAllocations: false)
 }
 
 final class Counter: @unchecked Sendable {

@@ -54,17 +54,22 @@ The public model:
   verdict causes and case warnings.
 - `Report.Measurement` and `Report.Measurement.Row`: the Codable projection of
   `Benchmark.Measurement`; each row has its size or argument row identity, raw
-  `SampleReport`s, the metrics it measured, and recomputed statistics.
+  `SampleReport`s, the metrics it measured, recomputed statistics and, when
+  recorded, its `Benchmark.AllocationSites`.
 - `Report.Statistics` and `Report.Statistic`: count, min, max, mean, median,
-  standard deviation, p90, p95 and p99 of one metric, and the selector for one
-  of them.
-- `Report.DimensionCurve`: one statistic of one metric across a case's sizes,
-  with amortized per-unit values.
+  standard deviation, p90, p95, p99 and mild and severe outlier counts of one
+  metric, and the selector for one of them.
+- `Report.DimensionCurve` and `Report.Complexity`: one statistic of one metric
+  across a case's sizes, with amortized per-unit values and the growth model
+  that best fits them.
+- `Report.ConfidenceInterval`: the range that holds a comparison's difference
+  with a stated confidence.
 - `ComparisonPolicy`, `ThresholdPolicy` and `BudgetPolicy`: the statistic,
   default and per-metric thresholds, and budgets a comparison applies.
 - `BaselineDocument` and `BaselineCase`: the measurements of an earlier run.
 - `BaselineComparison` and `BudgetComparison`: the result of comparing one
-  metric of one row.
+  metric of one row; a baseline comparison carries its confidence interval
+  and significance.
 - `ReportVerdict` and `ReportVerdictCause`: typed verdicts and their causes,
   naming the metric, statistic, row, actual and expected values.
 - `ReportWarning`: conditions that make comparisons less trustworthy.
@@ -105,12 +110,28 @@ the order the steps ran, and one builder produces the document.
 ## Comparison
 
 Comparisons are made per row: each argument row or Dimension size of a case is
-compared with the row of the baseline case that has the same identity. Every
+compared with the row of the baseline case that has the same identity. Each
 metric both rows measured is compared using the policy's statistic, median by
-default. A metric regresses when it moves past its threshold, 10% by default,
-in its worse direction, which the measured metric's direction decides.
-Thresholds are relative percentages or absolute amounts in the metric's unit
-and can differ per metric.
+default, when its `Benchmark.Metric.isComparedByDefault` is set or a threshold
+names it. Context switches, page faults, system calls and disk bytes have it
+unset, so they stay in the rows' values but get no comparison unless named. A metric regresses when it moves past its threshold,
+10% by default, in its worse direction, which the measured metric's direction
+decides, and the change is significant. Thresholds are relative percentages or
+absolute amounts in the metric's unit and can differ per metric.
+
+Significance comes from a bootstrap confidence interval of the difference
+between the two rows' statistics at 95%: 1,000 resamples of each side's values
+with replacement, seeded from the suite, case, row, metric and statistic so the
+same values always give the same interval. A change whose interval includes
+zero can be noise and passes. A side with fewer than two values, as a counting
+metric has, gets no interval, and the threshold alone judges it; values that
+never vary give an interval of the difference itself, so deterministic metrics
+are judged by the threshold too.
+
+A case with three or more Dimension sizes gets a complexity fit on each curve:
+every model from O(1) to O(n³) is fitted by least squares as
+`value ≈ coefficient × f(size)`, and the model with the smallest root-mean-square
+error relative to the mean value wins.
 
 Budgets limit one statistic of one metric, for every case or for one case. The
 limit is in the measured metric's unit; it is an upper bound for metrics where
@@ -120,17 +141,23 @@ on a metric the row did not measure is not compared.
 Warnings never change a verdict. The run warns when it measured a debug build
 and when its baseline was recorded under different platform, OS version,
 architecture, device model, Swift version or build configuration. A compared
-row warns when it has fewer than five timed samples and when a compared
-metric's spread, in the row or its baseline row, reaches the threshold: the
+row warns when it has fewer than five timed samples, when a compared
+metric's spread, in the row or its baseline row, reaches the threshold (the
 coefficient of variation for a relative threshold, the standard deviation for
-an absolute one.
+an absolute one), and when at least a tenth of a compared metric's values, out
+of five or more, are severe outliers. Outliers follow Tukey's fences, 1.5 and 3
+interquartile ranges outside the quartiles, with the range counted as at least
+1% of the median so values a clock step apart are not outliers.
 
 ## Output And Renderer Boundary
 
 `ReportDocument: Codable` JSON is the stable exchange contract for machines,
-agents and CI. Report also renders the console summary and speedscope
-timeline exports for the CLI; those renderers are package-internal, read the
-same document and add no facts of their own. Markdown, HTML, CSV and other
+agents and CI. Report also renders the console summary, a Markdown summary for
+pull request comments and speedscope exports for the CLI, with timelines as
+evented profiles and allocation sites as sampled profiles weighted by
+allocations and by bytes per call; those
+renderers are package-internal, read the same document and add no facts of
+their own, and their layout is not a contract. HTML, CSV and other
 presentations belong in templates or tools over the JSON, not in Report.
 
 ## Host Boundary
@@ -185,8 +212,13 @@ Report satisfies its scope when:
   (`BenchmarkHostTests`);
 - comparisons are per row, per metric and direction-aware, and budgets follow
   the measured metric's direction (`ReportComparisonTests`);
-- warnings cover debug builds, run-condition mismatches, few samples and noise
-  (`ReportWarningTests`);
+- a change that noise can explain passes, a significant one past its threshold
+  fails, single values are judged by the threshold, intervals repeat for the
+  same values, outliers follow Tukey's fences, complexity fits find each
+  growth model, and the Markdown summary lists comparisons
+  (`ReportStatisticsTests`);
+- warnings cover debug builds, run-condition mismatches, few samples, noise
+  and outliers (`ReportWarningTests`, `ReportStatisticsTests`);
 - timeline attribution links samples to span/event hierarchies
   (`TimelineCorrelationTests`, `BenchmarkCommandTests`);
 - CLI check, diff and baseline flows use Report documents and documented exit

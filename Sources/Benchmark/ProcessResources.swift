@@ -26,7 +26,8 @@ public struct ProcessCPUClock: BenchmarkClock {
   }
 }
 
-private enum ResourceUsage {
+/// The process's `getrusage` counters.
+enum ResourceUsage {
   static func current() -> rusage {
     #if canImport(Darwin)
       let who = RUSAGE_SELF

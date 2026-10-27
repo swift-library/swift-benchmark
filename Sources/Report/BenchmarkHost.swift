@@ -59,6 +59,40 @@ package struct HostMeasurement: Sendable, Codable {
     self.records = records
     self.attributions = attributions
   }
+
+  /// The batch size of the last timed sample of the step `stepID`.
+  package func timedBatchSize(ofStep stepID: String) -> Int? {
+    records.last {
+      $0.kind == .sampleRecorded && $0.context.stepID == stepID
+        && $0.context.phase?.hasPrefix("measurement") == true
+    }?.context.batchSize
+  }
+
+  /// Adds the samples that a counting process recorded for the step
+  /// `stepID` to this measurement's row of that step, numbered after the
+  /// row's own samples.
+  package mutating func insertCountingSamples(
+    ofStep stepID: String, from counting: HostMeasurement
+  ) {
+    let rowEnd =
+      records.lastIndex {
+        $0.kind == .dimensionRowEnded && $0.context.stepID == stepID
+      } ?? records.endIndex
+    var nextIteration =
+      records[..<rowEnd].compactMap { record in
+        record.kind == .sampleRecorded && record.context.stepID == stepID
+          ? record.context.iteration : nil
+      }.max().map { $0 + 1 } ?? 0
+    let samples = counting.records.filter {
+      $0.kind == .sampleRecorded && $0.context.stepID == stepID
+    }.map { record in
+      var record = record
+      record.context.iteration = nextIteration
+      nextIteration += 1
+      return record
+    }
+    records.insert(contentsOf: samples, at: rowEnd)
+  }
 }
 
 /// The executable the package workflow measures in.
@@ -68,7 +102,9 @@ package struct HostMeasurement: Sendable, Codable {
 /// ``run(discoveries:arguments:metadata:)`` from that executable's `main`
 /// and pass the executable to the CLI with `--host`. The CLI asks the host
 /// for its plan, then measures each step in a host process of its own;
-/// comparison, gating and rendering stay in the CLI.
+/// comparison, gating and rendering stay in the CLI. Given the interposer
+/// library, the CLI measures each step in two processes: one times the step
+/// without counting, and one loaded with the library counts its allocations.
 public enum BenchmarkHost {
   /// Answers the CLI's request in `arguments` for the benchmarks that
   /// `discoveries` declare. Errors are written to standard error and exit
@@ -147,11 +183,20 @@ public enum BenchmarkHost {
       if options.isolated, plan.steps.count != 1 {
         throw BenchmarkHostError.isolatedSelection(plan.steps.map(\.id))
       }
+      if options.timingOnly, options.countingOnly {
+        throw BenchmarkHostError.conflictingOptions("--timing-only", "--counting-only")
+      }
+      var runner = BenchmarkRunner(
+        countsAllocations: !options.timingOnly,
+        recordsPeakMemory: options.isolated && !options.countingOnly
+      )
+      runner.countsOnly = options.countingOnly
+      runner.recordsAllocationSites = options.recordsAllocationSites
       let measurement = try await measure(
         plan,
+        runner: runner,
         metadata: metadata,
-        capturesTimeline: options.capturesTimeline,
-        isolated: options.isolated
+        capturesTimeline: options.capturesTimeline
       )
       return (try encoder.encode(measurement), options.outputPath)
     default:
@@ -161,13 +206,13 @@ public enum BenchmarkHost {
 
   private static func measure(
     _ plan: BenchmarkRunner.Plan,
+    runner: BenchmarkRunner,
     metadata: RunMetadata,
-    capturesTimeline: Bool,
-    isolated: Bool
+    capturesTimeline: Bool
   ) async throws -> HostMeasurement {
     let timelineObserver = capturesTimeline ? BenchmarkTimelineObserver() : nil
     let events = Benchmark.Event.InMemoryRecorder()
-    let results = try await BenchmarkRunner(recordsPeakMemory: isolated).run(
+    let results = try await runner.run(
       plan,
       observers: timelineObserver.map { [$0] } ?? [],
       eventRecorders: [events]
@@ -190,6 +235,8 @@ package enum BenchmarkHostError: Error, CustomStringConvertible {
   case unknownStep(String)
   /// `--isolated` selected these steps instead of exactly one.
   case isolatedSelection([String])
+  /// Two options that cannot be combined.
+  case conflictingOptions(String, String)
   case noBenchmarksSelected
 
   package var description: String {
@@ -207,6 +254,8 @@ package enum BenchmarkHostError: Error, CustomStringConvertible {
     case .isolatedSelection(let ids):
       return
         "--isolated measures exactly one step, but the selection has \(ids.count): \(ids.joined(separator: ", "))."
+    case .conflictingOptions(let first, let second):
+      return "\(first) cannot be combined with \(second)."
     case .noBenchmarksSelected:
       return "No benchmarks matched the requested filters."
     }
@@ -216,7 +265,10 @@ package enum BenchmarkHostError: Error, CustomStringConvertible {
 /// The host's arguments: step selection, configuration overrides, and where
 /// to write the output.
 private struct BenchmarkHostOptions {
-  private static let flags: Set<String> = ["--adaptive", "--isolated", "--timeline"]
+  private static let flags: Set<String> = [
+    "--adaptive", "--isolated", "--timeline", "--timing-only", "--counting-only",
+    "--allocation-sites",
+  ]
   private static let valueOptions: Set<String> = [
     "--suite", "--case", "--tag", "--step", "--output",
     "--warmup", "--iterations", "--batch-size",
@@ -259,6 +311,21 @@ private struct BenchmarkHostOptions {
   /// makes its peak memory attributable to that step.
   var isolated: Bool {
     flags.contains("--isolated")
+  }
+
+  /// Whether this process times the steps without counting allocations.
+  var timingOnly: Bool {
+    flags.contains("--timing-only")
+  }
+
+  /// Whether this process only counts the steps' allocations.
+  var countingOnly: Bool {
+    flags.contains("--counting-only")
+  }
+
+  /// Whether counting records where allocations come from.
+  var recordsAllocationSites: Bool {
+    flags.contains("--allocation-sites")
   }
 
   func plan(discoveries: [any _BenchmarkDiscovery.Type]) throws -> BenchmarkRunner.Plan {

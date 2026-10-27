@@ -27,8 +27,9 @@ extension Benchmark {
   ///
   /// Values recorded during one sample are summed and divided by the sample's
   /// batch size, like the built-in metrics. The call does nothing outside a
-  /// measured sample and for the names of ``Metric/builtIn`` metrics, which
-  /// the runner measures itself.
+  /// measured sample, while per-call `setup` runs or its inputs are freed,
+  /// and for the names of ``Metric/builtIn`` metrics, which the runner
+  /// measures itself.
   public static func record(_ value: Double, for metric: Metric) {
     CustomMetricRecorder.current?.add(value, for: metric)
   }

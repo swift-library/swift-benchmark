@@ -52,6 +52,8 @@ extension Benchmark.Event {
     /// The case's batching policy, described as text.
     public var configurationBatching: String?
     public var message: String?
+    /// Where a counting sample's heap allocations came from, when recorded.
+    public var allocationSites: Benchmark.AllocationSites?
 
     public init(
       suiteName: String? = nil,
@@ -70,7 +72,8 @@ extension Benchmark.Event {
       configurationWarmup: String? = nil,
       configurationIterations: String? = nil,
       configurationBatching: String? = nil,
-      message: String? = nil
+      message: String? = nil,
+      allocationSites: Benchmark.AllocationSites? = nil
     ) {
       self.suiteName = suiteName
       self.caseName = caseName
@@ -89,6 +92,7 @@ extension Benchmark.Event {
       self.configurationIterations = configurationIterations
       self.configurationBatching = configurationBatching
       self.message = message
+      self.allocationSites = allocationSites
     }
 
     init(
@@ -96,7 +100,8 @@ extension Benchmark.Event {
       iteration: Int? = nil,
       phase: BenchmarkPhase? = nil,
       sample: Sample? = nil,
-      message: String? = nil
+      message: String? = nil,
+      allocationSites: Benchmark.AllocationSites? = nil
     ) {
       let metrics = sample.map { $0.values.keys.sorted { $0.name < $1.name } } ?? []
       self.init(
@@ -117,7 +122,8 @@ extension Benchmark.Event {
         configurationWarmup: String(describing: step.configuration.warmup),
         configurationIterations: String(describing: step.configuration.iterations),
         configurationBatching: String(describing: step.configuration.batching),
-        message: message
+        message: message,
+        allocationSites: allocationSites
       )
     }
   }

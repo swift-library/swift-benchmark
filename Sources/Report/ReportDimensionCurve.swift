@@ -12,19 +12,24 @@ extension Report {
     /// The statistic the curve plots at each size.
     public var statistic: Statistic
     public var points: [Point]
+    /// The growth model that best fits the points, or `nil` with fewer than
+    /// three sizes.
+    public var complexity: Complexity?
 
     public init(
       id: ReportID,
       scope: ReportScope,
       metric: Benchmark.Metric,
       statistic: Statistic,
-      points: [Point]
+      points: [Point],
+      complexity: Complexity? = nil
     ) {
       self.id = id
       self.scope = scope
       self.metric = metric
       self.statistic = statistic
       self.points = points
+      self.complexity = complexity
     }
   }
 }
@@ -79,6 +84,19 @@ extension Report.DimensionCurve {
           metric: metric,
           statistic: statistic
         )
+        let points = rows.compactMap { row -> Point? in
+          guard let size = row.size, let statistics = row.statistics(for: metric) else {
+            return nil
+          }
+          let value = statistic.value(from: statistics)
+          return Point(
+            size: size,
+            value: value,
+            amortizedPerUnit: Benchmark.Dimension.amortized(value, by: size),
+            sampleCount: statistics.count,
+            sourceLocation: sourceLocation
+          )
+        }
         return Report.DimensionCurve(
           id: curveID,
           scope: ReportScope(
@@ -89,19 +107,9 @@ extension Report.DimensionCurve {
           ),
           metric: metric,
           statistic: statistic,
-          points: rows.compactMap { row in
-            guard let size = row.size, let statistics = row.statistics(for: metric) else {
-              return nil
-            }
-            let value = statistic.value(from: statistics)
-            return Point(
-              size: size,
-              value: value,
-              amortizedPerUnit: Benchmark.Dimension.amortized(value, by: size),
-              sampleCount: statistics.count,
-              sourceLocation: sourceLocation
-            )
-          }
+          points: points,
+          complexity: Report.Complexity.fit(
+            points.map { (size: Double($0.size.rawValue), value: $0.value) })
         )
       }
     }

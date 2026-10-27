@@ -17,6 +17,9 @@ public struct ReportWarning: Sendable, Equatable, Codable {
     case noisyComparison
     /// A compared case has fewer timed samples than a stable comparison needs.
     case fewSamples
+    /// A compared metric has many values far outside the rest, which
+    /// something outside the workload usually explains.
+    case outliers
   }
 
   /// The condition reported.
@@ -40,6 +43,10 @@ public struct ReportWarning: Sendable, Equatable, Codable {
 extension ReportWarning {
   /// The fewest timed samples a compared case should have.
   static let minimumTimedSamples = 5
+
+  /// The share of a compared metric's values that may be severe outliers
+  /// before the row warns.
+  static let severeOutlierShare = 0.1
 
   /// Warnings that apply to the whole run: a debug build, and a baseline
   /// recorded under different run conditions.
@@ -72,8 +79,9 @@ extension ReportWarning {
     return warnings
   }
 
-  /// Warnings for one compared row: too few timed samples, and comparisons
-  /// whose noise in this row or the same baseline row reaches their threshold.
+  /// Warnings for one compared row: too few timed samples, comparisons whose
+  /// noise in this row or the same baseline row reaches their threshold, and
+  /// compared metrics with many severe outliers.
   static func rowWarnings(
     scope: ReportScope,
     row: Report.Measurement.Row,
@@ -94,6 +102,20 @@ extension ReportWarning {
       )
     }
     for comparison in comparisons {
+      if let statistics = row.statistics(for: comparison.metric),
+        statistics.count >= minimumTimedSamples,
+        Double(statistics.severeOutliers) >= Double(statistics.count) * severeOutlierShare
+      {
+        warnings.append(
+          ReportWarning(
+            kind: .outliers,
+            scope: scope,
+            message:
+              "\(prefix)\(statistics.severeOutliers) of \(statistics.count) \(comparison.metric.name) values lie far outside the rest; something outside the workload may have disturbed the run.",
+            metric: comparison.metric
+          )
+        )
+      }
       let spreads = [
         row.statistics(for: comparison.metric),
         baselineRow?.statistics(for: comparison.metric),

@@ -75,6 +75,47 @@ struct CLIWorkflowTests {
   }
 
   @Test(.timeLimit(.minutes(3)))
+  func theInterposerCountsEachStepInASecondProcess() async throws {
+    let fake = try await FakeHost(buildConfiguration: "release")
+    defer { fake.remove() }
+
+    _ = try await runProcess(
+      executable: try cliPath(),
+      arguments: [
+        "run", "--host", fake.host.path, "--interposer", interposerPath(), "--iterations",
+        "3", "--format", "json",
+      ]
+    )
+    let measures = try fake.launches().dropFirst().map { $0.split(separator: " ") }
+
+    #expect(measures.count == 4)
+    for index in stride(from: 0, to: measures.count - 1, by: 2) {
+      let timing = measures[index]
+      let counting = measures[index + 1]
+      let batchSize = counting.lastIndex(of: "--batch-size").map { counting[$0 + 1] }
+      #expect(timing.contains("--timing-only"))
+      #expect(counting.contains("--counting-only"))
+      // The counting process calls the step in batches of the timed size.
+      #expect(batchSize == "1")
+      #expect(timing[2] == counting[2])
+    }
+  }
+
+  @Test(.timeLimit(.minutes(3)))
+  func anInterposerThatCountsNothingFailsTheRun() async throws {
+    let fake = try await FakeHost(buildConfiguration: "release", countsHeap: false)
+    defer { fake.remove() }
+
+    let run = try await processResult(
+      executable: try cliPath(),
+      arguments: ["run", "--host", fake.host.path, "--interposer", interposerPath()]
+    )
+
+    #expect(run.status == 2)
+    #expect(run.errorOutput.contains("counted no allocations"))
+  }
+
+  @Test(.timeLimit(.minutes(3)))
   func tracedCommandsMeasureEveryStepInOneHostProcess() async throws {
     let fake = try await FakeHost(buildConfiguration: "debug")
     defer { fake.remove() }
@@ -223,6 +264,61 @@ struct CLIWorkflowTests {
         ).utf8)
     ).suites.first?.cases.first?.measurement
 
+    // With the interposer, each step is also counted in a process that loads
+    // it, which counts every allocation through the system allocator.
+    func counted(_ caseName: String) async throws -> Report.Measurement? {
+      try await JSONDecoder().decode(
+        ReportDocument.self,
+        from: Data(
+          runProcess(
+            executable: cli,
+            arguments: [
+              "run", "--host", hostPath, "--interposer", interposerPath(), "--case", caseName,
+              "--warmup", "0", "--iterations", "1", "--format", "json",
+            ]
+          ).utf8)
+      ).suites.first?.cases.first?.measurement
+    }
+    let countedAllocations = try await counted("Allocate1000")
+    let leaked = try await counted("Leak16Bytes")
+    // A process the benchmark starts does not inherit the interposer.
+    let spawned = try await counted("RunTrue")
+    // Inputs from setup are made and freed outside the counted calls.
+    let prepared = try await counted("SetupAllocates")
+    let leakSites = try await JSONDecoder().decode(
+      ReportDocument.self,
+      from: Data(
+        runProcess(
+          executable: cli,
+          arguments: [
+            "run", "--host", hostPath, "--interposer", interposerPath(), "--allocation-sites",
+            "--case", "Leak16Bytes", "--warmup", "0", "--iterations", "1", "--format", "json",
+          ]
+        ).utf8)
+    ).suites.first?.cases.first?.measurement.rows.first?.allocationSites
+    let batchSites = try await JSONDecoder().decode(
+      ReportDocument.self,
+      from: Data(
+        runProcess(
+          executable: cli,
+          arguments: [
+            "run", "--host", hostPath, "--interposer", interposerPath(), "--allocation-sites",
+            "--case", "BatchMalloc", "--warmup", "0", "--iterations", "1", "--format", "json",
+          ]
+        ).utf8)
+    ).suites.first?.cases.first?.measurement
+    let sitesWithoutInterposer = try await processResult(
+      executable: cli,
+      arguments: ["run", "--host", hostPath, "--allocation-sites", "--case", "Leak16Bytes"]
+    )
+    let sitesInTrace = try await processResult(
+      executable: cli,
+      arguments: [
+        "trace", "--host", hostPath, "--interposer", interposerPath(), "--allocation-sites",
+        "--xctrace-output", scratchPath + "/sites.trace", "--case", "Leak16Bytes",
+      ]
+    )
+
     let touched = try await JSONDecoder().decode(
       ReportDocument.self,
       from: Data(
@@ -240,11 +336,53 @@ struct CLIWorkflowTests {
       #expect((touched?.statistics(for: .peakMemory)?.median ?? 0) >= Double(48 << 20))
     #endif
     #if canImport(Darwin)
-      #expect(allocations?.statistics(for: .swiftAllocations)?.median == 1_000)
-      #expect(allocations?.statistics(for: .swiftAllocatedBytes)?.median == 24_000)
+      #expect(isPerCall(allocations?.statistics(for: .swiftAllocations)?.median, 1_000))
+      #expect(isPerCall(allocations?.statistics(for: .swiftAllocatedBytes)?.median, 24_000))
     #else
       #expect(allocations?.statistics(for: .swiftAllocations) == nil)
     #endif
+    #expect(allocations?.statistics(for: .heapAllocations) == nil)
+    #expect(isPerCall(countedAllocations?.statistics(for: .swiftAllocations)?.median, 1_000))
+    #expect(isPerCall(countedAllocations?.statistics(for: .swiftAllocatedBytes)?.median, 24_000))
+    // Each object is one system allocation of its 24 bytes. The unoptimized
+    // range loop allocates too, so the debug host counts more.
+    #expect((countedAllocations?.statistics(for: .heapAllocations)?.median ?? 0) >= 1_000)
+    #expect((countedAllocations?.statistics(for: .heapAllocatedBytes)?.median ?? 0) >= 24_000)
+    #expect(
+      isPerCall(countedAllocations?.statistics(for: .heapNetAllocations)?.median, 0, scale: 1_000))
+    #expect(countedAllocations?.statistics(for: .wallClock) != nil)
+    #expect(isPerCall(leaked?.statistics(for: .heapAllocations)?.median, 1))
+    #expect(isPerCall(leaked?.statistics(for: .heapAllocatedBytes)?.median, 16))
+    #expect(isPerCall(leaked?.statistics(for: .heapNetAllocations)?.median, 1))
+    #expect(spawned?.statistics(for: .heapAllocations) != nil)
+    #expect(isPerCall(prepared?.statistics(for: .heapAllocations)?.median, 0))
+    #expect(isPerCall(prepared?.statistics(for: .heapNetAllocations)?.median, 0))
+    #expect(isPerCall(prepared?.statistics(for: .swiftAllocations)?.median, 0))
+    // Stacks are per site, so other threads' allocations land on other stacks.
+    let leakStack = try #require(leakSites?.stacks.first)
+    #expect(
+      leakSites?.stacks.allSatisfy { stack in
+        !stack.frames.contains { frame in
+          frame.contains("BenchmarkWorkload") || frame.contains("BenchmarkRunner")
+        }
+      } == true)
+    #expect(leakStack.allocations == leakSites?.calls)
+    #expect(leakStack.bytes == 16 * (leakSites?.calls ?? 0))
+    #expect(leakStack.frames.contains { $0.contains("leak16Bytes") })
+    #if canImport(Darwin)
+      // Each block of a batch allocation is counted, and recorded at its site.
+      let batchStack = batchSites?.rows.first?.allocationSites?.stacks.first
+      #expect(isPerCall(batchSites?.statistics(for: .heapAllocations)?.median, 4))
+      #expect(isPerCall(batchSites?.statistics(for: .heapNetAllocations)?.median, 0))
+      #expect(batchStack?.frames.contains { $0.contains("batchMalloc") } == true)
+      #expect(batchStack?.allocations == 4 * (batchSites?.rows.first?.allocationSites?.calls ?? 0))
+    #endif
+    #expect(sitesWithoutInterposer.status == 2)
+    #expect(sitesWithoutInterposer.errorOutput.contains("--allocation-sites requires --interposer"))
+    #expect(sitesInTrace.status == 2)
+    #expect(
+      sitesInTrace.errorOutput.contains(
+        "--allocation-sites cannot be combined with --xctrace-output"))
     #expect(list.contains("\"suite\" : \"Fixture\""))
     #expect(list.contains("\"caseName\" : \"Noop\""))
     #expect(run.contains("\"wallClock\""))
@@ -257,4 +395,13 @@ struct CLIWorkflowTests {
     #expect(failedCheck.output.contains("\"verdict\" : \"failed\""))
     #expect(failedCheck.errorOutput.contains("Regression check failed."))
   }
+}
+
+/// Whether a counted per-call value is `expected`, within 5% of `scale` or of
+/// `expected`, whichever is larger. Counting covers every thread of the host,
+/// so other threads' allocations during the counting batch are spread over its
+/// calls; `scale` is the per-call allocation count those few calls carry.
+private func isPerCall(_ value: Double?, _ expected: Double, scale: Double = 1) -> Bool {
+  guard let value else { return false }
+  return abs(value - expected) < 0.05 * max(scale, expected)
 }

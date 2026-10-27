@@ -5,8 +5,9 @@ import Foundation
 
 extension HostBuilder {
   /// Linker arguments for Swift Testing, which bridged test modules import:
-  /// the toolchain's runtime when it ships one, otherwise the SDK platform's
-  /// `Testing.framework`.
+  /// the toolchain's runtime when it ships one, in a `testing` directory on
+  /// Apple platforms and beside the standard library on Linux, otherwise the
+  /// SDK platform's `Testing.framework`.
   func swiftTestingLibraryArguments() throws -> [String] {
     let toolchainAttempt = "toolchain testing runtime at runtimeLibraryImportPaths.first/testing"
     let output = try runProcess(
@@ -22,12 +23,20 @@ extension HostBuilder {
     else {
       return try swiftTestingFrameworkArguments(attempted: [toolchainAttempt])
     }
-    let testingPath = URL(fileURLWithPath: runtimeImportPath)
-      .appendingPathComponent("testing")
-      .path
-    guard FileManager.default.fileExists(atPath: testingPath) else {
-      return try swiftTestingFrameworkArguments(attempted: [toolchainAttempt, testingPath])
-    }
+    #if os(Linux)
+      let testingPath = runtimeImportPath
+      let library = URL(fileURLWithPath: testingPath).appendingPathComponent("libTesting.so").path
+      guard FileManager.default.fileExists(atPath: library) else {
+        throw PluginError.swiftTestingRuntimeUnavailable([library])
+      }
+    #else
+      let testingPath = URL(fileURLWithPath: runtimeImportPath)
+        .appendingPathComponent("testing")
+        .path
+      guard FileManager.default.fileExists(atPath: testingPath) else {
+        return try swiftTestingFrameworkArguments(attempted: [toolchainAttempt, testingPath])
+      }
+    #endif
     return [
       "-I", testingPath, "-L", testingPath, "-lTesting",
       "-Xlinker", "-rpath", "-Xlinker", testingPath,
@@ -47,7 +56,9 @@ extension HostBuilder {
         "-Xlinker", "-rpath", "-Xlinker", libraries,
       ]
     #else
-      return []
+      // XCTest ships beside the standard library, which the compiler links
+      // from and adds to the runtime search path.
+      return ["-lXCTest"]
     #endif
   }
 

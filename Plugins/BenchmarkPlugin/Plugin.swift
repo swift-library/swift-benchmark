@@ -5,8 +5,9 @@ import Foundation
 import PackagePlugin
 
 /// `swift package benchmark <command>`: builds a benchmark host from the
-/// package's declarations and hands it to the CLI, unless the arguments name
-/// a host already.
+/// package's declarations and hands it to the CLI, unless the arguments name a
+/// host already. Where heap counting works, on Apple platforms and Linux with
+/// glibc, it also builds and passes the interposer library.
 @main
 struct BenchmarkPlugin: CommandPlugin {
   func performCommand(context: PluginContext, arguments: [String]) async throws {
@@ -24,6 +25,9 @@ struct BenchmarkPlugin: CommandPlugin {
     var hostArguments = [command, "--host", host.path]
     if command != "list" {
       hostArguments += ["--swift-version", try builder.compilerVersion()]
+      #if canImport(Darwin) || canImport(Glibc)
+        hostArguments += ["--interposer", try builder.buildInterposer().path]
+      #endif
     }
     try runProcess(executable: cliTool.url, arguments: hostArguments + arguments.dropFirst())
   }

@@ -7,6 +7,7 @@ import Report
 struct CLIOptions {
   private static let flags: Set<String> = [
     "--adaptive",
+    "--allocation-sites",
     "--allow-debug",
     "--fail-on-regression",
     "--quiet",
@@ -21,7 +22,8 @@ struct CLIOptions {
   ]
   private static let valueOptions =
     Set(selectionOptions + configurationOptions).union([
-      "--host", "--swift-version", "--input", "--output", "--format", "--baseline",
+      "--host", "--interposer", "--swift-version", "--input", "--output", "--format",
+      "--baseline",
       "--statistic", "--threshold", "--budget", "--case-budget",
       "--trace", "--required-trace", "--trace-tool", "--trace-template", "--trace-command",
       "--xctrace-output", "--xctrace-template", "--xcrun",
@@ -68,6 +70,11 @@ struct CLIOptions {
       throw CLIError.missingOption(key)
     }
     return value
+  }
+
+  /// The host named by `--host`, with the interposer named by `--interposer`.
+  func host() throws -> HostProcess {
+    HostProcess(path: try requiredValue(for: "--host"), interposerPath: value(for: "--interposer"))
   }
 
   /// The host arguments that select the requested steps.

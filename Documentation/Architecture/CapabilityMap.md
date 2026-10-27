@@ -90,7 +90,8 @@ boundaries.
 
 1. Declaration UX, discovery, traits, tags, and runner plan.
 2. Package workflow over discovered declarations, including generated hosts for
-   library and test targets and one host process per step.
+   library and test targets, one host process per step, and a counting process
+   per step that loads the allocation interposer.
 3. Runner policy depth: fixed iterations and automatic batching by default,
    plus fixed batches and adaptive/min/max-duration opt-in.
 4. Report collection, event stream, document schema, baseline, budget, and CI

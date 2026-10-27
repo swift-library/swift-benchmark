@@ -25,6 +25,7 @@
                 "limit": 1500,
                 "metric": {
                   "direction": "lowerIsBetter",
+                  "isComparedByDefault": true,
                   "name": "wallClock",
                   "unit": "nanoseconds"
                 },
@@ -47,6 +48,7 @@
                 "metrics": [
                   {
                     "direction": "lowerIsBetter",
+                    "isComparedByDefault": true,
                     "name": "wallClock",
                     "unit": "nanoseconds"
                   }
@@ -77,10 +79,12 @@
                     "max": 2000,
                     "mean": 1500,
                     "median": 1500,
+                    "mildOutliers": 0,
                     "min": 1000,
                     "p90": 1900,
                     "p95": 1950,
                     "p99": 1990,
+                    "severeOutliers": 0,
                     "standardDeviation": 500
                   }
                 }
@@ -108,6 +112,7 @@
                 "limit": 1500,
                 "metric": {
                   "direction": "lowerIsBetter",
+                  "isComparedByDefault": true,
                   "name": "wallClock",
                   "unit": "nanoseconds"
                 },
@@ -119,6 +124,7 @@
               "message": "Budget exceeded for wallClock p95.",
               "metric": {
                 "direction": "lowerIsBetter",
+                "isComparedByDefault": true,
                 "name": "wallClock",
                 "unit": "nanoseconds"
               },

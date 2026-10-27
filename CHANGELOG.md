@@ -1,5 +1,57 @@
 # Changelog
 
+## Unreleased
+
+## 0.3.0
+
+- **Breaking**: A regression must also be significant. Each baseline
+  comparison carries a reproducible 95% bootstrap confidence interval of its
+  difference and its `significance`, and a change whose interval includes zero
+  passes. Metrics with one value per row, such as counts, are judged by their
+  threshold alone.
+- **Breaking**: Report JSON changes: every metric records
+  `isComparedByDefault`, statistics count mild and severe outliers, baseline
+  comparisons carry their confidence interval and significance, and rows can
+  carry allocation sites. Reports and baselines written by 0.2 do not load;
+  record them again.
+- **Breaking**: Context switches, page faults, system calls and disk bytes are
+  reported but judged only when a threshold or budget names them
+  (`Benchmark.Metric.isComparedByDefault`).
+- **Breaking**: The names of the new built-in metrics are reserved: values a
+  workload records under `instructions`, `cycles`, `contextSwitches`,
+  `pageFaults`, `systemCalls`, `diskReadBytes`, `diskWriteBytes`,
+  `heapAllocations`, `heapAllocatedBytes` or `heapNetAllocations` are ignored;
+  rename custom metrics that use them.
+- **Breaking**: `ReportWarning.Kind` gains `outliers`: a compared row warns when
+  a tenth of a compared metric's values are severe outliers. Exhaustive
+  `switch` statements over the kind need the new case.
+- Timed samples count instructions and cycles, which vary far less with
+  machine load than time, and context switches, page faults, system calls and
+  disk bytes, each where the platform provides them. The Linux instruction and
+  cycle counters are not yet validated on hardware that exposes them.
+  `BenchmarkRunner(countsProcessEvents:)` turns the counting off.
+- The package workflow counts every heap allocation, from Swift, C, C++ and
+  Objective-C: `heapAllocations`, `heapAllocatedBytes`, and
+  `heapNetAllocations` for memory each call keeps. The plugin builds the
+  `_BenchmarkInterposer` library and measures each step in a timing process
+  and a counting process that loads it; `--interposer` passes the library to
+  the CLI with your own host. On Linux the counting process also records the
+  Swift allocation and reference-counting metrics.
+- `--allocation-sites` records where heap allocations come from: each row
+  lists its call stacks with allocations and bytes, in JSON, the console and
+  Markdown summaries, and speedscope flame graphs.
+- `setup:` on `@Benchmark` and the `Benchmark` initializers makes a fresh input
+  for every call outside the timed and counted calls, for plain and Dimension
+  benchmarks.
+- Dimension curves of cases with three or more sizes carry the growth model
+  that best fits them, from O(1) to O(n³).
+- `--format markdown` renders a report summary for pull request comments.
+- Batch loops no longer allocate in unoptimized builds, so counts of a debug
+  build include only the workload's own allocations.
+- The command plugin's package workflow runs on Linux, without Objective-C and
+  XCFramework binary targets. Heap counting there needs glibc; elsewhere the
+  plugin measures without the counting process.
+
 ## 0.2.0
 
 - **Breaking**: Requires Swift 6.3 or later. Deployment minimums are iOS 18

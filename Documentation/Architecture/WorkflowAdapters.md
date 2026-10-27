@@ -26,7 +26,7 @@ preserves what a plain Swift Testing `@Test` body does not provide: warmup,
 batching, measured iterations, adaptive policies, samples of every metric,
 argument/scale rows, per-step process isolation, `ReportDocument`,
 baseline/budget verdicts and warnings, CI exit codes, timeline attribution and
-xctrace artifacts. It supports Apple platforms.
+xctrace artifacts. It runs on macOS and Linux.
 
 The plugin follows the official plugin-tool pattern:
 `BenchmarkPlugin -> BenchmarkDiscoveryTool -> _BenchmarkDiscoveryCore`.
@@ -87,16 +87,21 @@ bridge sources itself.
 The CLI drives a host through a package-internal protocol. `list` returns the
 host's plan and run metadata. `run`, `check` and `trace` then run
 `measure --step <id> --isolated` once per step, each in a host process of its
-own; with `--xctrace-output`, one `measure` under xctrace measures every
-selected step. Hosts write their output to a file the CLI names, and their
-standard output goes to the CLI's standard error. The CLI concatenates the
-steps' event records, builds the report, applies the baseline, budgets and
-warnings, attaches traces and renders. `check` refuses a debug host before
-measuring unless given `--allow-debug`.
+own. Given `--interposer`, which the plugin passes after building the
+`_BenchmarkInterposer` product, each step runs twice instead: `--timing-only` in
+a plain process, then `--counting-only --batch-size <timed size>` in a process
+that loads the interposer, with `--allocation-sites` when requested; the CLI
+inserts the counting samples into the timed row. With `--xctrace-output`, one
+`measure` under xctrace measures every selected step. Hosts write their output
+to a file the CLI names, and their standard output goes to the CLI's standard
+error. The CLI concatenates the steps' event records, builds the report, applies
+the baseline, budgets and warnings, attaches traces and renders. `check` refuses
+a debug host before measuring unless given `--allow-debug`.
 
 Options cover filters, warmup/iteration/batching overrides, adaptive policies,
-comparison and budgets, trace attachments and xctrace recording, output paths,
-quiet output and the host compiler's version. Unknown options are rejected.
+comparison and budgets, the interposer and allocation sites, trace attachments
+and xctrace recording, output paths, quiet output and the host compiler's
+version. Unknown options are rejected.
 
 Exit codes:
 
@@ -151,8 +156,9 @@ does not replace Benchmark runner behavior.
   (`PluginWorkflowTests`).
 - Hosts for packages with resources, binary targets, and C, Objective-C and C++
   targets, without extra sandbox permission (`PluginWorkflowTests`).
-- One host process per step, one traced process for xctrace, and the debug
-  gate before measuring (`CLIWorkflowTests`).
+- One host process per step, a timing and a counting process per step with
+  the interposer, one traced process for xctrace, and the debug gate before
+  measuring (`CLIWorkflowTests`).
 - Discovery of native, bridged, same-line and extension declarations and their
   diagnostics (`DiscoveryPlannerTests`, `TestingBridgeTests`).
 - Exit codes and report forwarding (`CLIWorkflowTests`, `PluginWorkflowTests`).

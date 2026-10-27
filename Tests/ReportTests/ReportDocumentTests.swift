@@ -198,4 +198,61 @@ struct ReportDocumentTests {
     #expect(
       profiles.first?["name"] as? String == "Parser.ParseDocument sample:Parser.ParseDocument.1")
   }
+
+  @Test
+  func allocationSitesReachEveryOutput() throws {
+    let sites = Benchmark.AllocationSites(
+      calls: 4,
+      stacks: [
+        Benchmark.AllocationStack(
+          frames: ["swift_slowAlloc", "swift_allocObject", "Parser.Node.init()", "Parser.parse()"],
+          allocations: 8, bytes: 256),
+        Benchmark.AllocationStack(
+          frames: ["malloc", "Parser.buffer()"], allocations: 4, bytes: 4_096),
+      ])
+    let result = BenchmarkResult(
+      suiteName: "Parser",
+      caseName: "ParseDocument",
+      configuration: .default,
+      measurement: Measurement(rows: [
+        Measurement.Row(
+          size: nil,
+          samples: [Sample(iteration: 0, batchSize: 4, values: [.heapAllocations: 3])],
+          allocationSites: sites)
+      ])
+    )
+    let document = ReportDocument(metadata: .fixture(), results: [result])
+
+    let decoded = try JSONDecoder().decode(
+      ReportDocument.self, from: Data(try JSONReportRenderer.render(document).utf8))
+    let console = ConsoleReportRenderer.render(document)
+    let markdown = MarkdownReportRenderer.render(document)
+    let speedscope = try #require(
+      JSONSerialization.jsonObject(with: Data(try SpeedscopeReportRenderer.render(document).utf8))
+        as? [String: Any])
+    let profiles = try #require(speedscope["profiles"] as? [[String: Any]])
+    let frames = try #require(
+      (speedscope["shared"] as? [String: Any])?["frames"] as? [[String: Any]])
+
+    #expect(decoded.suites.first?.cases.first?.measurement.rows.first?.allocationSites == sites)
+    // Summaries start at the first frame outside the allocator.
+    #expect(
+      console.contains("  2 allocations, 64 B per call at Parser.Node.init() ← Parser.parse()"))
+    #expect(console.contains("  1 allocations, 1.00 KiB per call at Parser.buffer()"))
+    #expect(
+      markdown.contains(
+        "| Parser › ParseDocument |  | 2 | 64 B | Parser.Node.init() ← Parser.parse() |"))
+    #expect(
+      profiles.map { $0["name"] as? String } == [
+        "Parser.ParseDocument allocations per call",
+        "Parser.ParseDocument allocated bytes per call",
+      ])
+    #expect(profiles.first?["type"] as? String == "sampled")
+    #expect(profiles.first?["weights"] as? [Double] == [2, 1])
+    let firstSample = try #require((profiles.first?["samples"] as? [[Int]])?.first)
+    #expect(
+      firstSample.map { frames[$0]["name"] as? String } == [
+        "Parser.parse()", "Parser.Node.init()", "swift_allocObject", "swift_slowAlloc",
+      ])
+  }
 }

@@ -35,11 +35,6 @@ struct HostBuilder {
       throw PluginError.noBenchmarksDiscovered
     }
 
-    let parameters = PackageManager.BuildParameters(
-      configuration: configuration,
-      logging: .concise,
-      echoLogs: false
-    )
     // Only targets that declare benchmarks are built, with their
     // dependencies; other targets, such as UI tests, are left alone. A
     // release build compiles test targets for testing, which the bridge's
@@ -76,10 +71,17 @@ struct HostBuilder {
     // Bridge closures run inside every measured batch, so they are optimized
     // like the package they call.
     let optimization = configuration == .release ? ["-O"] : []
+    #if os(Linux)
+      // Allocation sites name functions through the dynamic symbol table,
+      // which holds an executable's own functions only when exported.
+      let symbolArguments = ["-Xlinker", "--export-dynamic"]
+    #else
+      let symbolArguments: [String] = []
+    #endif
 
     try runProcess(
       executable: swiftc,
-      arguments: optimization + [
+      arguments: optimization + symbolArguments + [
         "-parse-as-library",
         "-enable-testing",
         "-module-cache-path",
@@ -94,6 +96,23 @@ struct HostBuilder {
       captureOutputOnFailure: true
     )
     return host
+  }
+
+  /// Builds the interposer library, which the CLI loads into the processes
+  /// that count each step's allocations.
+  func buildInterposer() throws -> URL {
+    let build = try packageManager.build(
+      .product("_BenchmarkInterposer"), parameters: parameters)
+    guard build.succeeded,
+      let library = build.builtArtifacts.first(where: { $0.kind == .dynamicLibrary })
+    else {
+      throw PluginError.buildFailed(build.logText)
+    }
+    return library.url
+  }
+
+  private var parameters: PackageManager.BuildParameters {
+    PackageManager.BuildParameters(configuration: configuration, logging: .concise, echoLogs: false)
   }
 
   /// Links each resource bundle of the build, `<Package>_<Target>.bundle`

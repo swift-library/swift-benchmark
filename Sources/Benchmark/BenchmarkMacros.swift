@@ -9,20 +9,31 @@ public macro BenchmarkSuite(
   _ traits: any BenchmarkSuiteTrait...
 ) = #externalMacro(module: "BenchmarkMacro", type: "BenchmarkSuiteMacro")
 
-@attached(peer, names: arbitrary)
+@attached(peer)
 public macro Benchmark(
   _ name: String? = nil,
   _ traits: any BenchmarkCaseTrait...
 ) = #externalMacro(module: "BenchmarkMacro", type: "BenchmarkMacro")
 
-@attached(peer, names: arbitrary)
+/// Declares a benchmark whose every call takes a fresh input from `setup`:
+/// the method takes one `inout` parameter, and `setup` makes its value, from
+/// the row's size when the benchmark has a `.dimension` trait. Neither `setup`
+/// nor freeing the input is timed or counted.
+@attached(peer)
+public macro Benchmark<Setup>(
+  _ name: String? = nil,
+  _ traits: any BenchmarkCaseTrait...,
+  setup: Setup
+) = #externalMacro(module: "BenchmarkMacro", type: "BenchmarkMacro")
+
+@attached(peer)
 public macro Benchmark<C>(
   _ name: String? = nil,
   _ traits: any BenchmarkCaseTrait...,
   arguments: C
 ) = #externalMacro(module: "BenchmarkMacro", type: "BenchmarkMacro")
 
-@attached(peer, names: arbitrary)
+@attached(peer)
 public macro Benchmark<C1, C2>(
   _ name: String? = nil,
   _ traits: any BenchmarkCaseTrait...,

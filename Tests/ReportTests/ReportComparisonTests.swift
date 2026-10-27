@@ -96,8 +96,10 @@ struct ReportComparisonTests {
     }
     let recorder = ReportRecorder()
 
-    let results = try await BenchmarkRunner(cpuClock: nil, countsAllocations: false)
-      .run(suite, eventRecorders: [recorder])
+    let results = try await BenchmarkRunner(
+      cpuClock: nil, countsProcessEvents: false, countsAllocations: false
+    )
+    .run(suite, eventRecorders: [recorder])
     let direct = ReportDocument(metadata: metadata, results: results)
     let eventBuilt = await recorder.document(metadata: metadata)
     let directRows = try #require(direct.suites.first?.cases.first?.measurement.rows)
@@ -106,6 +108,37 @@ struct ReportComparisonTests {
     #expect(
       eventRows.map { $0.metrics.map(\.name) } == [["wallClock"], ["parsedBytes", "wallClock"]])
     #expect(eventRows.map(\.metrics) == directRows.map(\.metrics))
+  }
+
+  @Test
+  func metricsTheEnvironmentMovesAreJudgedOnlyOnRequest() throws {
+    func result(contextSwitches: Double) -> BenchmarkResult {
+      BenchmarkResult(
+        suiteName: "Parser",
+        caseName: "Tokenize",
+        configuration: .default,
+        measurement: Measurement(samples: [
+          Sample(iteration: 0, values: [.wallClock: 1_000, .contextSwitches: contextSwitches])
+        ])
+      )
+    }
+    let baseline = BaselineDocument(
+      document: ReportDocument(metadata: .fixture(), results: [result(contextSwitches: 1)]))
+
+    let unrequested = ReportDocument(
+      metadata: .fixture(), results: [result(contextSwitches: 50)], baseline: baseline)
+    let requested = ReportDocument(
+      metadata: .fixture(),
+      results: [result(contextSwitches: 50)],
+      baseline: baseline,
+      comparison: ComparisonPolicy(metricThresholds: [.contextSwitches: .relativePercentage(10)])
+    )
+
+    #expect(unrequested.suites.first?.cases.first?.baselines.map(\.metric) == [.wallClock])
+    #expect(
+      requested.suites.first?.cases.first?.baselines.contains {
+        $0.metric == .contextSwitches && $0.verdict == .failed
+      } == true)
   }
 
   @Test

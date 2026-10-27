@@ -17,6 +17,8 @@ let package = Package(
     .executable(name: "swift-benchmark-cli", targets: ["BenchmarkCLI"]),
     .executable(name: "BenchmarkCLI", targets: ["BenchmarkCLI"]),
     .plugin(name: "BenchmarkPlugin", targets: ["BenchmarkPlugin"]),
+    // Injected into the host processes that count allocations; nothing links it.
+    .library(name: "_BenchmarkInterposer", type: .dynamic, targets: ["_BenchmarkInterposer"]),
   ],
   traits: [
     .trait(
@@ -47,13 +49,22 @@ let package = Package(
     ),
     .target(
       name: "Benchmark",
-      dependencies: ["BenchmarkMacro"],
+      dependencies: ["BenchmarkMacro", "_BenchmarkPlatform"],
       path: "Sources/Benchmark"
+    ),
+    .target(
+      name: "_BenchmarkPlatform",
+      path: "Sources/_BenchmarkPlatform"
+    ),
+    .target(
+      name: "_BenchmarkInterposer",
+      path: "Sources/_BenchmarkInterposer"
     ),
     .macro(
       name: "BenchmarkMacro",
       dependencies: [
         .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+        .product(name: "SwiftDiagnostics", package: "swift-syntax"),
         .product(name: "SwiftSyntax", package: "swift-syntax"),
         .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
         .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),

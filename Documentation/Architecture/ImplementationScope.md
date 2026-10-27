@@ -45,7 +45,7 @@ map cleanly to the local framework:
 | Traits, tags, and scoping | Swift Testing | `BenchmarkTrait`, `BenchmarkSuiteTrait`, `BenchmarkCaseTrait`, `BenchmarkScoping`, skip traits, configuration traits, Dimension traits, and tag traits feed plan construction. | Trait merge, tag filter, skip, and planning-failure tests |
 | Runner plan | Swift Testing | `BenchmarkRunner.Plan.Step` and `.Action` support measure, skip, planning failure, effective configuration, source locations, tags, and Dimension expansion. | Plan tests and runner tests |
 | Runner policy | Benchmark requirements | Fixed iterations and automatic batching are the defaults; fixed batches and adaptive, minimum-duration, and maximum-duration policies are opt-in and validated before workload execution. | Runner policy, batching and invalid-configuration tests |
-| Metrics | Swift runtime instrumentation hooks, platform resource APIs | Steps record wall-clock and CPU time and custom metrics in timed samples; Swift allocations, allocated bytes, retains and releases in a separate counting pass on Apple platforms; and peak memory in an isolated process; see `Metrics.md`. | Measurement, precision and isolated-host allocation tests |
+| Metrics | Swift runtime instrumentation hooks, platform resource and counter APIs, an allocator interposer | Steps record wall-clock and CPU time, instructions, cycles, operating system events and custom metrics in timed samples; Swift allocations, retains and releases and, in the package workflow's counting process, every heap allocation and its call sites, in a separate counting pass; and peak memory in an isolated process; see `Metrics.md`. | Measurement, precision, process counter, per-call setup and isolated-host allocation tests |
 | Event stream | Swift Testing | `Benchmark.Event`, `.Kind`, `.Context`, `.Stream.Record`, console recorder, and JSON Lines recorder are implemented. | Event lifecycle and JSON Lines tests |
 | Report builder | Swift Testing recorder pattern, local Report | `ReportRecorder` / `ReportBuilder` consume Benchmark events and build the durable `ReportDocument`. | Event-to-report tests |
 | Package command | SwiftPM plugin workflow requirement | `swift package benchmark` supports no-`--host` list/run/check/baseline write/update/diff/trace for declarations in library and test targets, measuring each step in a host process of its own; `--host` remains an advanced override. | Package fixture tests |
@@ -101,10 +101,12 @@ Rejected:
 - Swift Testing native adapter depth is limited by public Testing APIs.
   Benchmark still provides trait helpers and Report-based verdict projection
   without making Benchmark core depend on Testing.
-- Counting metrics require the Swift runtime's instrumentation hooks and are
-  recorded on Apple platforms only. Peak memory is attributable only
+- Swift counting metrics require the Swift runtime's instrumentation hooks on
+  Apple platforms and the interposer library in a counting process on Linux;
+  heap metrics need the interposer on both. Peak memory is attributable only
   in a process that measures one step.
-- The package workflow supports Apple platforms; Linux runs the libraries.
+- The package workflow runs on macOS and Linux; Objective-C targets and
+  XCFramework binary targets are Apple-only.
 - Multi-Dimension coordinates, heatmaps, and presentation templates remain
   future proposals over the stable `ReportDocument`.
 
@@ -120,8 +122,8 @@ Current acceptance is proven by:
   Dimension expansion;
 - runner tests for fixed, adaptive, minimum-duration, maximum-duration,
   batching, metrics, and error phases;
-- precision tests for wall-clock accuracy, sub-microsecond batching, and exact
-  allocation counts in an isolated host;
+- precision tests for wall-clock accuracy, sub-microsecond batching, and
+  per-call allocation counts in an isolated host;
 - event stream JSON Lines and event-to-report tests;
 - fixture package tests for `swift package benchmark`
   list/run/check/baseline write/update/diff/trace without user-written host
