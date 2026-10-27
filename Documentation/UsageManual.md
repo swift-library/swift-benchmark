@@ -303,7 +303,9 @@ platforms count the whole process; where the hardware counters are unavailable,
 as in some virtual machines, the metrics are left out. Linux counts user-mode
 instructions of the thread that runs the batch and the threads it creates, so
 it records them only for synchronous workloads and only where the kernel allows
-the process to open hardware counters.
+the process to open hardware counters. The Linux counters have not yet been
+validated on hardware that exposes them, so treat Linux `instructions` and
+`cycles` values as unverified.
 
 Context switches, page faults, system calls and disk bytes depend on the rest of
 the machine as much as on the code, so they appear in each row's values but

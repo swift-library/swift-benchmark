@@ -186,7 +186,7 @@ per sample. Adaptive iteration limits count each batch's whole duration.
 | Metric | Darwin | Linux |
 | --- | --- | --- |
 | `wallClock`, `cpuTime` | Yes | Yes |
-| `instructions`, `cycles` | Where the hardware counters work | Synchronous workloads, where the kernel allows hardware counters |
+| `instructions`, `cycles` | Where the hardware counters work | Synchronous workloads, where the kernel allows hardware counters; not yet validated on hardware that exposes them |
 | `contextSwitches`, `pageFaults` | Yes | Yes |
 | `systemCalls` | Yes | No |
 | `diskReadBytes`, `diskWriteBytes` | macOS | Yes |

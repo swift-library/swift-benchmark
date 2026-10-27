@@ -27,7 +27,8 @@
   `switch` statements over the kind need the new case.
 - Timed samples count instructions and cycles, which vary far less with
   machine load than time, and context switches, page faults, system calls and
-  disk bytes, each where the platform provides them.
+  disk bytes, each where the platform provides them. The Linux instruction and
+  cycle counters are not yet validated on hardware that exposes them.
   `BenchmarkRunner(countsProcessEvents:)` turns the counting off.
 - The package workflow counts every heap allocation, from Swift, C, C++ and
   Objective-C: `heapAllocations`, `heapAllocatedBytes`, and
