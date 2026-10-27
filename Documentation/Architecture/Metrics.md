@@ -85,8 +85,9 @@ values, so counting cannot re-enter itself. The runtime also sets the flag
 itself when an allocation finds a replaced slot, so a thread allocating as a
 counting pass ends can leave it set. Uninstalling restores the slots and then
 the flag, and the runner restores the flag again before each step, so no step is
-timed on the hook path. The hooks count every thread of the process, which makes
-the counts exact only in a process that measures nothing else. The hooks see
+timed on the hook path. The hooks count every thread of the process, so
+allocations that other threads make during the counting batch are spread over
+the batch's calls too. The hooks see
 only the Swift runtime's own allocations; every system allocator call, from C,
 C++ and Objective-C too, is counted through the interposer (see below). A
 runtime without the hook symbols leaves the Swift counting metrics out.
@@ -125,7 +126,8 @@ the counting process loads the interposer and timing never runs with it.
 
 libmalloc's entry points call one another through their exported symbols,
 which interposing replaces too, so one allocation can pass through several
-replacements; a per-thread nesting guard counts only the outermost. The runner
+replacements; a per-thread nesting guard counts only the outermost. Like the
+hooks, the interposer counts every thread of the process. The runner
 finds the library's controls with `dlsym`, so a process without it, such as a
 test process, records no heap metrics. The library removes itself from the
 front of the variable that loaded it, so the processes a benchmark starts do
@@ -211,10 +213,11 @@ otherwise is judged by default.
   (`BenchmarkMeasurementTests`).
 - Wall-clock accuracy for a known duration and sub-microsecond workloads timed
   over the calibration target (`MeasurementPrecisionTests`).
-- Exact allocation counts and bytes for a workload with a known allocation
-  pattern, measured in an isolated host process, and with the interposer
-  exact heap counts, bytes and unfreed allocations for workloads with known
-  allocations, and a workload that starts a process (package workflow tests).
+- Per-call allocation counts and bytes for a workload with a known allocation
+  pattern, measured in an isolated host process, and with the interposer heap
+  counts, bytes and unfreed allocations for workloads with known allocations,
+  each within a tolerance for other threads' allocations, and a workload that
+  starts a process (package workflow tests).
 - Timing and counting processes record only their own metrics, and the CLI
   adds counting samples to the timed row of their step (`BenchmarkHostTests`).
 - Allocation sites name the allocating benchmark function with exact totals

@@ -122,8 +122,8 @@ Current acceptance is proven by:
   Dimension expansion;
 - runner tests for fixed, adaptive, minimum-duration, maximum-duration,
   batching, metrics, and error phases;
-- precision tests for wall-clock accuracy, sub-microsecond batching, and exact
-  allocation counts in an isolated host;
+- precision tests for wall-clock accuracy, sub-microsecond batching, and
+  per-call allocation counts in an isolated host;
 - event stream JSON Lines and event-to-report tests;
 - fixture package tests for `swift package benchmark`
   list/run/check/baseline write/update/diff/trace without user-written host

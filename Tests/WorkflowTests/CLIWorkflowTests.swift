@@ -336,38 +336,44 @@ struct CLIWorkflowTests {
       #expect((touched?.statistics(for: .peakMemory)?.median ?? 0) >= Double(48 << 20))
     #endif
     #if canImport(Darwin)
-      #expect(allocations?.statistics(for: .swiftAllocations)?.median == 1_000)
-      #expect(allocations?.statistics(for: .swiftAllocatedBytes)?.median == 24_000)
+      #expect(isPerCall(allocations?.statistics(for: .swiftAllocations)?.median, 1_000))
+      #expect(isPerCall(allocations?.statistics(for: .swiftAllocatedBytes)?.median, 24_000))
     #else
       #expect(allocations?.statistics(for: .swiftAllocations) == nil)
     #endif
     #expect(allocations?.statistics(for: .heapAllocations) == nil)
-    #expect(countedAllocations?.statistics(for: .swiftAllocations)?.median == 1_000)
-    #expect(countedAllocations?.statistics(for: .swiftAllocatedBytes)?.median == 24_000)
+    #expect(isPerCall(countedAllocations?.statistics(for: .swiftAllocations)?.median, 1_000))
+    #expect(isPerCall(countedAllocations?.statistics(for: .swiftAllocatedBytes)?.median, 24_000))
     // Each object is one system allocation of its 24 bytes. The unoptimized
     // range loop allocates too, so the debug host counts more.
     #expect((countedAllocations?.statistics(for: .heapAllocations)?.median ?? 0) >= 1_000)
     #expect((countedAllocations?.statistics(for: .heapAllocatedBytes)?.median ?? 0) >= 24_000)
-    #expect(countedAllocations?.statistics(for: .heapNetAllocations)?.median == 0)
+    #expect(
+      isPerCall(countedAllocations?.statistics(for: .heapNetAllocations)?.median, 0, scale: 1_000))
     #expect(countedAllocations?.statistics(for: .wallClock) != nil)
-    #expect(leaked?.statistics(for: .heapAllocations)?.median == 1)
-    #expect(leaked?.statistics(for: .heapAllocatedBytes)?.median == 16)
-    #expect(leaked?.statistics(for: .heapNetAllocations)?.median == 1)
+    #expect(isPerCall(leaked?.statistics(for: .heapAllocations)?.median, 1))
+    #expect(isPerCall(leaked?.statistics(for: .heapAllocatedBytes)?.median, 16))
+    #expect(isPerCall(leaked?.statistics(for: .heapNetAllocations)?.median, 1))
     #expect(spawned?.statistics(for: .heapAllocations) != nil)
-    #expect(prepared?.statistics(for: .heapAllocations)?.median == 0)
-    #expect(prepared?.statistics(for: .heapNetAllocations)?.median == 0)
-    #expect(prepared?.statistics(for: .swiftAllocations)?.median == 0)
+    #expect(isPerCall(prepared?.statistics(for: .heapAllocations)?.median, 0))
+    #expect(isPerCall(prepared?.statistics(for: .heapNetAllocations)?.median, 0))
+    #expect(isPerCall(prepared?.statistics(for: .swiftAllocations)?.median, 0))
+    // Stacks are per site, so other threads' allocations land on other stacks.
     let leakStack = try #require(leakSites?.stacks.first)
-    #expect(leakSites?.stacks.count == 1)
+    #expect(
+      leakSites?.stacks.allSatisfy { stack in
+        !stack.frames.contains { frame in
+          frame.contains("BenchmarkWorkload") || frame.contains("BenchmarkRunner")
+        }
+      } == true)
     #expect(leakStack.allocations == leakSites?.calls)
     #expect(leakStack.bytes == 16 * (leakSites?.calls ?? 0))
     #expect(leakStack.frames.contains { $0.contains("leak16Bytes") })
-    #expect(!leakStack.frames.contains { $0.contains("BenchmarkWorkload") })
     #if canImport(Darwin)
       // Each block of a batch allocation is counted, and recorded at its site.
       let batchStack = batchSites?.rows.first?.allocationSites?.stacks.first
-      #expect(batchSites?.statistics(for: .heapAllocations)?.median == 4)
-      #expect(batchSites?.statistics(for: .heapNetAllocations)?.median == 0)
+      #expect(isPerCall(batchSites?.statistics(for: .heapAllocations)?.median, 4))
+      #expect(isPerCall(batchSites?.statistics(for: .heapNetAllocations)?.median, 0))
       #expect(batchStack?.frames.contains { $0.contains("batchMalloc") } == true)
       #expect(batchStack?.allocations == 4 * (batchSites?.rows.first?.allocationSites?.calls ?? 0))
     #endif
@@ -389,4 +395,13 @@ struct CLIWorkflowTests {
     #expect(failedCheck.output.contains("\"verdict\" : \"failed\""))
     #expect(failedCheck.errorOutput.contains("Regression check failed."))
   }
+}
+
+/// Whether a counted per-call value is `expected`, within 5% of `scale` or of
+/// `expected`, whichever is larger. Counting covers every thread of the host,
+/// so other threads' allocations during the counting batch are spread over its
+/// calls; `scale` is the per-call allocation count those few calls carry.
+private func isPerCall(_ value: Double?, _ expected: Double, scale: Double = 1) -> Bool {
+  guard let value else { return false }
+  return abs(value - expected) < 0.05 * max(scale, expected)
 }
